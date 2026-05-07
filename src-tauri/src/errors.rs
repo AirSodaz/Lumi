@@ -1,5 +1,5 @@
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 pub type AppResult<T> = Result<T, AppError>;
 
@@ -38,5 +38,10 @@ impl AppError {
 
     pub fn recoverable(&self) -> bool {
         self.recoverable
+    }
+
+    pub fn state_lock_poisoned(resource: &'static str) -> Self {
+        Self::new("state.lock_poisoned", "Application state lock was poisoned")
+            .with_detail(json!({ "resource": resource }))
     }
 }
