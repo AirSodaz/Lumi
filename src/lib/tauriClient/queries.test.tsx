@@ -3,7 +3,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { useLibraries, useServers } from "./queries";
+import { useChildren, useItemDetail, useLibraries, useServers } from "./queries";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -61,6 +61,73 @@ describe("tauri query hooks", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invokeMock).toHaveBeenCalledWith("providers_list_libraries", {
       request: { serverId: "server-1" },
+    });
+  });
+
+  it("loads children only when a server id is available", async () => {
+    invokeMock.mockResolvedValueOnce({
+      items: [
+        {
+          id: "movie-1",
+          providerKind: "emby",
+          serverId: "server-1",
+          itemType: "movie",
+          title: "Demo Movie",
+        },
+      ],
+      nextCursor: null,
+    });
+
+    const { result, rerender } = renderHook(
+      ({ serverId }) => useChildren(serverId, "library-1"),
+      {
+        initialProps: { serverId: null as string | null },
+        wrapper,
+      },
+    );
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    rerender({ serverId: "server-1" });
+
+    await waitFor(() => expect(result.current.data?.items[0]?.title).toBe("Demo Movie"));
+    expect(invokeMock).toHaveBeenCalledWith("media_list_children", {
+      request: { serverId: "server-1", parentId: "library-1", cursor: null },
+    });
+  });
+
+  it("loads item detail only when server id and item id are available", async () => {
+    invokeMock.mockResolvedValueOnce({
+      item: {
+        id: "movie-1",
+        providerKind: "emby",
+        serverId: "server-1",
+        itemType: "movie",
+        title: "Demo Movie",
+      },
+      mediaSources: [],
+    });
+
+    const { result, rerender } = renderHook(
+      ({ serverId, itemId }) => useItemDetail(serverId, itemId),
+      {
+        initialProps: {
+          serverId: "server-1" as string | null,
+          itemId: null as string | null,
+        },
+        wrapper,
+      },
+    );
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    rerender({ serverId: "server-1", itemId: "movie-1" });
+
+    await waitFor(() => expect(result.current.data?.item.title).toBe("Demo Movie"));
+    expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
+      request: { serverId: "server-1", itemId: "movie-1" },
     });
   });
 });

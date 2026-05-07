@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../App";
-import type { ServerProfile } from "../../lib/tauriClient";
+import type { LibraryItem, LibraryItemDetail, ServerProfile } from "../../lib/tauriClient";
 import { invoke } from "@tauri-apps/api/core";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -20,6 +20,139 @@ const demoServer: ServerProfile = {
   createdAt: "2026-05-07T00:00:00Z",
   updatedAt: "2026-05-07T00:00:00Z",
 };
+
+const moviesLibrary: LibraryItem = {
+  id: "library-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "folder",
+  title: "Movies",
+  posterUrl: null,
+  backdropUrl: null,
+};
+
+const tvLibrary: LibraryItem = {
+  id: "library-2",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "folder",
+  title: "TV Shows",
+};
+
+const demoMovie: LibraryItem = {
+  id: "movie-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "movie",
+  title: "Demo Movie",
+  year: 2026,
+  runtimeSeconds: 7200,
+  overview: "A mapped movie.",
+};
+
+const secondMovie: LibraryItem = {
+  id: "movie-2",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "movie",
+  title: "Second Movie",
+};
+
+const demoSeries: LibraryItem = {
+  id: "series-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "series",
+  title: "Demo Series",
+  overview: "A mapped series.",
+};
+
+const seasonOne: LibraryItem = {
+  id: "season-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "season",
+  title: "Season 1",
+};
+
+const episodeOne: LibraryItem = {
+  id: "episode-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "episode",
+  title: "Episode 1",
+  year: 2026,
+  runtimeSeconds: 1800,
+};
+
+type CommandArgs = {
+  request?: {
+    itemId?: string;
+    parentId?: string | null;
+    serverId?: string;
+  };
+};
+
+function itemDetail(item: LibraryItem): LibraryItemDetail {
+  return {
+    item,
+    mediaSources: item.itemType === "movie" || item.itemType === "episode"
+      ? [{ id: "source-1", name: "Direct", url: "http://localhost/stream.mkv" }]
+      : [],
+  };
+}
+
+function mockBrowsingCommands() {
+  invokeMock.mockImplementation((command: string, args?: unknown) => {
+    const request = (args as CommandArgs | undefined)?.request;
+
+    if (command === "settings_get") {
+      return Promise.resolve({
+        theme: "system",
+        materialEffectsEnabled: true,
+      });
+    }
+    if (command === "providers_list_servers") {
+      return Promise.resolve([demoServer]);
+    }
+    if (command === "providers_list_libraries") {
+      return Promise.resolve([moviesLibrary, tvLibrary]);
+    }
+    if (command === "media_list_children") {
+      const parentId = request?.parentId;
+      const itemsByParent: Record<string, LibraryItem[]> = {
+        "library-1": [demoMovie, secondMovie],
+        "library-2": [demoSeries],
+        "series-1": [seasonOne],
+        "season-1": [episodeOne],
+      };
+
+      return Promise.resolve({
+        items: itemsByParent[parentId ?? ""] ?? [],
+        nextCursor: null,
+      });
+    }
+    if (command === "media_get_item") {
+      const itemId = request?.itemId;
+      const details: Record<string, LibraryItemDetail> = {
+        "movie-1": itemDetail(demoMovie),
+        "movie-2": itemDetail(secondMovie),
+        "series-1": itemDetail(demoSeries),
+        "season-1": itemDetail(seasonOne),
+        "episode-1": itemDetail(episodeOne),
+      };
+
+      return Promise.resolve(details[itemId ?? "movie-1"]);
+    }
+    if (command === "settings_update") {
+      return Promise.resolve({
+        theme: "dark",
+        materialEffectsEnabled: true,
+      });
+    }
+    return Promise.resolve(null);
+  });
+}
 
 describe("LumiShell", () => {
   beforeEach(() => {
@@ -75,6 +208,135 @@ describe("LumiShell", () => {
 
     expect(libraries).toHaveFocus();
     expect(screen.getByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+  });
+
+  it("renders Home media rails from provider DTOs and opens media detail", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Latest" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: /Demo Movie/ });
+    expect(screen.getAllByText("No artwork").length).toBeGreaterThan(0);
+
+    await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
+
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
+        request: { serverId: "server-1", itemId: "movie-1" },
+      }),
+    );
+  });
+
+  it("opens a library, renders its children, and navigates to media detail", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    await user.click(await screen.findByRole("button", { name: /Movies/ }));
+
+    expect(await screen.findByRole("heading", { name: "Movies" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Demo Movie/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_list_children", {
+        request: { serverId: "server-1", parentId: "library-1", cursor: null },
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /Demo Movie/ }));
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+  });
+
+  it("moves media-card focus with arrow keys and opens detail with Enter", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
+    const second = await screen.findByRole("button", { name: /Second Movie/ });
+
+    firstMovie.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(second).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("heading", { name: "Second Movie" })).toBeInTheDocument();
+  });
+
+  it("navigates series to season to episode from media detail children", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    await user.click(await screen.findByRole("button", { name: /TV Shows/ }));
+    await user.click(await screen.findByRole("button", { name: /Demo Series/ }));
+
+    expect(await screen.findByRole("heading", { name: "Demo Series" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Season 1/ }));
+
+    expect(await screen.findByRole("heading", { name: "Season 1" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Episode 1/ }));
+
+    expect(await screen.findByRole("heading", { name: "Episode 1" })).toBeInTheDocument();
+  });
+
+  it("shows empty and failed media states without exposing raw details", async () => {
+    const user = userEvent.setup();
+    let childRequests = 0;
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "settings_get") {
+        return Promise.resolve({
+          theme: "system",
+          materialEffectsEnabled: true,
+        });
+      }
+      if (command === "providers_list_servers") {
+        return Promise.resolve([demoServer]);
+      }
+      if (command === "providers_list_libraries") {
+        return Promise.resolve([moviesLibrary]);
+      }
+      if (command === "media_list_children") {
+        childRequests += 1;
+        return Promise.resolve({
+          items: childRequests <= 2 ? [] : [demoMovie],
+          nextCursor: null,
+        });
+      }
+      if (command === "media_get_item") {
+        return Promise.reject({
+          code: "emby.server",
+          message: "Emby request failed",
+          recoverable: true,
+          detail: { body: "raw server detail" },
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    await user.click(await screen.findByRole("button", { name: /Movies/ }));
+    expect(await screen.findByText("No media found")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Back to Libraries" }));
+    await user.click(await screen.findByRole("button", { name: /Movies/ }));
+    await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
+
+    expect(await screen.findByText("Could not load media details")).toBeInTheDocument();
+    expect(screen.queryByText("raw server detail")).not.toBeInTheDocument();
   });
 
   it("logs into an Emby server from Settings and returns focus after closing", async () => {

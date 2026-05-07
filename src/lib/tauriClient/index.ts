@@ -4,6 +4,8 @@ export { media } from "./media";
 export { providers } from "./providers";
 export {
   queryKeys,
+  useChildren,
+  useItemDetail,
   useLibraries,
   useLoginManual,
   useServers,

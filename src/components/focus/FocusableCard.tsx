@@ -5,6 +5,7 @@ import type {
 } from "react";
 
 type FocusableCardProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  activateOnArrow?: boolean;
   children: ReactNode;
   focusScope?: string;
 };
@@ -13,6 +14,7 @@ const reverseKeys = new Set(["ArrowLeft", "ArrowUp"]);
 const forwardKeys = new Set(["ArrowRight", "ArrowDown"]);
 
 export function FocusableCard({
+  activateOnArrow = true,
   children,
   className = "",
   focusScope = "default",
@@ -45,7 +47,9 @@ export function FocusableCard({
     if (next) {
       event.preventDefault();
       next.focus();
-      next.click();
+      if (activateOnArrow) {
+        next.click();
+      }
     }
   }
 
