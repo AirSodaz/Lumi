@@ -46,7 +46,7 @@ export function MediaDetailView({
       <section className="view-stack" aria-labelledby="media-detail-loading">
         <DetailBackButton onBack={onBack} returnLabel={returnLabel} />
         <GlassPanel className="empty-state">
-          <Film aria-hidden="true" size={28} />
+          <Film aria-hidden="true" size={22} />
           <strong id="media-detail-loading">Loading media details</strong>
           <span>Fetching item data</span>
         </GlassPanel>
@@ -59,7 +59,7 @@ export function MediaDetailView({
       <section className="view-stack" aria-labelledby="media-detail-error">
         <DetailBackButton onBack={onBack} returnLabel={returnLabel} />
         <GlassPanel className="empty-state">
-          <Film aria-hidden="true" size={28} />
+          <Film aria-hidden="true" size={22} />
           <strong id="media-detail-error">Could not load media details</strong>
           <span>Try again from the library view</span>
         </GlassPanel>
@@ -105,7 +105,7 @@ export function MediaDetailView({
               onClick={handlePlay}
               type="button"
             >
-              <Play aria-hidden="true" size={17} />
+              <Play aria-hidden="true" size={15} />
               <span>{openPlayback.isPending ? "Opening" : "Play"}</span>
             </button>
             <span className="status-chip">{playbackStatus}</span>
@@ -206,7 +206,7 @@ type DetailBackButtonProps = {
 function DetailBackButton({ onBack, returnLabel }: DetailBackButtonProps) {
   return (
     <button className="secondary-action back-action" onClick={onBack} type="button">
-      <ChevronLeft aria-hidden="true" size={18} />
+      <ChevronLeft aria-hidden="true" size={16} />
       <span>Back to {returnLabel}</span>
     </button>
   );

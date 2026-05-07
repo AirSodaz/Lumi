@@ -40,7 +40,7 @@ export function LibrariesView({
               onClick={() => setSelectedLibrary(null)}
               type="button"
             >
-              <ChevronLeft aria-hidden="true" size={18} />
+              <ChevronLeft aria-hidden="true" size={16} />
               <span>Back to Libraries</span>
             </button>
           }
@@ -146,7 +146,7 @@ type EmptyStateProps = {
 function EmptyState({ icon: IconComponent, title, value }: EmptyStateProps) {
   return (
     <GlassPanel className="empty-state">
-      <IconComponent aria-hidden="true" size={28} />
+      <IconComponent aria-hidden="true" size={22} />
       <strong>{title}</strong>
       <span>{value}</span>
     </GlassPanel>

@@ -87,7 +87,7 @@ function ServersPanel() {
         {servers.map((server) => (
           <article className="server-row" key={server.id}>
             <span className="server-icon">
-              <Server aria-hidden="true" size={20} />
+              <Server aria-hidden="true" size={17} />
             </span>
             <div>
               <strong>{server.name}</strong>
@@ -98,7 +98,7 @@ function ServersPanel() {
                 <Tooltip.Trigger asChild>
                   <DropdownMenu.Trigger asChild>
                     <button aria-label={`More actions for ${server.name}`} type="button">
-                      <MoreHorizontal aria-hidden="true" size={18} />
+                      <MoreHorizontal aria-hidden="true" size={16} />
                     </button>
                   </DropdownMenu.Trigger>
                 </Tooltip.Trigger>
@@ -120,7 +120,7 @@ function ServersPanel() {
         ))}
         {servers.length === 0 ? (
           <GlassPanel className="empty-state compact">
-            <Server aria-hidden="true" size={26} />
+            <Server aria-hidden="true" size={22} />
             <strong>No servers connected</strong>
             <span>Add Server</span>
           </GlassPanel>
@@ -164,7 +164,7 @@ function AddServerDialog() {
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger asChild>
         <button className="primary-action" type="button">
-          <Plus aria-hidden="true" size={17} />
+          <Plus aria-hidden="true" size={15} />
           <span>Add Server</span>
         </button>
       </Dialog.Trigger>
@@ -180,7 +180,7 @@ function AddServerDialog() {
           <div className="dialog-title-row">
             <Dialog.Title>Add Emby Server</Dialog.Title>
             <Dialog.Close aria-label="Close" className="icon-button" type="button">
-              <X aria-hidden="true" size={18} />
+              <X aria-hidden="true" size={16} />
             </Dialog.Close>
           </div>
           <Dialog.Description className="sr-only">
@@ -246,7 +246,7 @@ function PlayerPanel() {
           <h2 id="player-title">Player</h2>
           <p>Native mpv</p>
         </div>
-        <MonitorCog aria-hidden="true" size={22} />
+        <MonitorCog aria-hidden="true" size={18} />
       </div>
       <div className="settings-list">
         <div className="settings-row">
@@ -277,7 +277,7 @@ function AppearancePanel() {
           <h2 id="appearance-title">Appearance</h2>
           <p>Content glass</p>
         </div>
-        <SlidersHorizontal aria-hidden="true" size={22} />
+        <SlidersHorizontal aria-hidden="true" size={18} />
       </div>
       <div className="settings-list">
         <label className="settings-row control-row">
@@ -328,7 +328,7 @@ function LogsPanel() {
           <h2 id="logs-title">Logs</h2>
           <p>Recent diagnostics</p>
         </div>
-        <Check aria-hidden="true" size={22} />
+        <Check aria-hidden="true" size={18} />
       </div>
       <div className="settings-list">
         <div className="settings-row">

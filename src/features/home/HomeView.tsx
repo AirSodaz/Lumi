@@ -56,14 +56,14 @@ export function HomeView({
                 onClick={() => onOpenMedia(featured)}
                 type="button"
               >
-                <Info aria-hidden="true" size={17} />
+                <Info aria-hidden="true" size={15} />
                 <span>More Info</span>
               </button>
               <span className="status-chip">{server?.name ?? "Server"}</span>
             </>
           ) : (
             <button className="primary-action" onClick={onOpenSettings} type="button">
-              <Server aria-hidden="true" size={17} />
+              <Server aria-hidden="true" size={15} />
               <span>Add Server</span>
             </button>
           )

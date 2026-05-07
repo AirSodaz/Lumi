@@ -5,8 +5,24 @@ import App from "../../App";
 import type { LibraryItem, LibraryItemDetail, ServerProfile } from "../../lib/tauriClient";
 import { invoke } from "@tauri-apps/api/core";
 
+const windowApiMocks = vi.hoisted(() => ({
+  close: vi.fn(),
+  minimize: vi.fn(),
+  startDragging: vi.fn(),
+  toggleMaximize: vi.fn(),
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: vi.fn(() => ({
+    close: windowApiMocks.close,
+    minimize: windowApiMocks.minimize,
+    startDragging: windowApiMocks.startDragging,
+    toggleMaximize: windowApiMocks.toggleMaximize,
+  })),
 }));
 
 const invokeMock = vi.mocked(invoke);
@@ -197,6 +213,14 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
 
 describe("LumiShell", () => {
   beforeEach(() => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    });
+    Object.values(windowApiMocks).forEach((mock) => {
+      mock.mockReset();
+      mock.mockResolvedValue(undefined);
+    });
     scrollIntoViewMock = vi.fn();
     Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
@@ -239,6 +263,78 @@ describe("LumiShell", () => {
       }
       return Promise.resolve(null);
     });
+  });
+
+  it("renders Windows chrome without the extra button before Back", async () => {
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+
+    const navigation = screen.getByLabelText("Window navigation");
+    expect(within(navigation).getAllByRole("button")).toHaveLength(2);
+    expect(within(navigation).getByRole("button", { name: "Go back" })).toBeDisabled();
+    expect(within(navigation).getByRole("button", { name: "Go forward" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /sidebar|pane|app menu/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps macOS on native window chrome", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15",
+    });
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+
+    expect(screen.queryByLabelText("Window navigation")).not.toBeInTheDocument();
+    expect(screen.queryByRole("menubar", { name: "Application menu" })).not.toBeInTheDocument();
+  });
+
+  it("navigates route history from the Windows titlebar", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const back = await screen.findByRole("button", { name: "Go back" });
+    const forward = screen.getByRole("button", { name: "Go forward" });
+    expect(back).toBeDisabled();
+    expect(forward).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Libraries" }));
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+    expect(back).toBeEnabled();
+    expect(forward).toBeDisabled();
+
+    await user.click(back);
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(forward).toBeEnabled();
+
+    await user.click(forward);
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+  });
+
+  it("opens Windows titlebar menus and calls window controls", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "View" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Search" }));
+    expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "File" }));
+    expect(await screen.findByRole("menuitem", { name: "Open File" })).toHaveAttribute(
+      "data-disabled",
+    );
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByRole("button", { name: "Minimize window" }));
+    expect(windowApiMocks.minimize).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Maximize or restore window" }));
+    expect(windowApiMocks.toggleMaximize).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Close window" }));
+    expect(windowApiMocks.close).toHaveBeenCalledTimes(1);
   });
 
   it("renders product navigation and removes bootstrap copy", async () => {

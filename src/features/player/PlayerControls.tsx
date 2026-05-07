@@ -57,7 +57,7 @@ export function PlayerControls({
           }
           type="button"
         >
-          <RotateCcw aria-hidden="true" size={17} />
+          <RotateCcw aria-hidden="true" size={15} />
         </button>
         <button
           aria-label={isPaused ? "Play" : "Pause"}
@@ -66,9 +66,9 @@ export function PlayerControls({
           type="button"
         >
           {isPaused ? (
-            <Play aria-hidden="true" size={17} />
+            <Play aria-hidden="true" size={15} />
           ) : (
-            <Pause aria-hidden="true" size={17} />
+            <Pause aria-hidden="true" size={15} />
           )}
         </button>
         <button
@@ -82,10 +82,10 @@ export function PlayerControls({
           }
           type="button"
         >
-          <RotateCw aria-hidden="true" size={17} />
+          <RotateCw aria-hidden="true" size={15} />
         </button>
         <label className="volume-control">
-          <Volume2 aria-hidden="true" size={17} />
+          <Volume2 aria-hidden="true" size={15} />
           <input
             aria-label="Volume"
             max={100}
@@ -101,7 +101,7 @@ export function PlayerControls({
           onClick={() => void send({ kind: "close" })}
           type="button"
         >
-          <X aria-hidden="true" size={17} />
+          <X aria-hidden="true" size={15} />
         </button>
       </div>
     </section>
