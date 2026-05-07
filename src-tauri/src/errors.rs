@@ -45,3 +45,20 @@ impl AppError {
             .with_detail(json!({ "resource": resource }))
     }
 }
+
+impl From<rusqlite::Error> for AppError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::new("persistence.sqlite", "SQLite persistence operation failed")
+            .with_detail(json!({ "source": error.to_string() }))
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::new(
+            "persistence.json",
+            "Stored JSON data could not be processed",
+        )
+        .with_detail(json!({ "source": error.to_string() }))
+    }
+}
