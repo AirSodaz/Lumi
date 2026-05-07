@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::AppResult;
 
+pub mod emby;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProviderKind {

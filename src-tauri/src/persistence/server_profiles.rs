@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::{errors::AppResult, providers::ServerProfile};
 
@@ -78,6 +78,44 @@ impl<'connection> ServerProfileRepository<'connection> {
         }
 
         Ok(profiles)
+    }
+
+    pub fn get(&self, server_id: &str) -> AppResult<Option<ServerProfile>> {
+        let row = self
+            .connection
+            .query_row(
+                "
+                SELECT id, provider_kind, name, base_url, user_id, created_at, updated_at
+                FROM server_profiles
+                WHERE id = ?1
+                ",
+                params![server_id],
+                |row| {
+                    Ok(ServerProfileRow {
+                        id: row.get(0)?,
+                        provider_kind: row.get(1)?,
+                        name: row.get(2)?,
+                        base_url: row.get(3)?,
+                        user_id: row.get(4)?,
+                        created_at: row.get(5)?,
+                        updated_at: row.get(6)?,
+                    })
+                },
+            )
+            .optional()?;
+
+        row.map(|row| {
+            Ok(ServerProfile {
+                id: row.id,
+                provider_kind: parse_provider_kind(&row.provider_kind)?,
+                name: row.name,
+                base_url: row.base_url,
+                user_id: row.user_id,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+        })
+        .transpose()
     }
 
     pub fn delete(&self, server_id: &str) -> AppResult<()> {

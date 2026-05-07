@@ -1,5 +1,6 @@
 mod credentials;
 mod database;
+mod local_store;
 mod media_cache;
 mod migrations;
 mod server_profiles;
@@ -10,6 +11,7 @@ pub use credentials::{
     CredentialKey, CredentialStore, MemoryCredentialStore, SystemCredentialStore,
 };
 pub use database::Database;
+pub use local_store::LocalStore;
 pub use media_cache::MediaCacheRepository;
 pub use server_profiles::ServerProfileRepository;
 

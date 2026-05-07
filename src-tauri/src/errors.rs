@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -36,6 +38,10 @@ impl AppError {
         &self.code
     }
 
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     pub fn recoverable(&self) -> bool {
         self.recoverable
     }
@@ -45,6 +51,14 @@ impl AppError {
             .with_detail(json!({ "resource": resource }))
     }
 }
+
+impl Display for AppError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for AppError {}
 
 impl From<rusqlite::Error> for AppError {
     fn from(error: rusqlite::Error) -> Self {

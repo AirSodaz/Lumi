@@ -1,10 +1,19 @@
-use std::sync::RwLock;
+use std::{
+    path::Path,
+    sync::{Arc, RwLock},
+};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     errors::{AppError, AppResult},
-    providers::{ProviderRegistry, ServerProfile},
+    persistence::{
+        CredentialStore, Database, LocalStore, MemoryCredentialStore, SystemCredentialStore,
+    },
+    providers::{
+        emby::{Clock, EmbyHttpTransport, ReqwestEmbyHttpTransport, SystemClock},
+        ProviderRegistry, ServerProfile,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,24 +47,80 @@ pub struct AppSettingsPatch {
     pub material_effects_enabled: Option<bool>,
 }
 
-#[derive(Default)]
 pub struct AppState {
     provider_registry: ProviderRegistry,
-    server_profiles: RwLock<Vec<ServerProfile>>,
+    local_store: Arc<LocalStore>,
+    credential_store: Arc<dyn CredentialStore>,
+    emby_transport: Arc<dyn EmbyHttpTransport>,
+    clock: Arc<dyn Clock>,
     settings: RwLock<AppSettings>,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        let database = Database::open_in_memory().expect("open in-memory Lumi database");
+        database
+            .initialize()
+            .expect("initialize in-memory Lumi database");
+        Self::with_services(
+            Arc::new(LocalStore::new(database)),
+            Arc::new(MemoryCredentialStore::default()),
+            Arc::new(ReqwestEmbyHttpTransport::default()),
+            Arc::new(SystemClock),
+        )
+    }
+}
+
 impl AppState {
+    pub fn persistent(database_path: impl AsRef<Path>) -> AppResult<Self> {
+        let database = Database::open(database_path)?;
+        database.initialize()?;
+        Ok(Self::with_services(
+            Arc::new(LocalStore::new(database)),
+            Arc::new(SystemCredentialStore::new()?),
+            Arc::new(ReqwestEmbyHttpTransport::new()?),
+            Arc::new(SystemClock),
+        ))
+    }
+
+    pub fn with_services(
+        local_store: Arc<LocalStore>,
+        credential_store: Arc<dyn CredentialStore>,
+        emby_transport: Arc<dyn EmbyHttpTransport>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            provider_registry: ProviderRegistry::default(),
+            local_store,
+            credential_store,
+            emby_transport,
+            clock,
+            settings: RwLock::new(AppSettings::default()),
+        }
+    }
+
     pub fn provider_registry(&self) -> &ProviderRegistry {
         &self.provider_registry
     }
 
+    pub fn local_store(&self) -> Arc<LocalStore> {
+        self.local_store.clone()
+    }
+
+    pub fn credential_store(&self) -> Arc<dyn CredentialStore> {
+        self.credential_store.clone()
+    }
+
+    pub fn emby_transport(&self) -> Arc<dyn EmbyHttpTransport> {
+        self.emby_transport.clone()
+    }
+
+    pub fn clock(&self) -> Arc<dyn Clock> {
+        self.clock.clone()
+    }
+
     pub fn list_servers(&self) -> AppResult<Vec<ServerProfile>> {
-        Ok(self
-            .server_profiles
-            .read()
-            .map_err(|_| AppError::state_lock_poisoned("server_profiles"))?
-            .clone())
+        self.local_store.list_server_profiles()
     }
 
     pub fn settings(&self) -> AppSettings {
