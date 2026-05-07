@@ -145,18 +145,26 @@ strong {
 
 .lumi-shell {
   --shell-top-offset: var(--chrome-height);
+  --sidebar-collapsed-width: 80px;
+  --sidebar-current-width: var(--sidebar-width);
+  --sidebar-width: 224px;
   position: relative;
   display: grid;
   height: 100vh;
   min-height: 0;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-current-width) minmax(0, 1fr);
   grid-template-rows: var(--shell-top-offset) minmax(0, 1fr);
   overflow: hidden;
   isolation: isolate;
+  transition: grid-template-columns var(--motion-panel-transition);
 }
 
 .lumi-shell[data-platform="macos"] {
   --shell-top-offset: var(--macos-titlebar-safe-area);
+}
+
+.lumi-shell[data-sidebar-collapsed="true"] {
+  --sidebar-current-width: var(--sidebar-collapsed-width);
 }
 
 .shell-vignette {
@@ -316,11 +324,14 @@ strong {
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(34px) saturate(1.2);
   overflow: hidden;
+  transition:
+    gap var(--motion-panel-transition),
+    padding var(--motion-panel-transition);
 }
 
 .brand-lockup {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
   gap: 10px;
   padding: 0 6px;
@@ -339,6 +350,36 @@ strong {
   font-weight: 760;
 }
 
+.brand-name,
+.nav-button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-toggle {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  background: rgb(255 255 255 / 9%);
+  transition:
+    transform var(--motion-focus-enter),
+    box-shadow var(--motion-focus-enter),
+    background var(--motion-focus-enter),
+    color var(--motion-focus-enter);
+}
+
+.sidebar-toggle:hover {
+  color: var(--color-text-primary);
+  background: rgb(255 255 255 / 15%);
+  transform: translateY(-1px);
+}
+
 .primary-nav,
 .settings-tabs {
   display: grid;
@@ -347,6 +388,7 @@ strong {
 
 .focusable-card,
 .nav-button,
+.sidebar-toggle,
 .titlebar-icon-button,
 .titlebar-menu-trigger,
 .titlebar-window-button,
@@ -376,6 +418,7 @@ strong {
 .primary-action:focus-visible,
 .secondary-action:focus-visible,
 .icon-button:focus-visible,
+.sidebar-toggle:focus-visible,
 .titlebar-icon-button:focus-visible,
 .titlebar-menu-trigger:focus-visible,
 .titlebar-window-button:focus-visible,
@@ -426,6 +469,31 @@ select:focus-visible {
   color: #101211;
   background: rgb(255 255 255 / 92%);
   box-shadow: 0 16px 42px rgb(0 0 0 / 34%);
+}
+
+.lumi-shell[data-sidebar-collapsed="true"] .shell-sidebar {
+  gap: 18px;
+  padding-inline: 8px;
+}
+
+.lumi-shell[data-sidebar-collapsed="true"] .brand-lockup {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 8px;
+  padding-inline: 0;
+}
+
+.lumi-shell[data-sidebar-collapsed="true"] .brand-name,
+.lumi-shell[data-sidebar-collapsed="true"] .nav-button-label {
+  display: none;
+}
+
+.lumi-shell[data-sidebar-collapsed="true"] .nav-button {
+  min-height: 42px;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 0;
+  padding: 0;
 }
 
 .shell-content {
@@ -1172,7 +1240,7 @@ select:focus-visible {
 
 @media (max-width: 1120px) {
   .lumi-shell {
-    grid-template-columns: 208px minmax(0, 1fr);
+    --sidebar-width: 208px;
   }
 
   .shell-sidebar {

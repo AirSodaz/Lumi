@@ -4,6 +4,8 @@ import {
   Home,
   Library,
   Minus,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
   Search,
   Settings,
@@ -53,6 +55,7 @@ type ViewTransitionDocument = Document & {
 };
 
 const initialRoute: ShellRoute = { kind: "view", view: "home" };
+const sidebarCollapsedStorageKey = "lumi.sidebarCollapsed";
 
 const navItems: Array<{ id: ViewId; label: string; icon: Icon }> = [
   { id: "home", label: "Home", icon: Home },
@@ -67,6 +70,9 @@ export function LumiShell() {
     current: initialRoute,
     forwardStack: [],
   }));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    readSidebarCollapsedPreference,
+  );
   const platform = useMemo(() => detectShellPlatform(), []);
   const route = history.current;
   const serversQuery = useServers();
@@ -124,6 +130,14 @@ export function LumiShell() {
       kind: "mediaDetail",
       returnView,
       serverId: item.serverId,
+    });
+  }
+
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      writeSidebarCollapsedPreference(next);
+      return next;
     });
   }
 
@@ -219,7 +233,11 @@ export function LumiShell() {
 
   return (
     <Tooltip.Provider delayDuration={250}>
-      <div className="lumi-shell" data-platform={platform}>
+      <div
+        className="lumi-shell"
+        data-platform={platform}
+        data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+      >
         <AppChrome
           activeView={activeView}
           canGoBack={history.backStack.length > 0}
@@ -230,17 +248,42 @@ export function LumiShell() {
           platform={platform}
         />
         <div className="shell-vignette" aria-hidden="true" />
-        <aside className="shell-sidebar" aria-label="Primary">
+        <aside className="shell-sidebar" aria-label="Primary" id="lumi-primary-sidebar">
           <div className="brand-lockup">
             <span className="brand-mark" aria-hidden="true">
               L
             </span>
-            <strong>Lumi</strong>
+            <strong className="brand-name">Lumi</strong>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  aria-controls="lumi-primary-sidebar"
+                  aria-expanded={!sidebarCollapsed}
+                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  className="sidebar-toggle"
+                  onClick={toggleSidebarCollapsed}
+                  type="button"
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeftOpen aria-hidden="true" size={17} />
+                  ) : (
+                    <PanelLeftClose aria-hidden="true" size={17} />
+                  )}
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content className="tooltip-content" side="right">
+                  {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  <Tooltip.Arrow className="tooltip-arrow" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
           </div>
           <nav className="primary-nav" aria-label="Main navigation">
             {navItems.map((item) => (
               <NavButton
                 active={activeView === item.id}
+                collapsed={sidebarCollapsed}
                 icon={item.icon}
                 key={item.id}
                 label={item.label}
@@ -443,6 +486,7 @@ function TitlebarMenu({ items, label }: TitlebarMenuProps) {
 
 type NavButtonProps = {
   active: boolean;
+  collapsed: boolean;
   icon: Icon;
   label: string;
   onMoveRight: () => boolean;
@@ -451,6 +495,7 @@ type NavButtonProps = {
 
 function NavButton({
   active,
+  collapsed,
   icon: IconComponent,
   label,
   onMoveRight,
@@ -462,9 +507,10 @@ function NavButton({
     }
   }
 
-  return (
+  const button = (
     <FocusableCard
       aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? label : undefined}
       className="nav-button"
       data-shell-nav-active={active ? "true" : undefined}
       focusScope="main-navigation"
@@ -472,8 +518,26 @@ function NavButton({
       onClick={onSelect}
     >
       <IconComponent aria-hidden="true" size={18} />
-      <span>{label}</span>
+      <span aria-hidden={collapsed ? true : undefined} className="nav-button-label">
+        {label}
+      </span>
     </FocusableCard>
+  );
+
+  if (!collapsed) {
+    return button;
+  }
+
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger asChild>{button}</Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content className="tooltip-content" side="right">
+          {label}
+          <Tooltip.Arrow className="tooltip-arrow" />
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }
 
@@ -516,6 +580,30 @@ function detectShellPlatform(): ShellPlatform {
   return /macintosh|mac os|macintel|macppc|mac68k/i.test(platformText)
     ? "macos"
     : "windows";
+}
+
+function readSidebarCollapsedPreference() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(sidebarCollapsedStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeSidebarCollapsedPreference(collapsed: boolean) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(sidebarCollapsedStorageKey, String(collapsed));
+  } catch {
+    // Sidebar state is a convenience preference; ignore unavailable storage.
+  }
 }
 
 function routeIdentity(route: ShellRoute) {

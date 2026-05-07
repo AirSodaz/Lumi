@@ -240,6 +240,7 @@ describe("LumiShell", () => {
       configurable: true,
       value: startViewTransitionMock,
     });
+    window.localStorage.clear();
 
     invokeMock.mockReset();
     invokeMock.mockImplementation((command: string) => {
@@ -274,7 +275,7 @@ describe("LumiShell", () => {
     expect(within(navigation).getAllByRole("button")).toHaveLength(2);
     expect(within(navigation).getByRole("button", { name: "Go back" })).toBeDisabled();
     expect(within(navigation).getByRole("button", { name: "Go forward" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: /sidebar|pane|app menu/i })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole("button", { name: /sidebar|pane|app menu/i })).not.toBeInTheDocument();
   });
 
   it("keeps macOS on native window chrome", async () => {
@@ -349,6 +350,58 @@ describe("LumiShell", () => {
     expect(screen.queryByText("Emby-first provider")).not.toBeInTheDocument();
     expect(screen.queryByText("Native mpv playback")).not.toBeInTheDocument();
     expect(screen.queryByText("System material shell")).not.toBeInTheDocument();
+  });
+
+  it("collapses and expands the sidebar while persisting the preference", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+    const shell = screen.getByLabelText("Primary").closest(".lumi-shell");
+    expect(shell).toHaveAttribute("data-sidebar-collapsed", "false");
+
+    await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+
+    expect(shell).toHaveAttribute("data-sidebar-collapsed", "true");
+    expect(window.localStorage.getItem("lumi.sidebarCollapsed")).toBe("true");
+
+    await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
+
+    expect(shell).toHaveAttribute("data-sidebar-collapsed", "false");
+    expect(window.localStorage.getItem("lumi.sidebarCollapsed")).toBe("false");
+  });
+
+  it("loads the persisted collapsed sidebar preference", async () => {
+    window.localStorage.setItem("lumi.sidebarCollapsed", "true");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+    expect(screen.getByLabelText("Primary").closest(".lumi-shell")).toHaveAttribute(
+      "data-sidebar-collapsed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("keeps collapsed sidebar navigation accessible and keyboard-navigable", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem("lumi.sidebarCollapsed", "true");
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+
+    const home = screen.getByRole("button", { name: "Home" });
+    const libraries = screen.getByRole("button", { name: "Libraries" });
+    home.focus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(libraries).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Libraries" })).toBeInTheDocument();
   });
 
   it("switches navigation with pointer and vertical arrow-key focus", async () => {
