@@ -105,9 +105,12 @@ const episodeOne: LibraryItem = {
 
 type CommandArgs = {
   request?: {
+    command?: unknown;
     itemId?: string;
+    mediaSourceId?: string | null;
     parentId?: string | null;
     serverId?: string;
+    sessionId?: string;
   };
 };
 
@@ -169,6 +172,24 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
     return Promise.resolve({
       theme: "dark",
       materialEffectsEnabled: true,
+    });
+  }
+  if (command === "playback_open") {
+    return Promise.resolve({
+      id: "session-1",
+      serverId: request?.serverId ?? "server-1",
+      itemId: request?.itemId ?? "movie-1",
+      state: "playing",
+      positionSeconds: 0,
+    });
+  }
+  if (command === "playback_command") {
+    return Promise.resolve({
+      id: request?.sessionId ?? "session-1",
+      serverId: "server-1",
+      itemId: "movie-1",
+      state: "paused",
+      positionSeconds: 0,
     });
   }
   return Promise.resolve(null);
@@ -296,7 +317,17 @@ describe("LumiShell", () => {
     await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
 
     expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+    const play = screen.getByRole("button", { name: "Play" });
+    expect(play).toBeEnabled();
+    await user.click(play);
+    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("playback_open", {
+      request: {
+        serverId: "server-1",
+        itemId: "movie-1",
+        mediaSourceId: "source-1",
+      },
+    });
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
         request: { serverId: "server-1", itemId: "movie-1" },
@@ -342,7 +373,36 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
     expect(screen.getByText("A mapped movie.")).toBeInTheDocument();
     expect(screen.getByText("No playback source")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
     expect(screen.queryByText("Could not load media details")).not.toBeInTheDocument();
+  });
+
+  it("shows playback errors without exposing raw stream URLs or tokens", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "playback_open") {
+        return Promise.reject({
+          code: "playback.mpv_library_missing",
+          message: "Native mpv library could not be loaded",
+          recoverable: true,
+          detail: {
+            mediaUrl: "http://localhost/stream.mkv?api_key=token-value",
+          },
+        });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
+    await user.click(await screen.findByRole("button", { name: "Play" }));
+
+    expect(await screen.findByText("Native mpv library could not be loaded")).toBeInTheDocument();
+    expect(screen.getByText("playback.mpv_library_missing")).toBeInTheDocument();
+    expect(screen.queryByText(/api_key=token-value/)).not.toBeInTheDocument();
   });
 
   it("opens a library, renders its children, and navigates to media detail", async () => {

@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod bootstrap;
 pub mod media;
+pub mod playback;
 pub mod providers;
 pub mod settings;
 

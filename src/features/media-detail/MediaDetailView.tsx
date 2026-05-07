@@ -1,4 +1,5 @@
 import { ChevronLeft, Film, Play } from "lucide-react";
+import { useState } from "react";
 import { FocusScope } from "../../components/focus";
 import { CinematicHero, GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
@@ -6,8 +7,12 @@ import { formatMetadata } from "../../lib/media/format";
 import {
   useChildren,
   useItemDetail,
+  useOpenPlayback,
+  type AppError,
   type LibraryItem,
+  type PlayerSession,
 } from "../../lib/tauriClient";
+import { PlayerControls } from "../player/PlayerControls";
 
 type MediaDetailViewProps = {
   itemId: string;
@@ -27,6 +32,9 @@ export function MediaDetailView({
   serverId,
 }: MediaDetailViewProps) {
   const detail = useItemDetail(serverId, itemId);
+  const openPlayback = useOpenPlayback();
+  const [activeSession, setActiveSession] = useState<PlayerSession | null>(null);
+  const [playbackError, setPlaybackError] = useState<AppError | null>(null);
   const item = detail.data?.item ?? null;
   const shouldLoadChildren = item ? browsableTypes.has(item.itemType) : false;
   const children = useChildren(shouldLoadChildren ? serverId : null, item?.id ?? null);
@@ -58,6 +66,25 @@ export function MediaDetailView({
   }
 
   const mediaSources = detail.data?.mediaSources ?? [];
+  const canPlay = mediaSources.length > 0;
+
+  async function handlePlay() {
+    if (!item || !canPlay) {
+      return;
+    }
+
+    setPlaybackError(null);
+    try {
+      const session = await openPlayback.mutateAsync({
+        itemId: item.id,
+        mediaSourceId: mediaSources[0]?.id ?? null,
+        serverId,
+      });
+      setActiveSession(session);
+    } catch (caught) {
+      setPlaybackError(toAppError(caught));
+    }
+  }
 
   return (
     <section className="view-stack media-detail" aria-labelledby="media-title">
@@ -65,9 +92,14 @@ export function MediaDetailView({
       <CinematicHero
         actions={
           <>
-            <button className="primary-action" disabled type="button">
+            <button
+              className="primary-action"
+              disabled={!canPlay || openPlayback.isPending}
+              onClick={handlePlay}
+              type="button"
+            >
               <Play aria-hidden="true" size={17} />
-              <span>Play</span>
+              <span>{openPlayback.isPending ? "Opening" : "Play"}</span>
             </button>
             <span className="status-chip">
               {mediaSources.length > 0
@@ -85,6 +117,20 @@ export function MediaDetailView({
       >
         <p>{item.overview ?? "No overview available."}</p>
       </CinematicHero>
+
+      {playbackError ? (
+        <GlassPanel className="form-error playback-error" role="alert">
+          <strong>{playbackError.message}</strong>
+          <span>{playbackError.code}</span>
+        </GlassPanel>
+      ) : null}
+
+      {activeSession && activeSession.state !== "closed" ? (
+        <PlayerControls
+          onSessionChange={setActiveSession}
+          session={activeSession}
+        />
+      ) : null}
 
       {shouldLoadChildren ? (
         <section className="media-rail" aria-labelledby="detail-children">
@@ -130,6 +176,23 @@ export function MediaDetailView({
       ) : null}
     </section>
   );
+}
+
+function toAppError(error: unknown): AppError {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    "message" in error
+  ) {
+    return error as AppError;
+  }
+
+  return {
+    code: "playback.unknown",
+    message: "Playback could not be started",
+    recoverable: true,
+  };
 }
 
 type DetailBackButtonProps = {

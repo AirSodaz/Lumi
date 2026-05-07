@@ -6,9 +6,15 @@ import {
 
 import { auth } from "./auth";
 import { media } from "./media";
+import { playback } from "./playback";
 import { providers } from "./providers";
 import { settings } from "./settings";
-import type { AppSettingsPatch, LoginManualRequest } from "./types";
+import type {
+  AppSettingsPatch,
+  LoginManualRequest,
+  PlaybackCommandRequest,
+  PlayerOpenRequest,
+} from "./types";
 
 const QUERY_STALE_TIME_MS = 60_000;
 
@@ -101,5 +107,17 @@ export function useUpdateSettings() {
       queryClient.setQueryData(queryKeys.settings, updated);
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings });
     },
+  });
+}
+
+export function useOpenPlayback() {
+  return useMutation({
+    mutationFn: (request: PlayerOpenRequest) => playback.open(request),
+  });
+}
+
+export function usePlaybackCommand() {
+  return useMutation({
+    mutationFn: (request: PlaybackCommandRequest) => playback.command(request),
   });
 }

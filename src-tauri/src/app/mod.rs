@@ -10,6 +10,7 @@ use crate::{
     persistence::{
         CredentialStore, Database, LocalStore, MemoryCredentialStore, SystemCredentialStore,
     },
+    player::{MpvBackend, PlaybackSessionStore, RuntimeMpvBackend},
     providers::{
         emby::{Clock, EmbyHttpTransport, ReqwestEmbyHttpTransport, SystemClock},
         ProviderRegistry, ServerProfile,
@@ -53,6 +54,8 @@ pub struct AppState {
     credential_store: Arc<dyn CredentialStore>,
     emby_transport: Arc<dyn EmbyHttpTransport>,
     clock: Arc<dyn Clock>,
+    player_backend: Arc<dyn MpvBackend>,
+    player_sessions: Arc<PlaybackSessionStore>,
     settings: RwLock<AppSettings>,
 }
 
@@ -89,12 +92,30 @@ impl AppState {
         emby_transport: Arc<dyn EmbyHttpTransport>,
         clock: Arc<dyn Clock>,
     ) -> Self {
+        Self::with_services_and_player(
+            local_store,
+            credential_store,
+            emby_transport,
+            clock,
+            Arc::new(RuntimeMpvBackend::default()),
+        )
+    }
+
+    pub fn with_services_and_player(
+        local_store: Arc<LocalStore>,
+        credential_store: Arc<dyn CredentialStore>,
+        emby_transport: Arc<dyn EmbyHttpTransport>,
+        clock: Arc<dyn Clock>,
+        player_backend: Arc<dyn MpvBackend>,
+    ) -> Self {
         Self {
             provider_registry: ProviderRegistry::default(),
             local_store,
             credential_store,
             emby_transport,
             clock,
+            player_backend,
+            player_sessions: Arc::new(PlaybackSessionStore::default()),
             settings: RwLock::new(AppSettings::default()),
         }
     }
@@ -117,6 +138,14 @@ impl AppState {
 
     pub fn clock(&self) -> Arc<dyn Clock> {
         self.clock.clone()
+    }
+
+    pub fn player_backend(&self) -> Arc<dyn MpvBackend> {
+        self.player_backend.clone()
+    }
+
+    pub fn player_sessions(&self) -> Arc<PlaybackSessionStore> {
+        self.player_sessions.clone()
     }
 
     pub fn list_servers(&self) -> AppResult<Vec<ServerProfile>> {

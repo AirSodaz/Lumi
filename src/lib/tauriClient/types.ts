@@ -76,3 +76,38 @@ export type GetItemRequest = {
   serverId: string;
   itemId: string;
 };
+
+export type PlayerState =
+  | "opening"
+  | "playing"
+  | "paused"
+  | "buffering"
+  | "ended"
+  | "error"
+  | "closed";
+
+export type PlayerSession = {
+  id: string;
+  serverId: string;
+  itemId: string;
+  state: PlayerState;
+  positionSeconds: number;
+};
+
+export type PlayerOpenRequest = {
+  serverId: string;
+  itemId: string;
+  mediaSourceId?: string | null;
+};
+
+export type PlaybackCommand =
+  | { kind: "play" }
+  | { kind: "pause" }
+  | { kind: "seek"; positionSeconds: number }
+  | { kind: "setVolume"; volume: number }
+  | { kind: "close" };
+
+export type PlaybackCommandRequest = {
+  sessionId: string;
+  command: PlaybackCommand;
+};

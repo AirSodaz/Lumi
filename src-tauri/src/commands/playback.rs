@@ -1,0 +1,163 @@
+use std::sync::Arc;
+
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+
+use crate::{
+    app::AppState,
+    errors::{AppError, AppResult},
+    events,
+    player::{
+        playback_window_failed, NativePlayerService, PlaybackCommand, PlaybackErrorEvent,
+        PlaybackHost, PlaybackPositionEvent, PlayerOpenRequest, PlayerService, PlayerSession,
+        PlayerWindow, ResolvedPlaybackSource,
+    },
+    providers::{emby::EmbyProvider, MediaProvider},
+};
+
+use super::auth::emby_provider_for_state;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackCommandRequest {
+    pub session_id: String,
+    pub command: PlaybackCommand,
+}
+
+#[tauri::command]
+pub async fn playback_open(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: PlayerOpenRequest,
+) -> AppResult<PlayerSession> {
+    let host = Arc::new(TauriPlaybackHost::new(app));
+    open_for_state(&state, host, request)
+}
+
+#[tauri::command]
+pub async fn playback_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: PlaybackCommandRequest,
+) -> AppResult<PlayerSession> {
+    let host = Arc::new(TauriPlaybackHost::new(app));
+    command_for_state(&state, host, request)
+}
+
+pub fn open_for_state(
+    state: &AppState,
+    host: Arc<dyn PlaybackHost>,
+    request: PlayerOpenRequest,
+) -> AppResult<PlayerSession> {
+    let source = resolve_playback_source(&emby_provider_for_state(state), &request)?;
+    player_service_for_state(state, host).open(request, source)
+}
+
+pub fn command_for_state(
+    state: &AppState,
+    host: Arc<dyn PlaybackHost>,
+    request: PlaybackCommandRequest,
+) -> AppResult<PlayerSession> {
+    player_service_for_state(state, host).command(&request.session_id, request.command)
+}
+
+fn player_service_for_state(state: &AppState, host: Arc<dyn PlaybackHost>) -> NativePlayerService {
+    NativePlayerService::with_store(state.player_sessions(), host, state.player_backend())
+}
+
+fn resolve_playback_source(
+    provider: &EmbyProvider,
+    request: &PlayerOpenRequest,
+) -> AppResult<ResolvedPlaybackSource> {
+    let sources = provider.get_playback_sources(&request.server_id, &request.item_id)?;
+
+    if sources.is_empty() {
+        return Err(
+            AppError::new("playback.no_source", "No playback source is available")
+                .with_recoverable(true),
+        );
+    }
+
+    let source = match request.media_source_id.as_deref() {
+        Some(source_id) => sources
+            .into_iter()
+            .find(|source| source.id == source_id)
+            .ok_or_else(|| {
+                AppError::new("playback.source_not_found", "Playback source was not found")
+                    .with_recoverable(true)
+            })?,
+        None => sources
+            .into_iter()
+            .next()
+            .expect("sources checked non-empty"),
+    };
+
+    Ok(ResolvedPlaybackSource {
+        id: source.id,
+        url: source.url,
+    })
+}
+
+struct TauriPlaybackHost {
+    app: AppHandle,
+}
+
+impl TauriPlaybackHost {
+    fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl PlaybackHost for TauriPlaybackHost {
+    fn create_player_window(&self, session_id: &str) -> AppResult<PlayerWindow> {
+        let label = format!("player-{session_id}");
+        let window = if let Some(window) = self.app.get_webview_window(&label) {
+            window
+        } else {
+            WebviewWindowBuilder::new(
+                &self.app,
+                label.clone(),
+                WebviewUrl::App("index.html?playerWindow=1".into()),
+            )
+            .title("Lumi Player")
+            .inner_size(1120.0, 700.0)
+            .resizable(true)
+            .build()
+            .map_err(playback_window_failed)?
+        };
+
+        let handle = window.window_handle().map_err(playback_window_failed)?;
+        let window_id = window_id_from_raw(handle.as_raw())?;
+
+        Ok(PlayerWindow { label, window_id })
+    }
+
+    fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()> {
+        self.app
+            .emit(events::PLAYBACK_STATE_CHANGED, session)
+            .map_err(playback_window_failed)
+    }
+
+    fn emit_position(&self, event: &PlaybackPositionEvent) -> AppResult<()> {
+        self.app
+            .emit(events::PLAYBACK_POSITION, event)
+            .map_err(playback_window_failed)
+    }
+
+    fn emit_error(&self, event: &PlaybackErrorEvent) -> AppResult<()> {
+        self.app
+            .emit(events::PLAYBACK_ERROR, event)
+            .map_err(playback_window_failed)
+    }
+}
+
+fn window_id_from_raw(handle: RawWindowHandle) -> AppResult<i64> {
+    match handle {
+        RawWindowHandle::Win32(handle) => Ok(handle.hwnd.get() as i64),
+        RawWindowHandle::AppKit(handle) => Ok(handle.ns_view.as_ptr() as i64),
+        RawWindowHandle::Xlib(handle) => Ok(handle.window as i64),
+        RawWindowHandle::Xcb(handle) => Ok(handle.window.get() as i64),
+        _ => Err(playback_window_failed("unsupported native window handle")),
+    }
+}

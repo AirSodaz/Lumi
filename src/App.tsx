@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+import { PlayerWindowView } from "./features/player/PlayerWindowView";
 import { LumiShell } from "./features/shell/LumiShell";
 import "./styles/global.css";
 
@@ -21,9 +22,16 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <LumiShell />
+      {isPlayerWindow() ? <PlayerWindowView /> : <LumiShell />}
     </QueryClientProvider>
   );
 }
 
 export default App;
+
+function isPlayerWindow() {
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("playerWindow") === "1"
+  );
+}

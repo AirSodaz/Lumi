@@ -1,6 +1,7 @@
 export { auth } from "./auth";
 export { getBootstrapStatus } from "./bootstrap";
 export { media } from "./media";
+export { playback } from "./playback";
 export { providers } from "./providers";
 export {
   queryKeys,
@@ -8,6 +9,8 @@ export {
   useItemDetail,
   useLibraries,
   useLoginManual,
+  useOpenPlayback,
+  usePlaybackCommand,
   useServers,
   useSettings,
   useUpdateSettings,
@@ -24,7 +27,12 @@ export type {
   ListLibrariesRequest,
   LoginManualRequest,
   MediaSource,
+  PlaybackCommand,
+  PlaybackCommandRequest,
   PagedResult,
+  PlayerOpenRequest,
+  PlayerSession,
+  PlayerState,
   ProviderKind,
   ServerProfile,
   ThemePreference,

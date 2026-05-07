@@ -5,6 +5,7 @@ use lumi_lib::{
     commands,
     errors::AppResult,
     events,
+    player::ResolvedPlaybackSource,
     player::{PlaybackCommand, PlayerOpenRequest, PlayerService, PlayerSession, PlayerState},
     providers::{
         LibraryItem, LibraryItemDetail, ListChildrenRequest, LoginRequest, MediaProvider,
@@ -87,11 +88,17 @@ fn player_service_trait_exposes_session_lifecycle() {
     let player = MockPlayerService;
 
     let session = player
-        .open(PlayerOpenRequest {
-            server_id: "server-1".into(),
-            item_id: "item-1".into(),
-            media_source_id: None,
-        })
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "item-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
         .expect("open player");
 
     assert_eq!(session.state, PlayerState::Opening);
@@ -195,7 +202,11 @@ impl MediaProvider for MockProvider {
 struct MockPlayerService;
 
 impl PlayerService for MockPlayerService {
-    fn open(&self, request: PlayerOpenRequest) -> AppResult<PlayerSession> {
+    fn open(
+        &self,
+        request: PlayerOpenRequest,
+        _source: ResolvedPlaybackSource,
+    ) -> AppResult<PlayerSession> {
         Ok(PlayerSession {
             id: "session-1".into(),
             server_id: request.server_id,
