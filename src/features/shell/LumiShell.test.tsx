@@ -120,55 +120,57 @@ function itemDetail(item: LibraryItem): LibraryItemDetail {
 }
 
 function mockBrowsingCommands() {
-  invokeMock.mockImplementation((command: string, args?: unknown) => {
-    const request = (args as CommandArgs | undefined)?.request;
+  invokeMock.mockImplementation(mockBrowsingCommandsFallback);
+}
 
-    if (command === "settings_get") {
-      return Promise.resolve({
-        theme: "system",
-        materialEffectsEnabled: true,
-      });
-    }
-    if (command === "providers_list_servers") {
-      return Promise.resolve([demoServer]);
-    }
-    if (command === "providers_list_libraries") {
-      return Promise.resolve([moviesLibrary, tvLibrary]);
-    }
-    if (command === "media_list_children") {
-      const parentId = request?.parentId;
-      const itemsByParent: Record<string, LibraryItem[]> = {
-        "library-1": [demoMovie, secondMovie, thirdMovie, fourthMovie],
-        "library-2": [demoSeries],
-        "series-1": [seasonOne],
-        "season-1": [episodeOne],
-      };
+function mockBrowsingCommandsFallback(command: string, args?: unknown) {
+  const request = (args as CommandArgs | undefined)?.request;
 
-      return Promise.resolve({
-        items: itemsByParent[parentId ?? ""] ?? [],
-        nextCursor: null,
-      });
-    }
-    if (command === "media_get_item") {
-      const itemId = request?.itemId;
-      const details: Record<string, LibraryItemDetail> = {
-        "movie-1": itemDetail(demoMovie),
-        "movie-2": itemDetail(secondMovie),
-        "series-1": itemDetail(demoSeries),
-        "season-1": itemDetail(seasonOne),
-        "episode-1": itemDetail(episodeOne),
-      };
+  if (command === "settings_get") {
+    return Promise.resolve({
+      theme: "system",
+      materialEffectsEnabled: true,
+    });
+  }
+  if (command === "providers_list_servers") {
+    return Promise.resolve([demoServer]);
+  }
+  if (command === "providers_list_libraries") {
+    return Promise.resolve([moviesLibrary, tvLibrary]);
+  }
+  if (command === "media_list_children") {
+    const parentId = request?.parentId;
+    const itemsByParent: Record<string, LibraryItem[]> = {
+      "library-1": [demoMovie, secondMovie, thirdMovie, fourthMovie],
+      "library-2": [demoSeries],
+      "series-1": [seasonOne],
+      "season-1": [episodeOne],
+    };
 
-      return Promise.resolve(details[itemId ?? "movie-1"]);
-    }
-    if (command === "settings_update") {
-      return Promise.resolve({
-        theme: "dark",
-        materialEffectsEnabled: true,
-      });
-    }
-    return Promise.resolve(null);
-  });
+    return Promise.resolve({
+      items: itemsByParent[parentId ?? ""] ?? [],
+      nextCursor: null,
+    });
+  }
+  if (command === "media_get_item") {
+    const itemId = request?.itemId;
+    const details: Record<string, LibraryItemDetail> = {
+      "movie-1": itemDetail(demoMovie),
+      "movie-2": itemDetail(secondMovie),
+      "series-1": itemDetail(demoSeries),
+      "season-1": itemDetail(seasonOne),
+      "episode-1": itemDetail(episodeOne),
+    };
+
+    return Promise.resolve(details[itemId ?? "movie-1"]);
+  }
+  if (command === "settings_update") {
+    return Promise.resolve({
+      theme: "dark",
+      materialEffectsEnabled: true,
+    });
+  }
+  return Promise.resolve(null);
 }
 
 describe("LumiShell", () => {
@@ -275,6 +277,32 @@ describe("LumiShell", () => {
         request: { serverId: "server-1", itemId: "movie-1" },
       }),
     );
+  });
+
+  it("renders media detail when playback sources are unavailable", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      const request = (args as CommandArgs | undefined)?.request;
+
+      if (command === "media_get_item" && request?.itemId === "movie-1") {
+        return Promise.resolve({
+          item: demoMovie,
+          mediaSources: [],
+        });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
+
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+    expect(screen.getByText("A mapped movie.")).toBeInTheDocument();
+    expect(screen.getByText("No playback source")).toBeInTheDocument();
+    expect(screen.queryByText("Could not load media details")).not.toBeInTheDocument();
   });
 
   it("opens a library, renders its children, and navigates to media detail", async () => {

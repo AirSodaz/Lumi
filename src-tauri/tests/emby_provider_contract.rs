@@ -217,15 +217,12 @@ mod providers {
                 FakeResponse::json(
                     200,
                     json!({
-                        "Items": [{
-                            "Id": "movie-1",
-                            "Name": "Demo Movie",
-                            "SortName": "Demo Movie",
-                            "Type": "Movie",
-                            "Overview": "A playable item",
-                            "MediaSources": []
-                        }],
-                        "TotalRecordCount": 1
+                        "Id": "movie-1",
+                        "Name": "Demo Movie",
+                        "SortName": "Demo Movie",
+                        "Type": "Movie",
+                        "Overview": "A playable item",
+                        "MediaSources": []
                     }),
                 ),
                 FakeResponse::json(
@@ -240,7 +237,7 @@ mod providers {
                     }),
                 ),
             ]));
-            let provider = test_provider(local_store, credential_store, transport);
+            let provider = test_provider(local_store, credential_store, transport.clone());
 
             let detail = provider
                 .get_item(&profile.id, "movie-1")
@@ -254,6 +251,86 @@ mod providers {
                 detail.media_sources[0].url,
                 "http://localhost:8096/Videos/movie-1/stream.mkv?MediaSourceId=source-1&api_key=token-value"
             );
+
+            let detail_request = transport.request_at(0);
+            assert_eq!(detail_request.method, EmbyHttpMethod::Get);
+            assert!(detail_request
+                .url
+                .starts_with("http://localhost:8096/Users/user-1/Items/movie-1?"));
+            assert!(detail_request.url.contains("Fields="));
+            assert_eq!(detail_request.header("X-Emby-Token"), Some("token-value"));
+        }
+
+        #[test]
+        fn get_series_detail_does_not_request_playback_sources() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                200,
+                json!({
+                    "Id": "series-1",
+                    "Name": "Demo Series",
+                    "Type": "Series",
+                    "Overview": "A show detail"
+                }),
+            )]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            let detail = provider
+                .get_item(&profile.id, "series-1")
+                .expect("get series detail");
+
+            assert_eq!(detail.item.title, "Demo Series");
+            assert_eq!(detail.item.item_type, "series");
+            assert_eq!(detail.media_sources, vec![]);
+            assert_eq!(transport.request_count(), 1);
+        }
+
+        #[test]
+        fn get_movie_detail_ignores_playback_info_404() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Id": "movie-1",
+                        "Name": "Demo Movie",
+                        "Type": "Movie",
+                        "Overview": "A detail payload"
+                    }),
+                ),
+                FakeResponse::json(404, json!({ "Message": "Playback info was not found" })),
+            ]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            let detail = provider
+                .get_item(&profile.id, "movie-1")
+                .expect("get movie detail despite playback info failure");
+
+            assert_eq!(detail.item.title, "Demo Movie");
+            assert_eq!(detail.item.overview, Some("A detail payload".into()));
+            assert_eq!(detail.media_sources, vec![]);
+            assert_eq!(transport.request_count(), 2);
+            assert!(transport
+                .request_at(1)
+                .url
+                .ends_with("/Items/movie-1/PlaybackInfo?UserId=user-1"));
+        }
+
+        #[test]
+        fn get_item_detail_404_stays_a_detail_failure() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                404,
+                json!({ "Message": "Item was not found" }),
+            )]));
+            let provider = test_provider(local_store, credential_store, transport);
+
+            let error = provider
+                .get_item(&profile.id, "missing-item")
+                .expect_err("missing item should fail detail");
+
+            assert_eq!(error.code(), "emby.not_found");
+            assert!(error.recoverable());
         }
 
         #[test]
@@ -360,6 +437,10 @@ impl FakeEmbyTransport {
 
     fn request_at(&self, index: usize) -> EmbyHttpRequest {
         self.requests.lock().unwrap()[index].clone()
+    }
+
+    fn request_count(&self) -> usize {
+        self.requests.lock().unwrap().len()
     }
 }
 

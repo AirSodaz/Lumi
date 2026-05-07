@@ -242,14 +242,14 @@ impl MediaProvider for EmbyProvider {
     fn get_item(&self, server_id: &str, item_id: &str) -> AppResult<LibraryItemDetail> {
         let (profile, token) = self.profile_and_token(server_id)?;
         let client = self.client(&profile.base_url)?;
-        let item = client
-            .get_item(&profile.user_id, item_id, &token)?
-            .ok_or_else(|| {
-                AppError::new("emby.media.not_found", "Emby media item was not found")
-                    .with_recoverable(true)
-            })?;
+        let item = client.get_item(&profile.user_id, item_id, &token)?;
         let item = client.map_item(item, &profile.id)?;
-        let media_sources = client.get_playback_sources(&profile.user_id, item_id, &token)?;
+        let media_sources = client.get_playback_sources_for_detail(
+            &profile.user_id,
+            &item.id,
+            &item.item_type,
+            &token,
+        );
 
         self.local_store.cache_media_item(&item)?;
 
@@ -385,24 +385,20 @@ impl EmbyClient {
             .and_then(decode_json::<EmbyItemsResponse>)
     }
 
-    fn get_item(&self, user_id: &str, item_id: &str, token: &str) -> AppResult<Option<EmbyItem>> {
-        let path = format!("Users/{user_id}/Items");
+    fn get_item(&self, user_id: &str, item_id: &str, token: &str) -> AppResult<EmbyItem> {
+        let path = format!("Users/{user_id}/Items/{item_id}");
         let response = self.send(
             EmbyHttpMethod::Get,
             &path,
-            &[
-                ("Ids", item_id.into()),
-                (
-                    "Fields",
-                    "Overview,SortName,PrimaryImageAspectRatio,MediaSources".into(),
-                ),
-            ],
+            &[(
+                "Fields",
+                "Overview,SortName,PrimaryImageAspectRatio,MediaSources".into(),
+            )],
             token_headers(token),
             Value::Null,
         )?;
         self.ensure_success(response, ErrorContext::Media)
-            .and_then(decode_json::<EmbyItemsResponse>)
-            .map(|response| response.items.into_iter().next())
+            .and_then(decode_json::<EmbyItem>)
     }
 
     fn get_playback_sources(
@@ -429,6 +425,21 @@ impl EmbyClient {
             .filter(|source| source.supports_direct_stream.unwrap_or(true))
             .map(|source| self.map_media_source(source, token))
             .collect()
+    }
+
+    fn get_playback_sources_for_detail(
+        &self,
+        user_id: &str,
+        item_id: &str,
+        item_type: &str,
+        token: &str,
+    ) -> Vec<MediaSource> {
+        if !is_playable_item_type(item_type) {
+            return Vec::new();
+        }
+
+        self.get_playback_sources(user_id, item_id, token)
+            .unwrap_or_default()
     }
 
     fn send(
@@ -671,6 +682,10 @@ fn map_item_type(item_type: Option<&str>, collection_type: Option<&str>) -> &'st
         (Some("BoxSet"), _) => "collection",
         _ => "folder",
     }
+}
+
+fn is_playable_item_type(item_type: &str) -> bool {
+    matches!(item_type, "episode" | "movie")
 }
 
 fn runtime_ticks_to_seconds(ticks: u64) -> u32 {

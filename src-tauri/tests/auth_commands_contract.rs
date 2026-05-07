@@ -104,13 +104,10 @@ mod commands {
                 FakeResponse::json(
                     200,
                     json!({
-                        "Items": [{
-                            "Id": "movie-1",
-                            "Name": "Demo Movie",
-                            "Type": "Movie",
-                            "Overview": "A detail payload"
-                        }],
-                        "TotalRecordCount": 1
+                        "Id": "movie-1",
+                        "Name": "Demo Movie",
+                        "Type": "Movie",
+                        "Overview": "A detail payload"
                     }),
                 ),
                 FakeResponse::json(200, json!({ "MediaSources": [] })),
