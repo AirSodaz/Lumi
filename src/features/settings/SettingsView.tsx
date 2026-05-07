@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { CinematicHero, GlassPanel } from "../../components/layout";
 import {
   useLoginManual,
   useServers,
@@ -34,12 +35,15 @@ export function SettingsView() {
 
   return (
     <section className="settings-view" aria-labelledby="settings-title">
-      <header className="view-header">
-        <div>
-          <p className="eyebrow">Lumi</p>
-          <h1 id="settings-title">Settings</h1>
-        </div>
-      </header>
+      <CinematicHero
+        className="settings-hero"
+        eyebrow="Lumi"
+        metadata={<span>Servers, player, appearance, and diagnostics</span>}
+        title="Settings"
+        titleId="settings-title"
+      >
+        <p>Keep server access, playback behavior, and material preferences in one quiet control surface.</p>
+      </CinematicHero>
 
       <div className="settings-layout">
         <nav className="settings-tabs" aria-label="Settings sections">
@@ -115,11 +119,11 @@ function ServersPanel() {
           </article>
         ))}
         {servers.length === 0 ? (
-          <div className="empty-state compact">
+          <GlassPanel className="empty-state compact">
             <Server aria-hidden="true" size={26} />
             <strong>No servers connected</strong>
             <span>Add Server</span>
-          </div>
+          </GlassPanel>
         ) : null}
       </div>
     </section>

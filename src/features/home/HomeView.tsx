@@ -1,6 +1,7 @@
-import { TvMinimalPlay } from "lucide-react";
-import { FocusScope } from "../../components/focus";
-import { PosterCard } from "../../components/media";
+import { Info, Server } from "lucide-react";
+import { CinematicHero } from "../../components/layout";
+import { MediaRail } from "../../components/media";
+import { formatMetadata } from "../../lib/media/format";
 import {
   useChildren,
   type LibraryItem,
@@ -34,40 +35,55 @@ export function HomeView({
   const mediaItems = firstChildren.data?.items ?? [];
   const latest = mediaItems.slice(0, 10);
   const hasServers = servers.length > 0;
+  const featured = latest[0] ?? null;
+  const heroTitle = featured?.title ?? (server ? server.name : "Connect your Emby library");
+  const heroDescription =
+    featured?.overview ??
+    (server
+      ? "Browse your saved library with a cinematic desktop shell."
+      : "Add a server from Settings to begin browsing your media.");
+  const heroBackdrop = featured?.backdropUrl ?? featured?.posterUrl ?? null;
 
   return (
-    <section className="view-stack" aria-labelledby="home-title">
-      <header className="view-header home-hero">
-        <div>
-          <p className="eyebrow">Lumi</p>
-          <h1 id="home-title">Home</h1>
-        </div>
-        <div className="hero-action">
-          {hasServers ? (
-            <span className="status-chip">{servers.length} server connected</span>
+    <section className="view-stack home-view" aria-labelledby="home-title">
+      <h1 className="sr-only" id="home-title">Home</h1>
+      <CinematicHero
+        actions={
+          featured ? (
+            <>
+              <button
+                className="primary-action"
+                onClick={() => onOpenMedia(featured)}
+                type="button"
+              >
+                <Info aria-hidden="true" size={17} />
+                <span>More Info</span>
+              </button>
+              <span className="status-chip">{server?.name ?? "Server"}</span>
+            </>
           ) : (
             <button className="primary-action" onClick={onOpenSettings} type="button">
-              Add Server
+              <Server aria-hidden="true" size={17} />
+              <span>Add Server</span>
             </button>
-          )}
-        </div>
-      </header>
-
-      <section className="hero-band" aria-label="Featured playback">
-        <div>
-          <p className="eyebrow">Continue Watching</p>
-          <h2>{server ? server.name : "Connect your Emby library"}</h2>
-          <p className="muted">
-            {server
-              ? "Browse your saved server from Home or Libraries."
-              : "Add a server from Settings to begin browsing."}
-          </p>
-        </div>
-        <TvMinimalPlay aria-hidden="true" size={54} />
-      </section>
+          )
+        }
+        backdropUrl={heroBackdrop}
+        eyebrow={featured ? "Featured from Emby" : "Lumi"}
+        metadata={
+          featured ? (
+            <span>{formatMetadata(featured)}</span>
+          ) : (
+            <span>{hasServers ? `${servers.length} server connected` : "Emby-first desktop library"}</span>
+          )
+        }
+        title={heroTitle}
+      >
+        <p>{heroDescription}</p>
+      </CinematicHero>
 
       <MediaRail
-        emptyText="Playback progress arrives in P7"
+        emptyText="Start watching and progress will appear here."
         entry={false}
         items={[]}
         loading={false}
@@ -83,63 +99,13 @@ export function HomeView({
         title="Latest"
       />
       <MediaRail
-        emptyText="Recommendations arrive with viewing history in P7"
+        emptyText="Recommendations will appear after Lumi learns your library."
         entry={false}
         items={[]}
         loading={false}
         onOpenMedia={onOpenMedia}
         title="Recommended"
       />
-    </section>
-  );
-}
-
-type MediaRailProps = {
-  emptyText: string;
-  entry: boolean;
-  items: LibraryItem[];
-  loading: boolean;
-  onOpenMedia: (item: LibraryItem) => void;
-  title: string;
-};
-
-function MediaRail({
-  emptyText,
-  entry,
-  items,
-  loading,
-  onOpenMedia,
-  title,
-}: MediaRailProps) {
-  const focusScope = `${title}-rail`;
-
-  return (
-    <section className="media-rail" aria-labelledby={focusScope}>
-      <h2 id={focusScope}>{title}</h2>
-      {items.length > 0 ? (
-        <FocusScope
-          aria-label={`${title} media`}
-          className="rail-items"
-          columns={3}
-          entry={entry}
-          focusKey={items.map((item) => item.id).join(":")}
-          scope={focusScope}
-        >
-          {items.map((item) => (
-            <PosterCard
-              focusScope={focusScope}
-              item={item}
-              key={item.id}
-              onOpen={onOpenMedia}
-            />
-          ))}
-        </FocusScope>
-      ) : (
-        <div className="empty-state compact">
-          <strong>{loading ? "Loading media" : "No media found"}</strong>
-          <span>{loading ? "Fetching library items" : emptyText}</span>
-        </div>
-      )}
     </section>
   );
 }

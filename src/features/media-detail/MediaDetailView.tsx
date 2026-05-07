@@ -1,5 +1,6 @@
 import { ChevronLeft, Film, Play } from "lucide-react";
 import { FocusScope } from "../../components/focus";
+import { CinematicHero, GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
 import { formatMetadata } from "../../lib/media/format";
 import {
@@ -34,11 +35,11 @@ export function MediaDetailView({
     return (
       <section className="view-stack" aria-labelledby="media-detail-loading">
         <DetailBackButton onBack={onBack} returnLabel={returnLabel} />
-        <div className="empty-state">
+        <GlassPanel className="empty-state">
           <Film aria-hidden="true" size={28} />
           <strong id="media-detail-loading">Loading media details</strong>
           <span>Fetching item data</span>
-        </div>
+        </GlassPanel>
       </section>
     );
   }
@@ -47,11 +48,11 @@ export function MediaDetailView({
     return (
       <section className="view-stack" aria-labelledby="media-detail-error">
         <DetailBackButton onBack={onBack} returnLabel={returnLabel} />
-        <div className="empty-state">
+        <GlassPanel className="empty-state">
           <Film aria-hidden="true" size={28} />
           <strong id="media-detail-error">Could not load media details</strong>
           <span>Try again from the library view</span>
-        </div>
+        </GlassPanel>
       </section>
     );
   }
@@ -61,47 +62,38 @@ export function MediaDetailView({
   return (
     <section className="view-stack media-detail" aria-labelledby="media-title">
       <DetailBackButton onBack={onBack} returnLabel={returnLabel} />
-      <section
-        className="detail-hero"
-        style={
-          item.backdropUrl
-            ? { backgroundImage: `url("${item.backdropUrl}")` }
-            : undefined
-        }
-      >
-        <div className="detail-poster" aria-hidden="true">
-          {item.posterUrl ? (
-            <img alt="" src={item.posterUrl} />
-          ) : (
-            <span>No artwork</span>
-          )}
-        </div>
-        <div className="detail-copy">
-          <p className="eyebrow">{formatMetadata(item)}</p>
-          <h1 id="media-title">{item.title}</h1>
-          <p className="muted">{item.overview ?? "No overview available."}</p>
-          <div className="detail-actions">
+      <CinematicHero
+        actions={
+          <>
             <button className="primary-action" disabled type="button">
               <Play aria-hidden="true" size={17} />
               <span>Play</span>
             </button>
             <span className="status-chip">
               {mediaSources.length > 0
-                ? `${mediaSources.length} source ready for P6`
+                ? `${mediaSources.length} source ready`
                 : "No playback source"}
             </span>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+        backdropUrl={item.backdropUrl ?? item.posterUrl ?? null}
+        className="media-detail-hero"
+        eyebrow={formatMetadata(item)}
+        posterUrl={item.posterUrl}
+        title={item.title}
+        titleId="media-title"
+      >
+        <p>{item.overview ?? "No overview available."}</p>
+      </CinematicHero>
 
       {shouldLoadChildren ? (
         <section className="media-rail" aria-labelledby="detail-children">
           <h2 id="detail-children">More from {item.title}</h2>
           {children.isError ? (
-            <div className="empty-state compact">
+            <GlassPanel className="empty-state compact">
               <strong>Could not load related media</strong>
               <span>Try again later</span>
-            </div>
+            </GlassPanel>
           ) : children.isLoading ? (
             <div className="rail-items">
               {[0, 1, 2].map((slot) => (
@@ -129,10 +121,10 @@ export function MediaDetailView({
               ))}
             </FocusScope>
           ) : (
-            <div className="empty-state compact">
+            <GlassPanel className="empty-state compact">
               <strong>No media found</strong>
               <span>{item.title}</span>
-            </div>
+            </GlassPanel>
           )}
         </section>
       ) : null}

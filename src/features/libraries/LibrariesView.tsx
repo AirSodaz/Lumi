@@ -1,7 +1,9 @@
 import { ChevronLeft, Film, Library, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { FocusScope } from "../../components/focus";
+import { CinematicHero, GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
+import { formatMetadata } from "../../lib/media/format";
 import {
   useChildren,
   type LibraryItem,
@@ -30,21 +32,27 @@ export function LibrariesView({
 
   if (selectedLibrary) {
     return (
-      <section className="view-stack" aria-labelledby="library-title">
-        <header className="view-header">
-          <div>
-            <p className="eyebrow">{server?.name ?? "No server"}</p>
-            <h1 id="library-title">{selectedLibrary.title}</h1>
-          </div>
-          <button
-            className="secondary-action"
-            onClick={() => setSelectedLibrary(null)}
-            type="button"
-          >
-            <ChevronLeft aria-hidden="true" size={18} />
-            <span>Back to Libraries</span>
-          </button>
-        </header>
+      <section className="view-stack libraries-view" aria-labelledby="library-title">
+        <CinematicHero
+          actions={
+            <button
+              className="secondary-action"
+              onClick={() => setSelectedLibrary(null)}
+              type="button"
+            >
+              <ChevronLeft aria-hidden="true" size={18} />
+              <span>Back to Libraries</span>
+            </button>
+          }
+          backdropUrl={selectedLibrary.backdropUrl ?? selectedLibrary.posterUrl ?? null}
+          eyebrow={server?.name ?? "No server"}
+          metadata={<span>{formatMetadata(selectedLibrary)}</span>}
+          posterUrl={selectedLibrary.posterUrl}
+          title={selectedLibrary.title}
+          titleId="library-title"
+        >
+          <p>Browse this library with keyboard, controller, or pointer focus.</p>
+        </CinematicHero>
 
         {children.isError ? (
           <EmptyState icon={Film} title="Could not load media" value="Try again later" />
@@ -64,13 +72,15 @@ export function LibrariesView({
   }
 
   return (
-    <section className="view-stack" aria-labelledby="libraries-title">
-      <header className="view-header">
-        <div>
-          <p className="eyebrow">{server?.name ?? "No server"}</p>
-          <h1 id="libraries-title">Libraries</h1>
-        </div>
-      </header>
+    <section className="view-stack libraries-view" aria-labelledby="libraries-title">
+      <CinematicHero
+        eyebrow={server?.name ?? "No server"}
+        metadata={<span>{libraries.length > 0 ? `${libraries.length} libraries` : "Library browser"}</span>}
+        title="Libraries"
+        titleId="libraries-title"
+      >
+        <p>Choose a media library and continue into your movies, shows, seasons, and collections.</p>
+      </CinematicHero>
 
       {servers.length === 0 ? (
         <EmptyState icon={Library} title="No servers connected" value="Add a server in Settings" />
@@ -135,10 +145,10 @@ type EmptyStateProps = {
 
 function EmptyState({ icon: IconComponent, title, value }: EmptyStateProps) {
   return (
-    <div className="empty-state">
+    <GlassPanel className="empty-state">
       <IconComponent aria-hidden="true" size={28} />
       <strong>{title}</strong>
       <span>{value}</span>
-    </div>
+    </GlassPanel>
   );
 }

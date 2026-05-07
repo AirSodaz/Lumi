@@ -8,6 +8,7 @@ import {
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { FocusableCard } from "../../components/focus";
+import { GlassPanel, MotionPage } from "../../components/layout";
 import {
   directionFromKey,
   focusElement,
@@ -33,6 +34,10 @@ type ShellRoute =
   | { kind: "view"; view: ViewId }
   | { itemId: string; kind: "mediaDetail"; returnView: ReturnView; serverId: string };
 
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => unknown;
+};
+
 const navItems: Array<{ id: ViewId; label: string; icon: Icon }> = [
   { id: "home", label: "Home", icon: Home },
   { id: "libraries", label: "Libraries", icon: Library },
@@ -48,9 +53,32 @@ export function LumiShell() {
   const librariesQuery = useLibraries(selectedServerId);
   const libraries = librariesQuery.data ?? [];
   const activeView = route.kind === "mediaDetail" ? route.returnView : route.view;
+  const routeKey =
+    route.kind === "mediaDetail"
+      ? `media-${route.serverId}-${route.itemId}`
+      : route.view;
+
+  function setRouteWithTransition(nextRoute: ShellRoute) {
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const transitionDocument =
+      typeof document !== "undefined"
+        ? (document as ViewTransitionDocument)
+        : null;
+
+    if (transitionDocument?.startViewTransition && !reduceMotion) {
+      transitionDocument.startViewTransition(() => setRoute(nextRoute));
+      return;
+    }
+
+    setRoute(nextRoute);
+  }
 
   function openMediaDetail(item: LibraryItem, returnView: ReturnView) {
-    setRoute({
+    setRouteWithTransition({
       itemId: item.id,
       kind: "mediaDetail",
       returnView,
@@ -104,7 +132,9 @@ export function LumiShell() {
     currentView = (
       <MediaDetailView
         itemId={route.itemId}
-        onBack={() => setRoute({ kind: "view", view: route.returnView })}
+        onBack={() =>
+          setRouteWithTransition({ kind: "view", view: route.returnView })
+        }
         onOpenMedia={(item) => openMediaDetail(item, route.returnView)}
         returnLabel={route.returnView === "home" ? "Home" : "Libraries"}
         serverId={route.serverId}
@@ -135,7 +165,9 @@ export function LumiShell() {
             libraries={libraries}
             librariesLoading={librariesQuery.isLoading}
             onOpenMedia={(item) => openMediaDetail(item, "home")}
-            onOpenSettings={() => setRoute({ kind: "view", view: "settings" })}
+            onOpenSettings={() =>
+              setRouteWithTransition({ kind: "view", view: "settings" })
+            }
             servers={servers}
             serversLoading={serversQuery.isLoading}
           />
@@ -147,6 +179,7 @@ export function LumiShell() {
   return (
     <Tooltip.Provider delayDuration={250}>
       <div className="lumi-shell">
+        <div className="shell-vignette" aria-hidden="true" />
         <aside className="shell-sidebar" aria-label="Primary">
           <div className="brand-lockup">
             <span className="brand-mark" aria-hidden="true">
@@ -162,13 +195,17 @@ export function LumiShell() {
                 key={item.id}
                 label={item.label}
                 onMoveRight={focusFirstContentEntry}
-                onSelect={() => setRoute({ kind: "view", view: item.id })}
+                onSelect={() =>
+                  setRouteWithTransition({ kind: "view", view: item.id })
+                }
               />
             ))}
           </nav>
         </aside>
         <main className="shell-content" onKeyDown={handleContentKeyDown}>
-          {currentView}
+          <MotionPage key={routeKey} routeKey={routeKey}>
+            {currentView}
+          </MotionPage>
         </main>
       </div>
     </Tooltip.Provider>
@@ -213,17 +250,21 @@ function NavButton({
 
 function SearchView() {
   return (
-    <section className="view-stack" aria-labelledby="search-title">
-      <header className="view-header">
+    <section className="view-stack search-view" aria-labelledby="search-title">
+      <header className="view-header cinematic-header">
         <div>
-          <p className="eyebrow">Global</p>
+          <p className="eyebrow">Find Media</p>
           <h1 id="search-title">Search</h1>
         </div>
       </header>
-      <div className="search-panel">
-        <Search aria-hidden="true" size={22} />
+      <GlassPanel className="search-panel" aria-label="Search media panel">
+        <Search aria-hidden="true" size={26} />
         <input aria-label="Search media" placeholder="Search media" type="search" />
-      </div>
+      </GlassPanel>
+      <GlassPanel className="empty-state search-empty">
+        <strong>Search your connected server</strong>
+        <span>Type a title, collection, season, or episode name.</span>
+      </GlassPanel>
     </section>
   );
 }

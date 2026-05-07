@@ -11,6 +11,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const invokeMock = vi.mocked(invoke);
 let scrollIntoViewMock: Mock;
+let startViewTransitionMock: Mock;
 
 const demoServer: ServerProfile = {
   id: "server-1",
@@ -180,6 +181,20 @@ describe("LumiShell", () => {
       configurable: true,
       value: scrollIntoViewMock,
     });
+    startViewTransitionMock = vi.fn((callback: () => void) => {
+      callback();
+
+      return {
+        finished: Promise.resolve(),
+        ready: Promise.resolve(),
+        skipTransition: vi.fn(),
+        updateCallbackDone: Promise.resolve(),
+      };
+    });
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: startViewTransitionMock,
+    });
 
     invokeMock.mockReset();
     invokeMock.mockImplementation((command: string) => {
@@ -240,6 +255,16 @@ describe("LumiShell", () => {
     expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
   });
 
+  it("uses view transitions for primary route changes when available", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(startViewTransitionMock).toHaveBeenCalled();
+  });
+
   it("moves from active sidebar navigation into the current media content with ArrowRight", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
@@ -277,6 +302,21 @@ describe("LumiShell", () => {
         request: { serverId: "server-1", itemId: "movie-1" },
       }),
     );
+  });
+
+  it("does not render development-phase placeholder copy in browsing surfaces", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await screen.findByRole("button", { name: /Demo Movie/ });
+
+    expect(screen.queryByText(/P6|P7|arrives/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Demo Movie/ }));
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+    expect(screen.queryByText(/P6|P7|arrives/i)).not.toBeInTheDocument();
   });
 
   it("renders media detail when playback sources are unavailable", async () => {

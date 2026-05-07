@@ -28,8 +28,10 @@ export function PosterCard({
         focusScope={focusScope}
       >
         <span className="poster-art" />
-        <strong>Loading</strong>
-        <span>Fetching media</span>
+        <span className="poster-card-copy">
+          <strong>Loading</strong>
+          <span>Fetching media</span>
+        </span>
       </FocusableCard>
     );
   }
@@ -53,8 +55,10 @@ export function PosterCard({
       >
         {item.posterUrl ? null : <span>No artwork</span>}
       </span>
-      <strong>{item.title}</strong>
-      <span>{metadata}</span>
+      <span className="poster-card-copy">
+        <strong>{item.title}</strong>
+        <span>{metadata}</span>
+      </span>
       {typeof progressPercent === "number" ? (
         <span
           aria-label={`${Math.round(progressPercent)}% watched`}
