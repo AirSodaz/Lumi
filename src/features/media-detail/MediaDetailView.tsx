@@ -23,6 +23,7 @@ type MediaDetailViewProps = {
 };
 
 const browsableTypes = new Set(["collection", "folder", "season", "series"]);
+const playableTypes = new Set(["episode", "movie"]);
 
 export function MediaDetailView({
   itemId,
@@ -37,6 +38,7 @@ export function MediaDetailView({
   const [playbackError, setPlaybackError] = useState<AppError | null>(null);
   const item = detail.data?.item ?? null;
   const shouldLoadChildren = item ? browsableTypes.has(item.itemType) : false;
+  const canPlay = item ? playableTypes.has(item.itemType) : false;
   const children = useChildren(shouldLoadChildren ? serverId : null, item?.id ?? null);
 
   if (detail.isLoading) {
@@ -66,7 +68,12 @@ export function MediaDetailView({
   }
 
   const mediaSources = detail.data?.mediaSources ?? [];
-  const canPlay = mediaSources.length > 0;
+  const playbackStatus =
+    mediaSources.length > 0
+      ? `${mediaSources.length} source ready`
+      : canPlay
+        ? "Source resolves on play"
+        : "Not playable";
 
   async function handlePlay() {
     if (!item || !canPlay) {
@@ -101,11 +108,7 @@ export function MediaDetailView({
               <Play aria-hidden="true" size={17} />
               <span>{openPlayback.isPending ? "Opening" : "Play"}</span>
             </button>
-            <span className="status-chip">
-              {mediaSources.length > 0
-                ? `${mediaSources.length} source ready`
-                : "No playback source"}
-            </span>
+            <span className="status-chip">{playbackStatus}</span>
           </>
         }
         backdropUrl={item.backdropUrl ?? item.posterUrl ?? null}

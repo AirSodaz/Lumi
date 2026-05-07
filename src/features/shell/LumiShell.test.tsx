@@ -350,7 +350,7 @@ describe("LumiShell", () => {
     expect(screen.queryByText(/P6|P7|arrives/i)).not.toBeInTheDocument();
   });
 
-  it("renders media detail when playback sources are unavailable", async () => {
+  it("keeps playable media action available when sources are not preloaded", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
     invokeMock.mockImplementation((command: string, args?: unknown) => {
@@ -372,8 +372,20 @@ describe("LumiShell", () => {
 
     expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
     expect(screen.getByText("A mapped movie.")).toBeInTheDocument();
-    expect(screen.getByText("No playback source")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+    expect(screen.getByText("Source resolves on play")).toBeInTheDocument();
+
+    const play = screen.getByRole("button", { name: "Play" });
+    expect(play).toBeEnabled();
+    await user.click(play);
+
+    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("playback_open", {
+      request: {
+        serverId: "server-1",
+        itemId: "movie-1",
+        mediaSourceId: null,
+      },
+    });
     expect(screen.queryByText("Could not load media details")).not.toBeInTheDocument();
   });
 

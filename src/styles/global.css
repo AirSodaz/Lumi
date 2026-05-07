@@ -552,7 +552,7 @@ select:focus-visible {
 }
 
 .focusable-card:disabled {
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 .library-card {
@@ -740,7 +740,7 @@ select:focus-visible {
 }
 
 .primary-action:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.62;
 }
 
