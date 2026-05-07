@@ -1,18 +1,29 @@
-import { useEffect, useState } from "react";
-import { BootstrapScreen } from "./features/bootstrap/BootstrapScreen";
-import { getBootstrapStatus } from "./lib/tauriClient/bootstrap";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
+import { LumiShell } from "./features/shell/LumiShell";
 import "./styles/global.css";
 
 function App() {
-  const [status, setStatus] = useState("checking");
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: false,
+            refetchOnWindowFocus: false,
+          },
+          mutations: {
+            retry: false,
+          },
+        },
+      }),
+  );
 
-  useEffect(() => {
-    getBootstrapStatus()
-      .then(setStatus)
-      .catch(() => setStatus("tauri-command-unavailable"));
-  }, []);
-
-  return <BootstrapScreen status={status} />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <LumiShell />
+    </QueryClientProvider>
+  );
 }
 
 export default App;

@@ -10,6 +10,22 @@ export type ServerProfile = {
   updatedAt: string;
 };
 
+export type AppError = {
+  code: string;
+  message: string;
+  recoverable: boolean;
+  detail?: unknown;
+};
+
+export type ThemePreference = "system" | "light" | "dark";
+
+export type AppSettings = {
+  theme: ThemePreference;
+  materialEffectsEnabled: boolean;
+};
+
+export type AppSettingsPatch = Partial<AppSettings>;
+
 export type LoginManualRequest = {
   baseUrl: string;
   username: string;
