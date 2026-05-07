@@ -112,6 +112,8 @@ export function MediaDetailView({
             <FocusScope
               aria-label={`More from ${item.title}`}
               className="rail-items"
+              columns={3}
+              entry
               focusKey={`${item.id}:${children.data.items
                 .map((child) => child.id)
                 .join(":")}`}

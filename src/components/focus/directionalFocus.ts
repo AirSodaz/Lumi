@@ -1,16 +1,37 @@
-const reverseKeys = new Set(["ArrowLeft", "ArrowUp"]);
-const forwardKeys = new Set(["ArrowRight", "ArrowDown"]);
+export type FocusDirection = "down" | "left" | "right" | "up";
 
 export function directionFromKey(key: string) {
-  if (forwardKeys.has(key)) {
-    return 1;
+  switch (key) {
+    case "ArrowDown":
+      return "down";
+    case "ArrowLeft":
+      return "left";
+    case "ArrowRight":
+      return "right";
+    case "ArrowUp":
+      return "up";
+    default:
+      return null;
+  }
+}
+
+export function focusElement(element: HTMLElement) {
+  element.focus({ preventScroll: true });
+  element.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+}
+
+export function focusFirstContentEntry() {
+  const entry = document.querySelector<HTMLElement>('[data-focus-entry="true"]');
+  const first = entry?.querySelector<HTMLButtonElement>(
+    "[data-focus-scope]:not(:disabled)",
+  );
+
+  if (!first) {
+    return false;
   }
 
-  if (reverseKeys.has(key)) {
-    return -1;
-  }
-
-  return 0;
+  focusElement(first);
+  return true;
 }
 
 export function focusFirstInScope(scope: string) {
@@ -19,14 +40,14 @@ export function focusFirstInScope(scope: string) {
     return false;
   }
 
-  first.focus({ preventScroll: true });
+  focusElement(first);
   return true;
 }
 
 export function moveFocusInScope(
   scope: string,
   current: HTMLButtonElement,
-  step: number,
+  direction: FocusDirection,
 ) {
   const items = getFocusableItems(scope);
   const index = items.indexOf(current);
@@ -35,10 +56,43 @@ export function moveFocusInScope(
     return null;
   }
 
-  const nextIndex = (index + step + items.length) % items.length;
+  const nextIndex = nextIndexForDirection(
+    index,
+    items.length,
+    columnsForScope(scope),
+    direction,
+  );
+
+  if (nextIndex === null) {
+    return null;
+  }
+
   const next = items[nextIndex] ?? null;
-  next?.focus({ preventScroll: true });
+  if (next) {
+    focusElement(next);
+  }
+
   return next;
+}
+
+export function isAtScopeBoundary(
+  scope: string,
+  current: HTMLButtonElement,
+  direction: FocusDirection,
+) {
+  const items = getFocusableItems(scope);
+  const index = items.indexOf(current);
+
+  if (index === -1 || items.length === 0) {
+    return false;
+  }
+
+  return nextIndexForDirection(
+    index,
+    items.length,
+    columnsForScope(scope),
+    direction,
+  ) === null;
 }
 
 export function hasFocusableItems(scope: string) {
@@ -63,4 +117,42 @@ function getFocusableItems(scope: string) {
       `[data-focus-scope="${scope}"]:not(:disabled)`,
     ),
   );
+}
+
+function columnsForScope(scope: string) {
+  const root = document.querySelector<HTMLElement>(
+    `[data-focus-scope-root="${scope}"]`,
+  );
+  const columns = Number(root?.dataset.focusColumns);
+
+  return Number.isFinite(columns) && columns > 0 ? Math.floor(columns) : 1;
+}
+
+function nextIndexForDirection(
+  index: number,
+  itemCount: number,
+  columns: number,
+  direction: FocusDirection,
+) {
+  const currentColumn = index % columns;
+
+  switch (direction) {
+    case "down": {
+      const next = index + columns;
+      return next < itemCount ? next : null;
+    }
+    case "left":
+      return currentColumn > 0 ? index - 1 : null;
+    case "right": {
+      const next = index + 1;
+      const staysInRow = Math.floor(next / columns) === Math.floor(index / columns);
+      return currentColumn < columns - 1 && next < itemCount && staysInRow
+        ? next
+        : null;
+    }
+    case "up": {
+      const next = index - columns;
+      return next >= 0 ? next : null;
+    }
+  }
 }

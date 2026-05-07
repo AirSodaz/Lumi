@@ -5,9 +5,16 @@ import {
   Search,
   Settings,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { FocusableCard } from "../../components/focus";
+import {
+  directionFromKey,
+  focusElement,
+  focusFirstContentEntry,
+  isAtScopeBoundary,
+  shouldIgnoreDirectionalKeyTarget,
+} from "../../components/focus/directionalFocus";
 import {
   useLibraries,
   useServers,
@@ -49,6 +56,46 @@ export function LumiShell() {
       returnView,
       serverId: item.serverId,
     });
+  }
+
+  function focusActiveNavigation() {
+    const activeNavigation = document.querySelector<HTMLButtonElement>(
+      '[data-shell-nav-active="true"]',
+    );
+
+    if (!activeNavigation) {
+      return false;
+    }
+
+    focusElement(activeNavigation);
+    return true;
+  }
+
+  function handleContentKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (
+      event.defaultPrevented ||
+      shouldIgnoreDirectionalKeyTarget(event.target)
+    ) {
+      return;
+    }
+
+    const direction = directionFromKey(event.key);
+    if (direction !== "left") {
+      return;
+    }
+
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const focusable = target?.closest<HTMLButtonElement>("[data-focus-scope]");
+    const scope = focusable?.dataset.focusScope;
+
+    if (
+      focusable &&
+      scope &&
+      isAtScopeBoundary(scope, focusable, direction) &&
+      focusActiveNavigation()
+    ) {
+      event.preventDefault();
+    }
   }
 
   let currentView: ReactNode;
@@ -114,12 +161,15 @@ export function LumiShell() {
                 icon={item.icon}
                 key={item.id}
                 label={item.label}
+                onMoveRight={focusFirstContentEntry}
                 onSelect={() => setRoute({ kind: "view", view: item.id })}
               />
             ))}
           </nav>
         </aside>
-        <main className="shell-content">{currentView}</main>
+        <main className="shell-content" onKeyDown={handleContentKeyDown}>
+          {currentView}
+        </main>
       </div>
     </Tooltip.Provider>
   );
@@ -129,15 +179,30 @@ type NavButtonProps = {
   active: boolean;
   icon: Icon;
   label: string;
+  onMoveRight: () => boolean;
   onSelect: () => void;
 };
 
-function NavButton({ active, icon: IconComponent, label, onSelect }: NavButtonProps) {
+function NavButton({
+  active,
+  icon: IconComponent,
+  label,
+  onMoveRight,
+  onSelect,
+}: NavButtonProps) {
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "ArrowRight" && onMoveRight()) {
+      event.preventDefault();
+    }
+  }
+
   return (
     <FocusableCard
       aria-current={active ? "page" : undefined}
       className="nav-button"
+      data-shell-nav-active={active ? "true" : undefined}
       focusScope="main-navigation"
+      onKeyDown={handleKeyDown}
       onClick={onSelect}
     >
       <IconComponent aria-hidden="true" size={20} />

@@ -30,13 +30,13 @@ export function FocusableCard({
       return;
     }
 
-    const step = directionFromKey(event.key);
+    const direction = directionFromKey(event.key);
 
-    if (step === 0) {
+    if (!direction) {
       return;
     }
 
-    const next = moveFocusInScope(focusScope, event.currentTarget, step);
+    const next = moveFocusInScope(focusScope, event.currentTarget, direction);
 
     if (next) {
       event.preventDefault();

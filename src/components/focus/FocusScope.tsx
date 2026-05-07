@@ -15,6 +15,8 @@ type FocusScopeProps = {
   "aria-label"?: string;
   children: ReactNode;
   className?: string;
+  columns?: number;
+  entry?: boolean;
   focusKey?: string | number;
   scope: string;
 };
@@ -23,6 +25,8 @@ export function FocusScope({
   "aria-label": ariaLabel,
   children,
   className = "",
+  columns = 1,
+  entry = false,
   focusKey,
   scope,
 }: FocusScopeProps) {
@@ -50,8 +54,17 @@ export function FocusScope({
       return;
     }
 
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (
+      target &&
+      target !== event.currentTarget &&
+      target.closest("[data-focus-scope]")
+    ) {
+      return;
+    }
+
     const direction = directionFromKey(event.key);
-    if (direction === 0) {
+    if (!direction) {
       return;
     }
 
@@ -64,6 +77,8 @@ export function FocusScope({
     <div
       aria-label={ariaLabel}
       className={`focus-scope ${className}`.trim()}
+      data-focus-columns={columns}
+      data-focus-entry={entry ? "true" : undefined}
       data-focus-scope-root={scope}
       onKeyDown={handleKeyDown}
       ref={scopeRef}

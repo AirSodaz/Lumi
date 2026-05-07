@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import App from "../../App";
 import type { LibraryItem, LibraryItemDetail, ServerProfile } from "../../lib/tauriClient";
 import { invoke } from "@tauri-apps/api/core";
@@ -10,6 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 const invokeMock = vi.mocked(invoke);
+let scrollIntoViewMock: Mock;
 
 const demoServer: ServerProfile = {
   id: "server-1",
@@ -56,6 +57,22 @@ const secondMovie: LibraryItem = {
   serverId: "server-1",
   itemType: "movie",
   title: "Second Movie",
+};
+
+const thirdMovie: LibraryItem = {
+  id: "movie-3",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "movie",
+  title: "Third Movie",
+};
+
+const fourthMovie: LibraryItem = {
+  id: "movie-4",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "movie",
+  title: "Fourth Movie",
 };
 
 const demoSeries: LibraryItem = {
@@ -121,7 +138,7 @@ function mockBrowsingCommands() {
     if (command === "media_list_children") {
       const parentId = request?.parentId;
       const itemsByParent: Record<string, LibraryItem[]> = {
-        "library-1": [demoMovie, secondMovie],
+        "library-1": [demoMovie, secondMovie, thirdMovie, fourthMovie],
         "library-2": [demoSeries],
         "series-1": [seasonOne],
         "season-1": [episodeOne],
@@ -156,6 +173,12 @@ function mockBrowsingCommands() {
 
 describe("LumiShell", () => {
   beforeEach(() => {
+    scrollIntoViewMock = vi.fn();
+    Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
+    });
+
     invokeMock.mockReset();
     invokeMock.mockImplementation((command: string) => {
       if (command === "settings_get") {
@@ -194,7 +217,7 @@ describe("LumiShell", () => {
     expect(screen.queryByText("System material shell")).not.toBeInTheDocument();
   });
 
-  it("switches navigation with pointer and arrow-key focus", async () => {
+  it("switches navigation with pointer and vertical arrow-key focus", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -204,10 +227,32 @@ describe("LumiShell", () => {
 
     const home = screen.getByRole("button", { name: "Home" });
     home.focus();
-    await user.keyboard("{ArrowRight}");
+    await user.keyboard("{ArrowDown}");
 
     expect(libraries).toHaveFocus();
     expect(screen.getByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+
+    await user.keyboard("{ArrowUp}");
+
+    expect(home).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
+  });
+
+  it("moves from active sidebar navigation into the current media content with ArrowRight", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
+    const home = screen.getByRole("button", { name: "Home" });
+    scrollIntoViewMock.mockClear();
+
+    home.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(firstMovie).toHaveFocus();
+    expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
   it("renders Home media rails from provider DTOs and opens media detail", async () => {
@@ -276,7 +321,32 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Second Movie" })).toBeInTheDocument();
   });
 
-  it("moves Libraries grid focus from the page with arrow keys and opens detail with Enter", async () => {
+  it("moves Home media-card focus as a 3-column grid and scrolls focused cards into view", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
+    const second = await screen.findByRole("button", { name: /Second Movie/ });
+    const fourth = await screen.findByRole("button", { name: /Fourth Movie/ });
+    scrollIntoViewMock.mockClear();
+
+    firstMovie.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(second).toHaveFocus();
+
+    firstMovie.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(fourth).toHaveFocus();
+    expect(scrollIntoViewMock).toHaveBeenCalled();
+
+    second.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(second).toHaveFocus();
+  });
+
+  it("moves Libraries grid focus by row and returns to the active sidebar at the left edge", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
@@ -287,6 +357,8 @@ describe("LumiShell", () => {
 
     const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
     const second = await screen.findByRole("button", { name: /Second Movie/ });
+    const fourth = await screen.findByRole("button", { name: /Fourth Movie/ });
+    const librariesNav = screen.getByRole("button", { name: "Libraries" });
     expect(firstMovie).not.toHaveFocus();
 
     await user.keyboard("{ArrowDown}");
@@ -295,8 +367,15 @@ describe("LumiShell", () => {
     await user.keyboard("{ArrowRight}");
     expect(second).toHaveFocus();
 
-    await user.keyboard("{Enter}");
-    expect(await screen.findByRole("heading", { name: "Second Movie" })).toBeInTheDocument();
+    firstMovie.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(fourth).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
+    expect(firstMovie).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(librariesNav).toHaveFocus();
   });
 
   it("navigates series to season to episode from media detail children", async () => {
@@ -441,6 +520,31 @@ describe("LumiShell", () => {
       expect(screen.queryByRole("dialog", { name: "Add Emby Server" })).not.toBeInTheDocument(),
     );
     expect(addServer).toHaveFocus();
+  });
+
+  it("does not let directional focus handlers take over dialog or search inputs", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Search" }));
+    const searchInput = screen.getByLabelText("Search media");
+    searchInput.focus();
+    scrollIntoViewMock.mockClear();
+
+    await user.keyboard("{ArrowRight}");
+    expect(searchInput).toHaveFocus();
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Add Server" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Add Emby Server" });
+    const urlInput = within(dialog).getByLabelText("Server URL");
+    scrollIntoViewMock.mockClear();
+
+    await user.keyboard("{ArrowDown}");
+    expect(urlInput).toHaveFocus();
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
   });
 
   it("allows submitting an Emby login with an empty password", async () => {

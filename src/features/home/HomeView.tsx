@@ -68,6 +68,7 @@ export function HomeView({
 
       <MediaRail
         emptyText="Playback progress arrives in P7"
+        entry={false}
         items={[]}
         loading={false}
         onOpenMedia={onOpenMedia}
@@ -75,6 +76,7 @@ export function HomeView({
       />
       <MediaRail
         emptyText={server ? "No media found" : "Connect a server first"}
+        entry
         items={latest}
         loading={loading}
         onOpenMedia={onOpenMedia}
@@ -82,6 +84,7 @@ export function HomeView({
       />
       <MediaRail
         emptyText="Recommendations arrive with viewing history in P7"
+        entry={false}
         items={[]}
         loading={false}
         onOpenMedia={onOpenMedia}
@@ -93,13 +96,21 @@ export function HomeView({
 
 type MediaRailProps = {
   emptyText: string;
+  entry: boolean;
   items: LibraryItem[];
   loading: boolean;
   onOpenMedia: (item: LibraryItem) => void;
   title: string;
 };
 
-function MediaRail({ emptyText, items, loading, onOpenMedia, title }: MediaRailProps) {
+function MediaRail({
+  emptyText,
+  entry,
+  items,
+  loading,
+  onOpenMedia,
+  title,
+}: MediaRailProps) {
   const focusScope = `${title}-rail`;
 
   return (
@@ -109,6 +120,8 @@ function MediaRail({ emptyText, items, loading, onOpenMedia, title }: MediaRailP
         <FocusScope
           aria-label={`${title} media`}
           className="rail-items"
+          columns={3}
+          entry={entry}
           focusKey={items.map((item) => item.id).join(":")}
           scope={focusScope}
         >

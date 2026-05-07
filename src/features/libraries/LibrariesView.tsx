@@ -100,6 +100,8 @@ function PosterGrid({ focusScope, items, onOpenMedia }: PosterGridProps) {
     <FocusScope
       aria-label="Media libraries"
       className="library-grid"
+      columns={3}
+      entry
       focusKey={items.map((item) => item.id).join(":")}
       scope={focusScope}
     >
