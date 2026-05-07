@@ -10,6 +10,8 @@ import { providers } from "./providers";
 import { settings } from "./settings";
 import type { AppSettingsPatch, LoginManualRequest } from "./types";
 
+const QUERY_STALE_TIME_MS = 60_000;
+
 export const queryKeys = {
   settings: ["settings"] as const,
   servers: ["servers"] as const,
@@ -24,6 +26,7 @@ export function useServers() {
   return useQuery({
     queryKey: queryKeys.servers,
     queryFn: providers.listServers,
+    staleTime: QUERY_STALE_TIME_MS,
   });
 }
 
@@ -32,6 +35,7 @@ export function useLibraries(serverId: string | null | undefined) {
     queryKey: queryKeys.libraries(serverId ?? "none"),
     queryFn: () => providers.listLibraries({ serverId: serverId ?? "" }),
     enabled: Boolean(serverId),
+    staleTime: QUERY_STALE_TIME_MS,
   });
 }
 
@@ -49,6 +53,7 @@ export function useChildren(
         cursor: cursor ?? null,
       }),
     enabled: Boolean(serverId),
+    staleTime: QUERY_STALE_TIME_MS,
   });
 }
 
@@ -64,6 +69,7 @@ export function useItemDetail(
         itemId: itemId ?? "",
       }),
     enabled: Boolean(serverId && itemId),
+    staleTime: QUERY_STALE_TIME_MS,
   });
 }
 
@@ -82,6 +88,7 @@ export function useSettings() {
   return useQuery({
     queryKey: queryKeys.settings,
     queryFn: settings.get,
+    staleTime: QUERY_STALE_TIME_MS,
   });
 }
 

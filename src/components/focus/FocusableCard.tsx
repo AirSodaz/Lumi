@@ -3,15 +3,16 @@ import type {
   KeyboardEvent,
   ReactNode,
 } from "react";
+import {
+  directionFromKey,
+  moveFocusInScope,
+} from "./directionalFocus";
 
 type FocusableCardProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   activateOnArrow?: boolean;
   children: ReactNode;
   focusScope?: string;
 };
-
-const reverseKeys = new Set(["ArrowLeft", "ArrowUp"]);
-const forwardKeys = new Set(["ArrowRight", "ArrowDown"]);
 
 export function FocusableCard({
   activateOnArrow = true,
@@ -29,24 +30,16 @@ export function FocusableCard({
       return;
     }
 
-    const step = forwardKeys.has(event.key) ? 1 : reverseKeys.has(event.key) ? -1 : 0;
+    const step = directionFromKey(event.key);
 
     if (step === 0) {
       return;
     }
 
-    const buttons = Array.from(
-      document.querySelectorAll<HTMLButtonElement>(
-        `[data-focus-scope="${focusScope}"]:not(:disabled)`,
-      ),
-    );
-    const index = buttons.indexOf(event.currentTarget);
-    const nextIndex = (index + step + buttons.length) % buttons.length;
-    const next = buttons[nextIndex];
+    const next = moveFocusInScope(focusScope, event.currentTarget, step);
 
     if (next) {
       event.preventDefault();
-      next.focus();
       if (activateOnArrow) {
         next.click();
       }

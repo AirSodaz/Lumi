@@ -186,6 +186,10 @@ select:focus-visible {
   border-radius: inherit;
 }
 
+.focus-scope {
+  outline: none;
+}
+
 .nav-button {
   display: grid;
   min-height: 48px;

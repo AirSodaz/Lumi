@@ -253,7 +253,7 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
   });
 
-  it("moves media-card focus with arrow keys and opens detail with Enter", async () => {
+  it("moves Home media-card focus from the rail with arrow keys and opens detail with Enter", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
@@ -262,11 +262,38 @@ describe("LumiShell", () => {
     const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
     const second = await screen.findByRole("button", { name: /Second Movie/ });
 
-    firstMovie.focus();
+    expect(firstMovie).not.toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(firstMovie).toHaveFocus();
+
     await user.keyboard("{ArrowRight}");
 
     expect(second).toHaveFocus();
     expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("heading", { name: "Second Movie" })).toBeInTheDocument();
+  });
+
+  it("moves Libraries grid focus from the page with arrow keys and opens detail with Enter", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    await user.click(await screen.findByRole("button", { name: /Movies/ }));
+
+    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
+    const second = await screen.findByRole("button", { name: /Second Movie/ });
+    expect(firstMovie).not.toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(firstMovie).toHaveFocus();
+
+    await user.keyboard("{ArrowRight}");
+    expect(second).toHaveFocus();
 
     await user.keyboard("{Enter}");
     expect(await screen.findByRole("heading", { name: "Second Movie" })).toBeInTheDocument();
@@ -283,18 +310,48 @@ describe("LumiShell", () => {
     await user.click(await screen.findByRole("button", { name: /Demo Series/ }));
 
     expect(await screen.findByRole("heading", { name: "Demo Series" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: /Season 1/ }));
+    const season = await screen.findByRole("button", { name: /Season 1/ });
+    expect(season).not.toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(season).toHaveFocus();
+
+    await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("heading", { name: "Season 1" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: /Episode 1/ }));
+    const episode = await screen.findByRole("button", { name: /Episode 1/ });
+    await user.keyboard("{ArrowDown}");
+    expect(episode).toHaveFocus();
+    await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("heading", { name: "Episode 1" })).toBeInTheDocument();
   });
 
+  it("only loads the first Home library on initial render", async () => {
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await screen.findByRole("button", { name: /Demo Movie/ });
+
+    await waitFor(() => {
+      const childRequests = invokeMock.mock.calls.filter(
+        ([command]) => command === "media_list_children",
+      );
+      expect(childRequests).toEqual([
+        [
+          "media_list_children",
+          { request: { serverId: "server-1", parentId: "library-1", cursor: null } },
+        ],
+      ]);
+    });
+  });
+
   it("shows empty and failed media states without exposing raw details", async () => {
     const user = userEvent.setup();
-    let childRequests = 0;
-    invokeMock.mockImplementation((command: string) => {
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      const request = (args as CommandArgs | undefined)?.request;
+
       if (command === "settings_get") {
         return Promise.resolve({
           theme: "system",
@@ -305,12 +362,11 @@ describe("LumiShell", () => {
         return Promise.resolve([demoServer]);
       }
       if (command === "providers_list_libraries") {
-        return Promise.resolve([moviesLibrary]);
+        return Promise.resolve([tvLibrary, moviesLibrary]);
       }
       if (command === "media_list_children") {
-        childRequests += 1;
         return Promise.resolve({
-          items: childRequests <= 2 ? [] : [demoMovie],
+          items: request?.parentId === "library-1" ? [demoMovie] : [],
           nextCursor: null,
         });
       }
@@ -328,7 +384,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Libraries" }));
-    await user.click(await screen.findByRole("button", { name: /Movies/ }));
+    await user.click(await screen.findByRole("button", { name: /TV Shows/ }));
     expect(await screen.findByText("No media found")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Back to Libraries" }));

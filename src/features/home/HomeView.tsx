@@ -1,4 +1,5 @@
 import { TvMinimalPlay } from "lucide-react";
+import { FocusScope } from "../../components/focus";
 import { PosterCard } from "../../components/media";
 import {
   useChildren,
@@ -25,24 +26,13 @@ export function HomeView({
 }: HomeViewProps) {
   const server = servers[0] ?? null;
   const firstLibrary = libraries[0] ?? null;
-  const secondLibrary = libraries[1] ?? null;
-  const thirdLibrary = libraries[2] ?? null;
   const firstChildren = useChildren(firstLibrary ? server?.id : null, firstLibrary?.id ?? null);
-  const secondChildren = useChildren(secondLibrary ? server?.id : null, secondLibrary?.id ?? null);
-  const thirdChildren = useChildren(thirdLibrary ? server?.id : null, thirdLibrary?.id ?? null);
   const loading =
     serversLoading ||
     librariesLoading ||
-    firstChildren.isLoading ||
-    secondChildren.isLoading ||
-    thirdChildren.isLoading;
-  const mediaItems = [
-    ...(firstChildren.data?.items ?? []),
-    ...(secondChildren.data?.items ?? []),
-    ...(thirdChildren.data?.items ?? []),
-  ];
+    firstChildren.isLoading;
+  const mediaItems = firstChildren.data?.items ?? [];
   const latest = mediaItems.slice(0, 10);
-  const recommended = mediaItems.slice(10, 20);
   const hasServers = servers.length > 0;
 
   return (
@@ -91,9 +81,9 @@ export function HomeView({
         title="Latest"
       />
       <MediaRail
-        emptyText="More recommendations will appear as libraries grow"
-        items={recommended}
-        loading={loading && latest.length > 0}
+        emptyText="Recommendations arrive with viewing history in P7"
+        items={[]}
+        loading={false}
         onOpenMedia={onOpenMedia}
         title="Recommended"
       />
@@ -110,20 +100,27 @@ type MediaRailProps = {
 };
 
 function MediaRail({ emptyText, items, loading, onOpenMedia, title }: MediaRailProps) {
+  const focusScope = `${title}-rail`;
+
   return (
-    <section className="media-rail" aria-labelledby={`${title}-rail`}>
-      <h2 id={`${title}-rail`}>{title}</h2>
+    <section className="media-rail" aria-labelledby={focusScope}>
+      <h2 id={focusScope}>{title}</h2>
       {items.length > 0 ? (
-        <div className="rail-items">
+        <FocusScope
+          aria-label={`${title} media`}
+          className="rail-items"
+          focusKey={items.map((item) => item.id).join(":")}
+          scope={focusScope}
+        >
           {items.map((item) => (
             <PosterCard
-              focusScope={`${title}-rail`}
+              focusScope={focusScope}
               item={item}
               key={item.id}
               onOpen={onOpenMedia}
             />
           ))}
-        </div>
+        </FocusScope>
       ) : (
         <div className="empty-state compact">
           <strong>{loading ? "Loading media" : "No media found"}</strong>

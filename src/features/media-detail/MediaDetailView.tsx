@@ -1,4 +1,5 @@
 import { ChevronLeft, Film, Play } from "lucide-react";
+import { FocusScope } from "../../components/focus";
 import { PosterCard } from "../../components/media";
 import { formatMetadata } from "../../lib/media/format";
 import {
@@ -108,7 +109,14 @@ export function MediaDetailView({
               ))}
             </div>
           ) : children.data?.items.length ? (
-            <div className="rail-items">
+            <FocusScope
+              aria-label={`More from ${item.title}`}
+              className="rail-items"
+              focusKey={`${item.id}:${children.data.items
+                .map((child) => child.id)
+                .join(":")}`}
+              scope="detail-children"
+            >
               {children.data.items.map((child) => (
                 <PosterCard
                   focusScope="detail-children"
@@ -117,7 +125,7 @@ export function MediaDetailView({
                   onOpen={onOpenMedia}
                 />
               ))}
-            </div>
+            </FocusScope>
           ) : (
             <div className="empty-state compact">
               <strong>No media found</strong>

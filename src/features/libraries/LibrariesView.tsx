@@ -1,5 +1,6 @@
 import { ChevronLeft, Film, Library, type LucideIcon } from "lucide-react";
 import { useState } from "react";
+import { FocusScope } from "../../components/focus";
 import { PosterCard } from "../../components/media";
 import {
   useChildren,
@@ -96,7 +97,12 @@ type PosterGridProps = {
 
 function PosterGrid({ focusScope, items, onOpenMedia }: PosterGridProps) {
   return (
-    <div className="library-grid" aria-label="Media libraries">
+    <FocusScope
+      aria-label="Media libraries"
+      className="library-grid"
+      focusKey={items.map((item) => item.id).join(":")}
+      scope={focusScope}
+    >
       {items.map((item) => (
         <PosterCard
           focusScope={focusScope}
@@ -105,7 +111,7 @@ function PosterGrid({ focusScope, items, onOpenMedia }: PosterGridProps) {
           onOpen={onOpenMedia}
         />
       ))}
-    </div>
+    </FocusScope>
   );
 }
 

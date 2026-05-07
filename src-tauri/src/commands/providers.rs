@@ -26,11 +26,12 @@ pub fn list_servers_for_state(state: &AppState) -> AppResult<Vec<ServerProfile>>
 }
 
 #[tauri::command]
-pub fn providers_list_libraries(
+pub async fn providers_list_libraries(
     state: State<'_, AppState>,
     request: ListLibrariesRequest,
 ) -> AppResult<Vec<LibraryItem>> {
-    list_libraries_for_state(&state, request)
+    let state = super::state_for_blocking(state.inner());
+    super::run_blocking_command(move || list_libraries_for_state(&state, request)).await
 }
 
 pub fn list_libraries_for_state(

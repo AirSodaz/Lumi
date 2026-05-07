@@ -18,11 +18,12 @@ pub struct GetItemRequest {
 }
 
 #[tauri::command]
-pub fn media_list_children(
+pub async fn media_list_children(
     state: State<'_, AppState>,
     request: ListChildrenRequest,
 ) -> AppResult<PagedResult<LibraryItem>> {
-    list_children_for_state(&state, request)
+    let state = super::state_for_blocking(state.inner());
+    super::run_blocking_command(move || list_children_for_state(&state, request)).await
 }
 
 pub fn list_children_for_state(
@@ -33,11 +34,12 @@ pub fn list_children_for_state(
 }
 
 #[tauri::command]
-pub fn media_get_item(
+pub async fn media_get_item(
     state: State<'_, AppState>,
     request: GetItemRequest,
 ) -> AppResult<LibraryItemDetail> {
-    get_item_for_state(&state, request)
+    let state = super::state_for_blocking(state.inner());
+    super::run_blocking_command(move || get_item_for_state(&state, request)).await
 }
 
 pub fn get_item_for_state(

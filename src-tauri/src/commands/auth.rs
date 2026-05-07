@@ -7,11 +7,12 @@ use crate::{
 };
 
 #[tauri::command]
-pub fn auth_login_manual(
+pub async fn auth_login_manual(
     state: State<'_, AppState>,
     request: LoginRequest,
 ) -> AppResult<ServerProfile> {
-    login_manual_for_state(&state, request)
+    let state = super::state_for_blocking(state.inner());
+    super::run_blocking_command(move || login_manual_for_state(&state, request)).await
 }
 
 pub fn login_manual_for_state(state: &AppState, request: LoginRequest) -> AppResult<ServerProfile> {
