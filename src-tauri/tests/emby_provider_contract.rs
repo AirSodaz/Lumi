@@ -84,6 +84,43 @@ mod providers {
         }
 
         #[test]
+        fn login_allows_empty_password_and_preserves_base_url_path() {
+            let local_store = initialized_local_store();
+            let credential_store = Arc::new(MemoryCredentialStore::default());
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                200,
+                json!({
+                    "AccessToken": "token-value",
+                    "ServerId": "server-1",
+                    "User": {
+                        "Id": "user-1",
+                        "Name": "Demo User",
+                        "ServerName": "Demo Server"
+                    }
+                }),
+            )]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            let profile = provider
+                .login_manual(LoginRequest {
+                    base_url: "http://localhost:8096/emby".into(),
+                    username: "demo".into(),
+                    password: "".into(),
+                })
+                .expect("login succeeds with empty password");
+
+            assert_eq!(profile.base_url, "http://localhost:8096/emby");
+
+            let request = transport.request_at(0);
+            assert_eq!(
+                request.url,
+                "http://localhost:8096/emby/Users/AuthenticateByName"
+            );
+            assert_eq!(request.body["Username"], "demo");
+            assert_eq!(request.body["Pw"], "");
+        }
+
+        #[test]
         fn lists_libraries_and_children_as_view_ready_items() {
             let (local_store, credential_store, profile) = initialized_profile_with_token();
             let transport = Arc::new(FakeEmbyTransport::new(vec![
@@ -238,6 +275,7 @@ mod providers {
                 .expect_err("invalid credentials should fail");
 
             assert_eq!(error.code(), "emby.auth.invalid_credentials");
+            assert_eq!(error.message(), "Invalid username or password");
             assert!(error.recoverable());
         }
     }

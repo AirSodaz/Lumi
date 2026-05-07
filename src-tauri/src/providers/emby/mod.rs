@@ -297,6 +297,10 @@ impl EmbyClient {
 
         parsed.set_query(None);
         parsed.set_fragment(None);
+        if parsed.path() != "/" && !parsed.path().ends_with('/') {
+            let path = format!("{}/", parsed.path());
+            parsed.set_path(&path);
+        }
         Ok(Self {
             base_url: parsed,
             transport,
@@ -468,7 +472,17 @@ impl EmbyClient {
             _ => "emby.http",
         };
 
-        Err(AppError::new(code, "Emby request failed")
+        let message = match (context, response.status) {
+            (ErrorContext::Authentication, 401 | 403) => response
+                .body
+                .get("Message")
+                .and_then(Value::as_str)
+                .filter(|message| !message.trim().is_empty())
+                .unwrap_or("Invalid username or password"),
+            _ => "Emby request failed",
+        };
+
+        Err(AppError::new(code, message)
             .with_recoverable(true)
             .with_detail(json!({ "status": response.status, "body": response.body })))
     }

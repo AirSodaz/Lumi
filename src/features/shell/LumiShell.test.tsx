@@ -125,6 +125,45 @@ describe("LumiShell", () => {
     expect(addServer).toHaveFocus();
   });
 
+  it("allows submitting an Emby login with an empty password", async () => {
+    const user = userEvent.setup();
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "settings_get") {
+        return Promise.resolve({
+          theme: "system",
+          materialEffectsEnabled: true,
+        });
+      }
+      if (command === "providers_list_servers") {
+        return Promise.resolve([]);
+      }
+      if (command === "auth_login_manual") {
+        return Promise.resolve(demoServer);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Add Server" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Add Emby Server" });
+    await user.type(within(dialog).getByLabelText("Server URL"), "http://localhost:8096");
+    await user.type(within(dialog).getByLabelText("Username"), "demo");
+    await user.click(within(dialog).getByRole("button", { name: "Connect" }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("auth_login_manual", {
+        request: {
+          baseUrl: "http://localhost:8096",
+          username: "demo",
+          password: "",
+        },
+      }),
+    );
+  });
+
   it("keeps login input values visible when login fails", async () => {
     const user = userEvent.setup();
     invokeMock.mockImplementation((command: string) => {
@@ -155,14 +194,16 @@ describe("LumiShell", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add Emby Server" });
     const urlInput = within(dialog).getByLabelText("Server URL");
     const usernameInput = within(dialog).getByLabelText("Username");
+    const passwordInput = within(dialog).getByLabelText("Password");
     await user.type(urlInput, "http://localhost:8096");
     await user.type(usernameInput, "demo");
-    await user.type(within(dialog).getByLabelText("Password"), "wrong");
+    await user.type(passwordInput, "wrong");
     await user.click(within(dialog).getByRole("button", { name: "Connect" }));
 
     expect(await within(dialog).findByText("Invalid username or password")).toBeInTheDocument();
     expect(within(dialog).getByText("emby.auth.invalid_credentials")).toBeInTheDocument();
     expect(urlInput).toHaveValue("http://localhost:8096");
     expect(usernameInput).toHaveValue("demo");
+    expect(passwordInput).toHaveValue("wrong");
   });
 });

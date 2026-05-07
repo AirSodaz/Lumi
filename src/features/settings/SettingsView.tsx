@@ -209,7 +209,6 @@ function AddServerDialog() {
               <input
                 autoComplete="current-password"
                 onChange={(event) => setPassword(event.target.value)}
-                required
                 type="password"
                 value={password}
               />
