@@ -53,12 +53,18 @@ export type LogExport = {
 
 export type LoginManualRequest = {
   baseUrl: string;
+  displayName?: string;
   username: string;
   password: string;
 };
 
 export type LogoutRequest = {
   serverId: string;
+};
+
+export type UpdateServerProfileRequest = {
+  serverId: string;
+  name: string;
 };
 
 export type LibraryItem = {

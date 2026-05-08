@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { LibraryItem, ListLibrariesRequest, ServerProfile } from "./types";
+import type {
+  LibraryItem,
+  ListLibrariesRequest,
+  ServerProfile,
+  UpdateServerProfileRequest,
+} from "./types";
 
 export const providers = {
   listServers() {
@@ -9,5 +14,9 @@ export const providers = {
 
   listLibraries(request: ListLibrariesRequest) {
     return invoke<LibraryItem[]>("providers_list_libraries", { request });
+  },
+
+  updateServerProfile(request: UpdateServerProfileRequest) {
+    return invoke<ServerProfile>("providers_update_server_profile", { request });
   },
 };

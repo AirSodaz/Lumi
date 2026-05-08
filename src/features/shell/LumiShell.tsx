@@ -13,7 +13,14 @@ import {
   X,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -32,6 +39,7 @@ import {
   useLibraries,
   useServers,
   type LibraryItem,
+  type ServerProfile,
 } from "../../lib/tauriClient";
 import { FavoritesView } from "../favorites/FavoritesView";
 import { HomeView } from "../home/HomeView";
@@ -61,6 +69,7 @@ type ViewTransitionDocument = Document & {
 
 const initialRoute: ShellRoute = { kind: "view", view: "home" };
 const sidebarCollapsedStorageKey = "lumi.sidebarCollapsed";
+const selectedServerStorageKey = "lumi.selectedServerId";
 
 const navItems: Array<{ id: ViewId; label: string; icon: Icon }> = [
   { id: "home", label: "Home", icon: Home },
@@ -82,7 +91,11 @@ export function LumiShell() {
   const route = history.current;
   const serversQuery = useServers();
   const servers = serversQuery.data ?? [];
-  const selectedServerId = servers[0]?.id ?? null;
+  const [preferredServerId, setPreferredServerId] = useState(
+    readSelectedServerPreference,
+  );
+  const selectedServer = selectServer(servers, preferredServerId);
+  const selectedServerId = selectedServer?.id ?? null;
   const librariesQuery = useLibraries(selectedServerId);
   const libraries = librariesQuery.data ?? [];
   const activeView =
@@ -92,6 +105,17 @@ export function LumiShell() {
         ? "home"
         : route.view;
   const routeKey = routeIdentity(route);
+
+  useEffect(() => {
+    if (
+      preferredServerId !== selectedServerId &&
+      !serversQuery.isLoading &&
+      (preferredServerId !== null || selectedServerId !== null)
+    ) {
+      setPreferredServerId(selectedServerId);
+      writeSelectedServerPreference(selectedServerId);
+    }
+  }, [preferredServerId, selectedServerId, serversQuery.isLoading]);
 
   function runRouteTransition(updateRoute: () => void) {
     const reduceMotion =
@@ -148,6 +172,12 @@ export function LumiShell() {
       kind: "library",
       libraryId: item.id,
     });
+  }
+
+  function selectActiveServer(serverId: string) {
+    setPreferredServerId(serverId);
+    writeSelectedServerPreference(serverId);
+    setRouteWithTransition({ kind: "view", view: "home" });
   }
 
   function toggleSidebarCollapsed() {
@@ -222,6 +252,7 @@ export function LumiShell() {
         }
         onOpenMedia={(item) => openMediaDetail(item, "home")}
         selectedLibraryId={route.libraryId}
+        selectedServer={selectedServer}
         servers={servers}
       />
     );
@@ -247,6 +278,8 @@ export function LumiShell() {
             onOpenSettings={() =>
               setRouteWithTransition({ kind: "view", view: "settings" })
             }
+            onSelectServer={selectActiveServer}
+            selectedServer={selectedServer}
             servers={servers}
             serversLoading={serversQuery.isLoading}
           />
@@ -648,6 +681,50 @@ function writeSidebarCollapsedPreference(collapsed: boolean) {
   } catch {
     // Sidebar state is a convenience preference; ignore unavailable storage.
   }
+}
+
+function readSelectedServerPreference() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(selectedServerStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function writeSelectedServerPreference(serverId: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (serverId) {
+      window.localStorage.setItem(selectedServerStorageKey, serverId);
+      return;
+    }
+
+    window.localStorage.removeItem(selectedServerStorageKey);
+  } catch {
+    // Server selection is a convenience preference; ignore unavailable storage.
+  }
+}
+
+function selectServer(
+  servers: readonly ServerProfile[],
+  preferredServerId: string | null,
+) {
+  if (servers.length === 0) {
+    return null;
+  }
+
+  return (
+    servers.find((server) => server.id === preferredServerId) ??
+    servers[0] ??
+    null
+  );
 }
 
 function routeIdentity(route: ShellRoute) {

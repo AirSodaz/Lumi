@@ -85,6 +85,15 @@ describe("SettingsView", () => {
       if (command === "auth_logout") {
         return Promise.resolve(null);
       }
+      if (command === "providers_update_server_profile") {
+        return Promise.resolve({
+          ...demoServer,
+          name:
+            (args as { request?: { name?: string } } | undefined)?.request?.name ??
+            demoServer.name,
+          updatedAt: "2026-05-08T00:00:00Z",
+        });
+      }
       return Promise.resolve(null);
     });
   });
@@ -117,6 +126,27 @@ describe("SettingsView", () => {
     const dialog = await screen.findByRole("dialog", { name: "Demo Server" });
     expect(within(dialog).getByText("http://localhost:8096")).toBeInTheDocument();
     expect(within(dialog).getByText("user-1")).toBeInTheDocument();
+  });
+
+  it("renames a saved server from the server menu", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView />, { wrapper });
+
+    await screen.findByText("Demo Server");
+    await user.click(screen.getByRole("button", { name: "More actions for Demo Server" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Rename Server" });
+    const nameInput = within(dialog).getByLabelText("Server name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Living Room");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("providers_update_server_profile", {
+        request: { serverId: "server-1", name: "Living Room" },
+      }),
+    );
   });
 
   it("saves player preferences and shows mpv diagnostics", async () => {

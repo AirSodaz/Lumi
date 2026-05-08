@@ -39,6 +39,16 @@ const demoServer: ServerProfile = {
   updatedAt: "2026-05-07T00:00:00Z",
 };
 
+const secondServer: ServerProfile = {
+  id: "server-2",
+  providerKind: "emby",
+  name: "Second Server",
+  baseUrl: "http://localhost:8097",
+  userId: "user-2",
+  createdAt: "2026-05-07T00:00:00Z",
+  updatedAt: "2026-05-07T00:00:00Z",
+};
+
 const moviesLibrary: LibraryItem = {
   id: "library-1",
   providerKind: "emby",
@@ -55,6 +65,14 @@ const tvLibrary: LibraryItem = {
   serverId: "server-1",
   itemType: "folder",
   title: "TV Shows",
+};
+
+const secondServerLibrary: LibraryItem = {
+  id: "library-3",
+  providerKind: "emby",
+  serverId: "server-2",
+  itemType: "folder",
+  title: "Kids",
 };
 
 const demoMovie: LibraryItem = {
@@ -74,6 +92,14 @@ const secondMovie: LibraryItem = {
   serverId: "server-1",
   itemType: "movie",
   title: "Second Movie",
+};
+
+const secondServerMovie: LibraryItem = {
+  id: "movie-20",
+  providerKind: "emby",
+  serverId: "server-2",
+  itemType: "movie",
+  title: "Second Server Movie",
 };
 
 const thirdMovie: LibraryItem = {
@@ -191,9 +217,25 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
     return Promise.resolve([demoServer]);
   }
   if (command === "providers_list_libraries") {
-    return Promise.resolve([moviesLibrary, tvLibrary]);
+    return Promise.resolve(
+      request?.serverId === "server-2"
+        ? [secondServerLibrary]
+        : [moviesLibrary, tvLibrary],
+    );
   }
   if (command === "media_get_home_rows") {
+    if (request?.serverId === "server-2") {
+      return Promise.resolve({
+        continueWatching: [secondServerMovie],
+        latestByLibrary: [
+          {
+            libraryId: "library-3",
+            items: [secondServerMovie],
+          },
+        ],
+      });
+    }
+
     return Promise.resolve({
       continueWatching: [
         {
@@ -642,6 +684,61 @@ describe("LumiShell", () => {
     );
   });
 
+  it("switches the active server and persists the selection", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "providers_list_servers") {
+        return Promise.resolve([demoServer, secondServer]);
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await screen.findByRole("button", { name: /Demo Movie/ });
+    await user.click(await screen.findByRole("button", { name: "Demo Server" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Second Server/ }));
+
+    expect(window.localStorage.getItem("lumi.selectedServerId")).toBe("server-2");
+    expect(
+      await screen.findAllByRole("button", { name: /Second Server Movie/ }),
+    ).toHaveLength(2);
+    expect(await screen.findByRole("button", { name: "Kids" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("providers_list_libraries", {
+        request: { serverId: "server-2" },
+      }),
+    );
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_get_home_rows", {
+        request: {
+          continueWatchingLimit: 10,
+          latestLimit: 10,
+          libraryIds: ["library-3"],
+          serverId: "server-2",
+        },
+      }),
+    );
+  });
+
+  it("falls back when the persisted selected server no longer exists", async () => {
+    window.localStorage.setItem("lumi.selectedServerId", "missing-server");
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await screen.findByRole("button", { name: /Demo Movie/ });
+
+    expect(window.localStorage.getItem("lumi.selectedServerId")).toBe("server-1");
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("providers_list_libraries", {
+        request: { serverId: "server-1" },
+      }),
+    );
+  });
+
   it("does not render development-phase placeholder copy in browsing surfaces", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
@@ -1047,6 +1144,7 @@ describe("LumiShell", () => {
     expect(urlInput).toHaveFocus();
 
     await user.type(urlInput, "http://localhost:8096");
+    await user.type(within(dialog).getByLabelText("Server name"), "Living Room");
     await user.type(within(dialog).getByLabelText("Username"), "demo");
     await user.type(within(dialog).getByLabelText("Password"), "secret");
     await user.click(within(dialog).getByRole("button", { name: "Connect" }));
@@ -1055,6 +1153,7 @@ describe("LumiShell", () => {
       expect(invokeMock).toHaveBeenCalledWith("auth_login_manual", {
         request: {
           baseUrl: "http://localhost:8096",
+          displayName: "Living Room",
           username: "demo",
           password: "secret",
         },

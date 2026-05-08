@@ -18,6 +18,7 @@ export {
   usePlaybackCommand,
   useServers,
   useSettings,
+  useUpdateServerProfile,
   useUpdateSettings,
 } from "./queries";
 export { settings } from "./settings";
@@ -49,4 +50,5 @@ export type {
   ServerProfile,
   SubtitlePreference,
   ThemePreference,
+  UpdateServerProfileRequest,
 } from "./types";

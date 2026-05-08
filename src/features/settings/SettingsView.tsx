@@ -28,6 +28,7 @@ import {
   useMpvDiagnostic,
   useServers,
   useSettings,
+  useUpdateServerProfile,
   useUpdateSettings,
   type AppError,
   type LogExport,
@@ -99,6 +100,7 @@ function ServersPanel() {
   const logout = useLogout();
   const servers = serversQuery.data ?? [];
   const [viewingServer, setViewingServer] = useState<ServerProfile | null>(null);
+  const [renamingServer, setRenamingServer] = useState<ServerProfile | null>(null);
 
   return (
     <section className="settings-section" aria-labelledby="servers-title">
@@ -149,6 +151,12 @@ function ServersPanel() {
                     >
                       View Server
                     </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      className="dropdown-item"
+                      onSelect={() => setRenamingServer(server)}
+                    >
+                      Rename
+                    </DropdownMenu.Item>
                     <DropdownMenu.Item className="dropdown-item">Diagnostics</DropdownMenu.Item>
                     <DropdownMenu.Item
                       className="dropdown-item"
@@ -184,6 +192,14 @@ function ServersPanel() {
         }}
         server={viewingServer}
       />
+      <RenameServerDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenamingServer(null);
+          }
+        }}
+        server={renamingServer}
+      />
     </section>
   );
 }
@@ -191,6 +207,7 @@ function ServersPanel() {
 function AddServerDialog() {
   const [open, setOpen] = useState(false);
   const [baseUrl, setBaseUrl] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<AppError | null>(null);
@@ -210,7 +227,14 @@ function AddServerDialog() {
     setError(null);
 
     try {
-      await login.mutateAsync({ baseUrl, username, password });
+      const trimmedDisplayName = displayName.trim();
+      await login.mutateAsync({
+        baseUrl,
+        ...(trimmedDisplayName ? { displayName: trimmedDisplayName } : {}),
+        username,
+        password,
+      });
+      setDisplayName("");
       setPassword("");
       setOpen(false);
     } catch (caught) {
@@ -270,6 +294,16 @@ function AddServerDialog() {
                       required
                       type="url"
                       value={baseUrl}
+                    />
+                  </label>
+                  <label>
+                    <span>Server name</span>
+                    <input
+                      autoComplete="off"
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      placeholder="Use server name"
+                      type="text"
+                      value={displayName}
                     />
                   </label>
                   <label>
@@ -545,6 +579,123 @@ function ServerDetailDialog({ onOpenChange, server }: ServerDetailDialogProps) {
                     <span>{server.providerKind}</span>
                   </div>
                 </div>
+              </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        ) : null}
+      </AnimatePresence>
+    </Dialog.Root>
+  );
+}
+
+type RenameServerDialogProps = {
+  onOpenChange: (open: boolean) => void;
+  server: ServerProfile | null;
+};
+
+function RenameServerDialog({ onOpenChange, server }: RenameServerDialogProps) {
+  const updateServerProfile = useUpdateServerProfile();
+  const [name, setName] = useState("");
+  const [error, setError] = useState<AppError | null>(null);
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
+  function handleOpenAutoFocus(event: Event) {
+    event.preventDefault();
+    setName(server?.name ?? "");
+    setError(null);
+    firstInputRef.current?.focus();
+    firstInputRef.current?.select();
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!server) {
+      return;
+    }
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError({
+        code: "providers.server_name_required",
+        message: "Server name is required",
+        recoverable: true,
+      });
+      return;
+    }
+
+    setError(null);
+    try {
+      await updateServerProfile.mutateAsync({
+        serverId: server.id,
+        name: trimmedName,
+      });
+      onOpenChange(false);
+    } catch (caught) {
+      setError(toAppError(caught));
+    }
+  }
+
+  return (
+    <Dialog.Root open={Boolean(server)} onOpenChange={onOpenChange}>
+      <AnimatePresence>
+        {server ? (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild forceMount>
+              <motion.div
+                className="dialog-overlay"
+                data-motion-surface="dialog-overlay"
+                {...dialogOverlayMotion}
+              />
+            </Dialog.Overlay>
+            <Dialog.Content asChild forceMount onOpenAutoFocus={handleOpenAutoFocus}>
+              <motion.div
+                className="dialog-content"
+                data-motion-surface="dialog-content"
+                {...dialogContentMotion}
+              >
+                <div className="dialog-title-row">
+                  <Dialog.Title>Rename Server</Dialog.Title>
+                  <Dialog.Close asChild>
+                    <MotionButton aria-label="Close" className="icon-button" type="button">
+                      <X aria-hidden="true" size={16} />
+                    </MotionButton>
+                  </Dialog.Close>
+                </div>
+                <Dialog.Description className="sr-only">
+                  Edit the local display name for this saved server.
+                </Dialog.Description>
+                <form className="dialog-form" onSubmit={handleSubmit}>
+                  <label>
+                    <span>Server name</span>
+                    <input
+                      onChange={(event) => setName(event.target.value)}
+                      ref={firstInputRef}
+                      required
+                      type="text"
+                      value={name}
+                    />
+                  </label>
+                  {error ? (
+                    <div className="form-error" role="alert">
+                      <strong>{error.message}</strong>
+                      <span>{error.code}</span>
+                    </div>
+                  ) : null}
+                  <div className="dialog-actions">
+                    <Dialog.Close asChild>
+                      <MotionButton className="secondary-action" type="button">
+                        Cancel
+                      </MotionButton>
+                    </Dialog.Close>
+                    <MotionButton
+                      className="primary-action"
+                      disabled={updateServerProfile.isPending}
+                      type="submit"
+                    >
+                      {updateServerProfile.isPending ? "Saving" : "Save"}
+                    </MotionButton>
+                  </div>
+                </form>
               </motion.div>
             </Dialog.Content>
           </Dialog.Portal>

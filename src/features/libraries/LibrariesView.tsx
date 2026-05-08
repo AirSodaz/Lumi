@@ -21,6 +21,7 @@ type LibrariesViewProps = {
   onBackToHome: () => void;
   onOpenMedia: (item: LibraryItem) => void;
   selectedLibraryId: string;
+  selectedServer: ServerProfile | null;
   servers: ServerProfile[];
 };
 
@@ -30,11 +31,12 @@ export function LibrariesView({
   onBackToHome,
   onOpenMedia,
   selectedLibraryId,
+  selectedServer,
   servers,
 }: LibrariesViewProps) {
   const selectedLibrary =
     libraries.find((library) => library.id === selectedLibraryId) ?? null;
-  const server = servers[0] ?? null;
+  const server = selectedServer ?? servers[0] ?? null;
   const children = useChildren(
     selectedLibrary ? server?.id : null,
     selectedLibrary?.id ?? null,

@@ -27,6 +27,7 @@ pub fn run() {
             commands::auth::auth_login_manual,
             commands::auth::auth_logout,
             commands::providers::providers_list_servers,
+            commands::providers::providers_update_server_profile,
             commands::providers::providers_list_libraries,
             commands::media::media_list_children,
             commands::media::media_get_item,

@@ -42,6 +42,25 @@ impl LocalStore {
         })
     }
 
+    pub fn rename_server_profile(
+        &self,
+        server_id: &str,
+        name: &str,
+        updated_at: &str,
+    ) -> AppResult<ServerProfile> {
+        self.with_database(|database| {
+            let repository = ServerProfileRepository::new(database.connection());
+            repository.rename(server_id, name, updated_at)?;
+            repository.get(server_id)?.ok_or_else(|| {
+                AppError::new(
+                    "persistence.server_not_found",
+                    "Saved server profile was not found",
+                )
+                .with_recoverable(true)
+            })
+        })
+    }
+
     pub fn delete_server_profile(&self, server_id: &str) -> AppResult<()> {
         self.with_database(|database| {
             ServerProfileRepository::new(database.connection()).delete(server_id)

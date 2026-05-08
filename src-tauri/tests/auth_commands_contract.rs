@@ -38,6 +38,7 @@ mod commands {
                 &state,
                 LoginRequest {
                     base_url: "http://localhost:8096".into(),
+                    display_name: None,
                     username: "demo".into(),
                     password: "secret".into(),
                 },
@@ -107,6 +108,62 @@ mod commands {
             assert_eq!(libraries.len(), 1);
             assert_eq!(libraries[0].title, "Movies");
             assert_eq!(libraries[0].item_type, "folder");
+        }
+
+        #[test]
+        fn update_server_profile_renames_saved_profile_without_changing_identity() {
+            let state = test_state(vec![]);
+            let profile = seed_profile_with_token(&state);
+
+            let renamed = provider_commands::update_server_profile_for_state(
+                &state,
+                provider_commands::UpdateServerProfileRequest {
+                    server_id: profile.id.clone(),
+                    name: "  Living Room  ".into(),
+                },
+            )
+            .expect("rename server profile");
+
+            assert_eq!(renamed.id, profile.id);
+            assert_eq!(renamed.name, "Living Room");
+            assert_eq!(renamed.provider_kind, profile.provider_kind);
+            assert_eq!(renamed.base_url, profile.base_url);
+            assert_eq!(renamed.user_id, profile.user_id);
+            assert_eq!(renamed.created_at, profile.created_at);
+            assert_eq!(renamed.updated_at, "2026-05-08T00:00:00Z");
+            assert_eq!(
+                state
+                    .credential_store()
+                    .get_token(&CredentialKey::server_token(&profile))
+                    .expect("token remains readable"),
+                Some("token-value".into())
+            );
+        }
+
+        #[test]
+        fn update_server_profile_rejects_blank_name() {
+            let state = test_state(vec![]);
+            let profile = seed_profile_with_token(&state);
+
+            let error = provider_commands::update_server_profile_for_state(
+                &state,
+                provider_commands::UpdateServerProfileRequest {
+                    server_id: profile.id.clone(),
+                    name: "   ".into(),
+                },
+            )
+            .expect_err("blank names are rejected");
+
+            assert_eq!(error.code(), "providers.server_name_required");
+            assert!(error.recoverable());
+            assert_eq!(
+                state
+                    .local_store()
+                    .get_server_profile(&profile.id)
+                    .expect("profile remains saved")
+                    .name,
+                profile.name
+            );
         }
     }
 
@@ -251,7 +308,7 @@ struct FixedClock;
 
 impl Clock for FixedClock {
     fn now_iso8601(&self) -> String {
-        "2026-05-07T00:00:00Z".into()
+        "2026-05-08T00:00:00Z".into()
     }
 }
 

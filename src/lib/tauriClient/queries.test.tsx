@@ -10,6 +10,7 @@ import {
   useItemDetail,
   useLibraries,
   useServers,
+  useUpdateServerProfile,
 } from "./queries";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -211,6 +212,27 @@ describe("tauri query hooks", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invokeMock).toHaveBeenCalledWith("auth_logout", {
       request: { serverId: "server-1" },
+    });
+  });
+
+  it("updates saved server profiles through the typed provider client", async () => {
+    invokeMock.mockResolvedValueOnce({
+      id: "server-1",
+      providerKind: "emby",
+      name: "Living Room",
+      baseUrl: "http://localhost:8096",
+      userId: "user-1",
+      createdAt: "2026-05-07T00:00:00Z",
+      updatedAt: "2026-05-08T00:00:00Z",
+    });
+
+    const { result } = renderHook(() => useUpdateServerProfile(), { wrapper });
+
+    result.current.mutate({ serverId: "server-1", name: "Living Room" });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invokeMock).toHaveBeenCalledWith("providers_update_server_profile", {
+      request: { serverId: "server-1", name: "Living Room" },
     });
   });
 });

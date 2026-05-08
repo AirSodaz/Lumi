@@ -269,10 +269,17 @@ impl MediaProvider for EmbyProvider {
         let client = self.client(&request.base_url)?;
         let authenticated = client.authenticate_by_name(&request.username, &request.password)?;
         let now = self.clock.now_iso8601();
+        let profile_name = request
+            .display_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .unwrap_or(&authenticated.server_name)
+            .to_string();
         let profile = ServerProfile {
             id: new_emby_profile_id(),
             provider_kind: ProviderKind::Emby,
-            name: authenticated.server_name,
+            name: profile_name,
             base_url: client.base_url_string(),
             user_id: authenticated.user_id,
             created_at: now.clone(),

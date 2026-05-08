@@ -1,10 +1,12 @@
 import type { CSSProperties } from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { motion, useReducedMotion } from "motion/react";
-import { Info, Server } from "lucide-react";
+import { Check, ChevronDown, Info, Server } from "lucide-react";
 import { MediaRail } from "../../components/media";
 import { MotionButton } from "../../components/motion";
 import { formatMetadata } from "../../lib/media/format";
 import { createSurfaceMotion } from "../../lib/motion/presets";
+import { dropdownMotion } from "../../lib/motion/presets";
 import {
   useHomeRows,
   type LibraryItem,
@@ -17,6 +19,8 @@ type HomeViewProps = {
   onOpenLibrary: (item: LibraryItem) => void;
   onOpenMedia: (item: LibraryItem) => void;
   onOpenSettings: () => void;
+  onSelectServer: (serverId: string) => void;
+  selectedServer: ServerProfile | null;
   servers: ServerProfile[];
   serversLoading: boolean;
 };
@@ -27,11 +31,13 @@ export function HomeView({
   onOpenLibrary,
   onOpenMedia,
   onOpenSettings,
+  onSelectServer,
+  selectedServer,
   servers,
   serversLoading,
 }: HomeViewProps) {
   const reducedMotion = useReducedMotion();
-  const server = servers[0] ?? null;
+  const server = selectedServer;
   const libraryIds = libraries.map((library) => library.id);
   const homeRows = useHomeRows(server?.id, libraryIds);
   const loading =
@@ -78,7 +84,11 @@ export function HomeView({
         </div>
         <div className="toolbar-cluster">
           {server ? (
-            <span className="status-chip">{server.name}</span>
+            <ServerSelector
+              onSelectServer={onSelectServer}
+              selectedServer={server}
+              servers={servers}
+            />
           ) : (
             <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
               <Server aria-hidden="true" size={15} />
@@ -153,5 +163,61 @@ export function HomeView({
         />
       ))}
     </section>
+  );
+}
+
+type ServerSelectorProps = {
+  onSelectServer: (serverId: string) => void;
+  selectedServer: ServerProfile;
+  servers: ServerProfile[];
+};
+
+function ServerSelector({
+  onSelectServer,
+  selectedServer,
+  servers,
+}: ServerSelectorProps) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <MotionButton
+          aria-label={selectedServer.name}
+          className="server-selector-trigger"
+          type="button"
+        >
+          <Server aria-hidden="true" size={15} />
+          <span>{selectedServer.name}</span>
+          <ChevronDown aria-hidden="true" size={14} />
+        </MotionButton>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" asChild>
+          <motion.div
+            className="dropdown-content server-selector-menu"
+            data-motion-surface="dropdown"
+            {...dropdownMotion}
+          >
+            {servers.map((server) => (
+              <DropdownMenu.Item
+                aria-current={server.id === selectedServer.id ? "true" : undefined}
+                className="dropdown-item server-selector-item"
+                key={server.id}
+                onSelect={() => onSelectServer(server.id)}
+              >
+                <span className="server-selector-check">
+                  {server.id === selectedServer.id ? (
+                    <Check aria-hidden="true" size={14} />
+                  ) : null}
+                </span>
+                <span>
+                  <strong>{server.name}</strong>
+                  <small>{server.baseUrl}</small>
+                </span>
+              </DropdownMenu.Item>
+            ))}
+          </motion.div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

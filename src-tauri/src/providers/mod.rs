@@ -28,6 +28,8 @@ pub struct ServerProfile {
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     pub base_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub username: String,
     pub password: String,
 }

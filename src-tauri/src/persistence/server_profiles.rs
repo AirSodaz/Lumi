@@ -118,6 +118,19 @@ impl<'connection> ServerProfileRepository<'connection> {
         .transpose()
     }
 
+    pub fn rename(&self, server_id: &str, name: &str, updated_at: &str) -> AppResult<()> {
+        self.connection.execute(
+            "
+            UPDATE server_profiles
+            SET name = ?2, updated_at = ?3
+            WHERE id = ?1
+            ",
+            params![server_id, name, updated_at],
+        )?;
+
+        Ok(())
+    }
+
     pub fn delete(&self, server_id: &str) -> AppResult<()> {
         self.connection.execute(
             "DELETE FROM server_profiles WHERE id = ?1",

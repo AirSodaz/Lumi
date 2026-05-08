@@ -41,6 +41,7 @@ fn media_provider_trait_exposes_v1_capabilities() {
         provider
             .login_manual(LoginRequest {
                 base_url: "http://localhost:8096".into(),
+                display_name: None,
                 username: "demo".into(),
                 password: "secret".into(),
             })

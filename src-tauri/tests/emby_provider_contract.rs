@@ -36,6 +36,7 @@ mod providers {
             let profile = provider
                 .login_manual(LoginRequest {
                     base_url: "http://localhost:8096/".into(),
+                    display_name: None,
                     username: "demo".into(),
                     password: "secret".into(),
                 })
@@ -92,6 +93,7 @@ mod providers {
             let profile = provider
                 .login_manual(LoginRequest {
                     base_url: "http://localhost:8096/emby".into(),
+                    display_name: None,
                     username: "demo".into(),
                     password: "".into(),
                 })
@@ -121,6 +123,7 @@ mod providers {
             let first = provider
                 .login_manual(LoginRequest {
                     base_url: "http://localhost:8096".into(),
+                    display_name: None,
                     username: "demo".into(),
                     password: "secret".into(),
                 })
@@ -128,6 +131,7 @@ mod providers {
             let second = provider
                 .login_manual(LoginRequest {
                     base_url: "http://localhost:8096".into(),
+                    display_name: None,
                     username: "demo".into(),
                     password: "secret".into(),
                 })
@@ -155,6 +159,59 @@ mod providers {
                     .expect("second token is readable"),
                 Some("token-two".into())
             );
+        }
+
+        #[test]
+        fn login_uses_local_display_name_when_provided() {
+            let local_store = initialized_local_store();
+            let credential_store = Arc::new(MemoryCredentialStore::default());
+            let transport = Arc::new(FakeEmbyTransport::new(vec![auth_response(
+                "token-value",
+                "server-1",
+                "user-1",
+            )]));
+            let provider = test_provider(local_store.clone(), credential_store, transport);
+
+            let profile = provider
+                .login_manual(LoginRequest {
+                    base_url: "http://localhost:8096".into(),
+                    display_name: Some("  Living Room  ".into()),
+                    username: "demo".into(),
+                    password: "secret".into(),
+                })
+                .expect("login succeeds");
+
+            assert_eq!(profile.name, "Living Room");
+            assert_eq!(
+                local_store
+                    .get_server_profile(&profile.id)
+                    .expect("profile persisted")
+                    .name,
+                "Living Room"
+            );
+        }
+
+        #[test]
+        fn login_uses_server_name_when_display_name_is_blank() {
+            let local_store = initialized_local_store();
+            let credential_store = Arc::new(MemoryCredentialStore::default());
+            let transport = Arc::new(FakeEmbyTransport::new(vec![auth_response(
+                "token-value",
+                "server-1",
+                "user-1",
+            )]));
+            let provider = test_provider(local_store, credential_store, transport);
+
+            let profile = provider
+                .login_manual(LoginRequest {
+                    base_url: "http://localhost:8096".into(),
+                    display_name: Some("   ".into()),
+                    username: "demo".into(),
+                    password: "secret".into(),
+                })
+                .expect("login succeeds");
+
+            assert_eq!(profile.name, "Demo Server");
         }
 
         #[test]
@@ -618,6 +675,7 @@ mod providers {
             let error = provider
                 .login_manual(LoginRequest {
                     base_url: "http://localhost:8096".into(),
+                    display_name: None,
                     username: "demo".into(),
                     password: "wrong".into(),
                 })
@@ -642,6 +700,7 @@ mod providers {
             let error = provider
                 .login_manual(LoginRequest {
                     base_url: "http://localhost:8096".into(),
+                    display_name: None,
                     username: "demo".into(),
                     password: "secret".into(),
                 })

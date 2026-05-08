@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app::AppState,
-    errors::AppResult,
+    errors::{AppError, AppResult},
     providers::{LibraryItem, MediaProvider, ServerProfile},
 };
 
@@ -16,6 +16,13 @@ pub struct ListLibrariesRequest {
     pub server_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateServerProfileRequest {
+    pub server_id: String,
+    pub name: String,
+}
+
 #[tauri::command]
 pub fn providers_list_servers(state: State<'_, AppState>) -> AppResult<Vec<ServerProfile>> {
     list_servers_for_state(&state)
@@ -23,6 +30,33 @@ pub fn providers_list_servers(state: State<'_, AppState>) -> AppResult<Vec<Serve
 
 pub fn list_servers_for_state(state: &AppState) -> AppResult<Vec<ServerProfile>> {
     state.list_servers()
+}
+
+#[tauri::command]
+pub fn providers_update_server_profile(
+    state: State<'_, AppState>,
+    request: UpdateServerProfileRequest,
+) -> AppResult<ServerProfile> {
+    update_server_profile_for_state(&state, request)
+}
+
+pub fn update_server_profile_for_state(
+    state: &AppState,
+    request: UpdateServerProfileRequest,
+) -> AppResult<ServerProfile> {
+    let name = request.name.trim();
+    if name.is_empty() {
+        return Err(
+            AppError::new("providers.server_name_required", "Server name is required")
+                .with_recoverable(true),
+        );
+    }
+
+    state.local_store().rename_server_profile(
+        &request.server_id,
+        name,
+        &state.clock().now_iso8601(),
+    )
 }
 
 #[tauri::command]

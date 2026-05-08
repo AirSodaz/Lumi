@@ -15,6 +15,7 @@ import type {
   LoginManualRequest,
   PlaybackCommandRequest,
   PlayerOpenRequest,
+  UpdateServerProfileRequest,
 } from "./types";
 
 const QUERY_STALE_TIME_MS = 60_000;
@@ -128,6 +129,25 @@ export function useLogout() {
   });
 }
 
+export function useUpdateServerProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: UpdateServerProfileRequest) =>
+      providers.updateServerProfile(request),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.servers, (servers: unknown) =>
+        Array.isArray(servers)
+          ? servers.map((server) =>
+              isServerProfile(server) && server.id === updated.id ? updated : server,
+            )
+          : servers,
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.servers });
+    },
+  });
+}
+
 export function useSettings() {
   return useQuery({
     queryKey: queryKeys.settings,
@@ -180,4 +200,8 @@ export function usePlaybackCommand() {
   return useMutation({
     mutationFn: (request: PlaybackCommandRequest) => playback.command(request),
   });
+}
+
+function isServerProfile(value: unknown): value is { id: string } {
+  return typeof value === "object" && value !== null && "id" in value;
 }
