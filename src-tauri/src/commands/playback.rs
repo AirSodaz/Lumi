@@ -1,10 +1,16 @@
 use std::sync::Arc;
 
+#[cfg(target_os = "windows")]
+use std::{
+    collections::HashMap,
+    sync::{Mutex, OnceLock},
+};
+
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "windows")]
 use tauri::WindowEvent;
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::{
     app::AppState,
@@ -236,13 +242,23 @@ impl PlaybackHost for TauriPlaybackHost {
             .emit(events::PLAYBACK_ERROR, event)
             .map_err(playback_emit_failed)
     }
+
+    fn show_video_surface(&self, session_id: &str) -> AppResult<()> {
+        show_video_surface_for_session(&self.app, session_id)
+    }
+
+    fn destroy_video_surface(&self, session_id: &str) -> AppResult<()> {
+        destroy_video_surface_for_session(&self.app, session_id)
+    }
 }
 
 #[cfg(target_os = "windows")]
 fn embedded_window_id_for(window: &tauri::WebviewWindow) -> AppResult<Option<i64>> {
     let handle = window.window_handle().map_err(playback_window_failed)?;
     match handle.as_raw() {
-        RawWindowHandle::Win32(handle) => create_video_host_window(window, handle.hwnd.get() as isize),
+        RawWindowHandle::Win32(handle) => {
+            create_video_host_window(window, handle.hwnd.get() as isize)
+        }
         _ => Err(playback_window_failed("unsupported native window handle")),
     }
 }
@@ -259,7 +275,7 @@ fn create_video_host_window(
 ) -> AppResult<Option<i64>> {
     use windows_sys::Win32::Foundation::{HINSTANCE, HWND};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, HMENU, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
+        CreateWindowExW, HMENU, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPSIBLINGS,
     };
 
     const CONTROL_REGION_HEIGHT: u32 = 172;
@@ -273,7 +289,7 @@ fn create_video_host_window(
             WINDOW_EX_STYLE::default(),
             class_name.as_ptr(),
             std::ptr::null(),
-            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+            WS_CHILD | WS_CLIPSIBLINGS,
             0,
             0,
             video_width as i32,
@@ -286,11 +302,22 @@ fn create_video_host_window(
     };
 
     if child.is_null() {
-        return Err(playback_window_failed("native video host could not be created"));
+        return Err(playback_window_failed(
+            "native video host could not be created",
+        ));
     }
 
     let child = child as isize;
     position_video_host(child, video_width, video_height);
+    let session_id = window
+        .label()
+        .strip_prefix("player-")
+        .map(str::to_string)
+        .ok_or_else(|| playback_window_failed("player window label is missing session id"))?;
+    video_surfaces()
+        .lock()
+        .map_err(|_| crate::errors::AppError::state_lock_poisoned("video_surfaces"))?
+        .insert(session_id, child);
     window.on_window_event(move |event| match event {
         WindowEvent::Resized(size)
         | WindowEvent::ScaleFactorChanged {
@@ -310,11 +337,62 @@ fn create_video_host_window(
 }
 
 #[cfg(target_os = "windows")]
+fn show_video_surface_for_session(app: &AppHandle, session_id: &str) -> AppResult<()> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNA};
+
+    let app = app.clone();
+    let session_id = session_id.to_string();
+    app.run_on_main_thread(move || {
+        let Ok(surfaces) = video_surfaces().lock() else {
+            return;
+        };
+        let Some(child) = surfaces.get(&session_id).copied() else {
+            return;
+        };
+
+        let _ = unsafe { ShowWindow(child as windows_sys::Win32::Foundation::HWND, SW_SHOWNA) };
+    })
+    .map_err(playback_window_failed)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn show_video_surface_for_session(_app: &AppHandle, _session_id: &str) -> AppResult<()> {
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn destroy_video_surface_for_session(app: &AppHandle, session_id: &str) -> AppResult<()> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::DestroyWindow;
+
+    let app = app.clone();
+    let session_id = session_id.to_string();
+    app.run_on_main_thread(move || {
+        let Ok(mut surfaces) = video_surfaces().lock() else {
+            return;
+        };
+        let child = surfaces.remove(&session_id);
+        if let Some(child) = child {
+            let _ = unsafe { DestroyWindow(child as windows_sys::Win32::Foundation::HWND) };
+        }
+    })
+    .map_err(playback_window_failed)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn destroy_video_surface_for_session(_app: &AppHandle, _session_id: &str) -> AppResult<()> {
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn video_surfaces() -> &'static Mutex<HashMap<String, isize>> {
+    static VIDEO_SURFACES: OnceLock<Mutex<HashMap<String, isize>>> = OnceLock::new();
+    VIDEO_SURFACES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(target_os = "windows")]
 fn position_video_host(child: isize, width: u32, height: u32) {
     use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER,
-    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
 
     let _ = unsafe {
         SetWindowPos(
@@ -353,9 +431,12 @@ impl PlaybackProgressReporter for EmbyProgressReporter {
 }
 
 fn playback_emit_failed(source: impl ToString) -> AppError {
-    AppError::new("playback.event_emit_failed", "Playback event could not be emitted")
-        .with_recoverable(true)
-        .with_detail(serde_json::json!({ "source": source.to_string() }))
+    AppError::new(
+        "playback.event_emit_failed",
+        "Playback event could not be emitted",
+    )
+    .with_recoverable(true)
+    .with_detail(serde_json::json!({ "source": source.to_string() }))
 }
 
 fn playback_window_failed(source: impl ToString) -> AppError {

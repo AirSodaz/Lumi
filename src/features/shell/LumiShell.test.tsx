@@ -719,7 +719,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
-    expect(await screen.findByText("Opening")).toBeInTheDocument();
+    expect(await screen.findAllByText("Opening")).not.toHaveLength(0);
     expect(invokeMock).toHaveBeenCalledWith("playback_get_session", {
       sessionId: "session-1",
     });
@@ -737,10 +737,43 @@ describe("LumiShell", () => {
       positionSeconds: 75,
     });
 
-    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(await screen.findAllByText("Playing")).not.toHaveLength(0);
     expect(await screen.findByText("1:15")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Close player" }));
+    expect(invokeMock).toHaveBeenCalledWith("playback_command", {
+      request: {
+        sessionId: "session-1",
+        command: { kind: "close" },
+      },
+    });
+  });
+
+  it("keeps the player window responsive while buffering before the first frame", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
+    emitTauriEvent("playback:state-changed", {
+      id: "session-1",
+      serverId: "server-1",
+      itemId: "movie-1",
+      state: "buffering",
+      positionSeconds: 0,
+    });
+
+    expect(await screen.findAllByText("Buffering")).not.toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Seek back" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Seek forward" })).toBeDisabled();
+    expect(screen.getByLabelText("Volume")).toBeDisabled();
+
+    const close = screen.getByRole("button", { name: "Close player" });
+    expect(close).toBeEnabled();
+    await user.click(close);
     expect(invokeMock).toHaveBeenCalledWith("playback_command", {
       request: {
         sessionId: "session-1",
@@ -755,7 +788,7 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Opening")).toBeInTheDocument();
+    expect(await screen.findAllByText("Opening")).not.toHaveLength(0);
     emitTauriEvent("playback:error", {
       sessionId: "session-1",
       code: "playback.mpv_library_missing",

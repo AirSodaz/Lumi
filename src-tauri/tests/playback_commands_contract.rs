@@ -9,8 +9,9 @@ use lumi_lib::{
     errors::AppResult,
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
     player::{
-        MpvBackend, MpvOpenRequest, PlaybackCommand, PlaybackErrorEvent, PlaybackHost,
-        PlaybackPositionEvent, PlayerOpenRequest, PlayerSession, ResolvedPlaybackSource,
+        MpvBackend, MpvEventSink, MpvOpenRequest, PlaybackCommand, PlaybackErrorEvent,
+        PlaybackHost, PlaybackPositionEvent, PlayerOpenRequest, PlayerSession,
+        ResolvedPlaybackSource,
     },
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
@@ -672,6 +673,14 @@ impl PlaybackHost for FakePlaybackHost {
     fn emit_error(&self, _event: &PlaybackErrorEvent) -> AppResult<()> {
         Ok(())
     }
+
+    fn show_video_surface(&self, _session_id: &str) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn destroy_video_surface(&self, _session_id: &str) -> AppResult<()> {
+        Ok(())
+    }
 }
 
 struct FailingPlaybackHost;
@@ -696,6 +705,14 @@ impl PlaybackHost for FailingPlaybackHost {
     fn emit_error(&self, _event: &PlaybackErrorEvent) -> AppResult<()> {
         Ok(())
     }
+
+    fn show_video_surface(&self, _session_id: &str) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn destroy_video_surface(&self, _session_id: &str) -> AppResult<()> {
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -706,7 +723,7 @@ struct FakeMpvBackend {
 }
 
 impl MpvBackend for FakeMpvBackend {
-    fn open(&self, request: MpvOpenRequest) -> AppResult<()> {
+    fn open(&self, request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
         self.opened.lock().unwrap().push(request);
         self.opened_changed.notify_all();
         Ok(())

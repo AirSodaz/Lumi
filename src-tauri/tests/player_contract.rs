@@ -7,9 +7,10 @@ use std::{
 use lumi_lib::{
     errors::{AppError, AppResult},
     player::{
-        MpvBackend, MpvOpenRequest, NativePlayerService, PlaybackCommand, PlaybackErrorEvent,
-        PlaybackHost, PlaybackPositionEvent, PlaybackProgressReporter, PlayerOpenRequest,
-        PlayerService, PlayerSession, PlayerState, ResolvedPlaybackSource,
+        MpvBackend, MpvEventSink, MpvOpenRequest, MpvPlaybackEvent, NativePlayerService,
+        PlaybackCommand, PlaybackErrorEvent, PlaybackHost, PlaybackPositionEvent,
+        PlaybackProgressReporter, PlayerOpenRequest, PlayerService, PlayerSession, PlayerState,
+        ResolvedPlaybackSource,
     },
     providers::PlaybackProgressUpdate,
 };
@@ -46,8 +47,157 @@ fn native_player_service_returns_opening_then_loads_source_asynchronously() {
     backend.complete_open(Ok(()));
 
     assert_eq!(
+        host.wait_for_state(PlayerState::Buffering).state,
+        PlayerState::Buffering
+    );
+    assert!(!host.has_state(PlayerState::Playing));
+}
+
+#[test]
+fn native_player_service_marks_playing_only_after_backend_ready_event() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    backend.wait_for_open_request();
+    backend.complete_open(Ok(()));
+    assert_eq!(
+        host.wait_for_state(PlayerState::Buffering).state,
+        PlayerState::Buffering
+    );
+    assert!(!host.has_state(PlayerState::Playing));
+
+    backend.emit_event(MpvPlaybackEvent::Ready);
+
+    assert_eq!(
         host.wait_for_state(PlayerState::Playing).state,
         PlayerState::Playing
+    );
+    assert_eq!(
+        host.shown_surfaces.lock().unwrap().as_slice(),
+        &[session.id]
+    );
+}
+
+#[test]
+fn native_player_service_does_not_regress_ready_during_open_back_to_buffering() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(ReadyDuringOpenMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend);
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    assert_eq!(session.state, PlayerState::Opening);
+    assert_eq!(
+        host.wait_for_state(PlayerState::Playing).state,
+        PlayerState::Playing
+    );
+    thread::sleep(Duration::from_millis(25));
+    assert_eq!(
+        service.session(&session.id).unwrap().state,
+        PlayerState::Playing
+    );
+    assert!(!host.has_state(PlayerState::Buffering));
+}
+
+#[test]
+fn native_player_service_ignores_duplicate_ready_events() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    backend.wait_for_open_request();
+    backend.complete_open(Ok(()));
+    host.wait_for_state(PlayerState::Buffering);
+    backend.emit_event(MpvPlaybackEvent::Ready);
+    backend.emit_event(MpvPlaybackEvent::Ready);
+
+    assert_eq!(
+        host.wait_for_state(PlayerState::Playing).state,
+        PlayerState::Playing
+    );
+    thread::sleep(Duration::from_millis(25));
+    assert_eq!(
+        host.shown_surfaces.lock().unwrap().as_slice(),
+        &[session.id]
+    );
+}
+
+#[test]
+fn native_player_service_reports_async_backend_load_errors_as_events() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv?api_key=secret".into(),
+            },
+        )
+        .expect("open playback");
+
+    backend.wait_for_open_request();
+    backend.complete_open(Ok(()));
+    host.wait_for_state(PlayerState::Buffering);
+    backend.emit_event(MpvPlaybackEvent::Error(playback_test_error()));
+
+    let error = host.wait_for_error("playback.test_open_failed");
+    assert_eq!(error.session_id.as_deref(), Some(session.id.as_str()));
+    assert!(!format!("{error:?}").contains("api_key=secret"));
+    assert_eq!(
+        host.wait_for_state(PlayerState::Error).state,
+        PlayerState::Error
+    );
+    assert_eq!(
+        host.destroyed_surfaces.lock().unwrap().as_slice(),
+        &[session.id]
     );
 }
 
@@ -135,10 +285,7 @@ fn native_player_service_returns_window_errors_before_opening_backend() {
     assert!(!format!("{error}").contains("api_key=secret"));
     let errors = host.errors.lock().unwrap();
     assert_eq!(
-        errors
-            .last()
-            .expect("window failure event")
-            .code,
+        errors.last().expect("window failure event").code,
         "playback.window_failed"
     );
 }
@@ -231,11 +378,20 @@ fn native_player_service_close_during_opening_prevents_late_playing_state() {
     backend.wait_for_close_count(2);
 
     let states = host.states.lock().unwrap();
-    assert!(!states.iter().any(|state| state.state == PlayerState::Playing));
+    assert!(!states
+        .iter()
+        .any(|state| state.state == PlayerState::Playing));
     assert_eq!(
         states.last().expect("closed state event").state,
         PlayerState::Closed
     );
+
+    drop(states);
+    backend.emit_event(MpvPlaybackEvent::Ready);
+    let states = host.states.lock().unwrap();
+    assert!(!states
+        .iter()
+        .any(|state| state.state == PlayerState::Playing));
 }
 
 #[test]
@@ -382,6 +538,8 @@ struct FakePlaybackHost {
     states: Mutex<Vec<PlayerSession>>,
     positions: Mutex<Vec<PlaybackPositionEvent>>,
     errors: Mutex<Vec<PlaybackErrorEvent>>,
+    shown_surfaces: Mutex<Vec<String>>,
+    destroyed_surfaces: Mutex<Vec<String>>,
     window_result: Mutex<AppResult<Option<i64>>>,
     state_changed: Condvar,
     error_changed: Condvar,
@@ -393,6 +551,8 @@ impl Default for FakePlaybackHost {
             states: Mutex::new(Vec::new()),
             positions: Mutex::new(Vec::new()),
             errors: Mutex::new(Vec::new()),
+            shown_surfaces: Mutex::new(Vec::new()),
+            destroyed_surfaces: Mutex::new(Vec::new()),
             window_result: Mutex::new(Ok(None)),
             state_changed: Condvar::new(),
             error_changed: Condvar::new(),
@@ -419,6 +579,19 @@ impl PlaybackHost for FakePlaybackHost {
     fn emit_error(&self, event: &PlaybackErrorEvent) -> AppResult<()> {
         self.errors.lock().unwrap().push(event.clone());
         self.error_changed.notify_all();
+        Ok(())
+    }
+
+    fn show_video_surface(&self, session_id: &str) -> AppResult<()> {
+        self.shown_surfaces.lock().unwrap().push(session_id.into());
+        Ok(())
+    }
+
+    fn destroy_video_surface(&self, session_id: &str) -> AppResult<()> {
+        self.destroyed_surfaces
+            .lock()
+            .unwrap()
+            .push(session_id.into());
         Ok(())
     }
 }
@@ -450,11 +623,7 @@ impl FakePlaybackHost {
             let now = Instant::now();
             assert!(now < deadline, "timed out waiting for {state:?}");
             let timeout = deadline.saturating_duration_since(now);
-            states = self
-                .state_changed
-                .wait_timeout(states, timeout)
-                .unwrap()
-                .0;
+            states = self.state_changed.wait_timeout(states, timeout).unwrap().0;
         }
     }
 
@@ -468,12 +637,16 @@ impl FakePlaybackHost {
             let now = Instant::now();
             assert!(now < deadline, "timed out waiting for {code}");
             let timeout = deadline.saturating_duration_since(now);
-            errors = self
-                .error_changed
-                .wait_timeout(errors, timeout)
-                .unwrap()
-                .0;
+            errors = self.error_changed.wait_timeout(errors, timeout).unwrap().0;
         }
+    }
+
+    fn has_state(&self, state: PlayerState) -> bool {
+        self.states
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|session| session.state == state)
     }
 }
 
@@ -494,7 +667,7 @@ impl FakeMpvBackend {
 }
 
 impl MpvBackend for FakeMpvBackend {
-    fn open(&self, request: MpvOpenRequest) -> AppResult<()> {
+    fn open(&self, request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
         self.opened.lock().unwrap().push(request);
         Ok(())
     }
@@ -523,6 +696,7 @@ struct BlockingMpvBackend {
     open_started: Condvar,
     open_outcome: Mutex<Option<AppResult<()>>>,
     open_completed: Condvar,
+    event_sink: Mutex<Option<(String, Arc<dyn MpvEventSink>)>>,
 }
 
 impl BlockingMpvBackend {
@@ -545,6 +719,17 @@ impl BlockingMpvBackend {
         self.open_completed.notify_all();
     }
 
+    fn emit_event(&self, event: MpvPlaybackEvent) {
+        let (session_id, event_sink) = self
+            .event_sink
+            .lock()
+            .unwrap()
+            .as_ref()
+            .expect("backend event sink")
+            .clone();
+        event_sink.on_mpv_event(&session_id, event);
+    }
+
     fn wait_for_close_count(&self, expected: usize) {
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
@@ -565,7 +750,8 @@ impl BlockingMpvBackend {
 }
 
 impl MpvBackend for BlockingMpvBackend {
-    fn open(&self, request: MpvOpenRequest) -> AppResult<()> {
+    fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+        *self.event_sink.lock().unwrap() = Some((request.session_id.clone(), event_sink));
         self.opened.lock().unwrap().push(request);
         self.open_started.notify_all();
 
@@ -588,6 +774,31 @@ impl MpvBackend for BlockingMpvBackend {
 
     fn close(&self, session_id: &str) -> AppResult<()> {
         self.command(session_id, PlaybackCommand::Close)
+    }
+
+    fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {
+        Ok(None)
+    }
+}
+
+#[derive(Default)]
+struct ReadyDuringOpenMpvBackend {
+    opened: Mutex<Vec<MpvOpenRequest>>,
+}
+
+impl MpvBackend for ReadyDuringOpenMpvBackend {
+    fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+        self.opened.lock().unwrap().push(request.clone());
+        event_sink.on_mpv_event(&request.session_id, MpvPlaybackEvent::Ready);
+        Ok(())
+    }
+
+    fn command(&self, _session_id: &str, _command: PlaybackCommand) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn close(&self, _session_id: &str) -> AppResult<()> {
+        Ok(())
     }
 
     fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {

@@ -5,7 +5,7 @@ use lumi_lib::{
     commands::settings as settings_commands,
     errors::AppResult,
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
-    player::{MpvBackend, MpvOpenRequest, PlaybackCommand},
+    player::{MpvBackend, MpvEventSink, MpvOpenRequest, PlaybackCommand},
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
         ProviderKind, ServerProfile,
@@ -141,7 +141,7 @@ struct FakeMpvBackend {
 }
 
 impl MpvBackend for FakeMpvBackend {
-    fn open(&self, _request: MpvOpenRequest) -> AppResult<()> {
+    fn open(&self, _request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
         Ok(())
     }
 

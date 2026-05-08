@@ -88,6 +88,14 @@ pub struct MpvOpenRequest {
     pub media_url: String,
 }
 
+#[derive(Debug, Clone)]
+pub enum MpvPlaybackEvent {
+    Ready,
+    Ended,
+    Error(AppError),
+    Shutdown,
+}
+
 pub trait PlaybackHost: Send + Sync {
     fn create_player_window(&self, session_id: &str) -> AppResult<Option<i64>>;
 
@@ -96,6 +104,14 @@ pub trait PlaybackHost: Send + Sync {
     fn emit_position(&self, event: &PlaybackPositionEvent) -> AppResult<()>;
 
     fn emit_error(&self, event: &PlaybackErrorEvent) -> AppResult<()>;
+
+    fn show_video_surface(&self, _session_id: &str) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn destroy_video_surface(&self, _session_id: &str) -> AppResult<()> {
+        Ok(())
+    }
 }
 
 pub trait PlaybackProgressReporter: Send + Sync {
@@ -112,13 +128,17 @@ impl PlaybackProgressReporter for NoopPlaybackProgressReporter {
 }
 
 pub trait MpvBackend: Send + Sync {
-    fn open(&self, request: MpvOpenRequest) -> AppResult<()>;
+    fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()>;
 
     fn command(&self, session_id: &str, command: PlaybackCommand) -> AppResult<()>;
 
     fn close(&self, session_id: &str) -> AppResult<()>;
 
     fn position_seconds(&self, session_id: &str) -> AppResult<Option<u32>>;
+}
+
+pub trait MpvEventSink: Send + Sync {
+    fn on_mpv_event(&self, session_id: &str, event: MpvPlaybackEvent);
 }
 
 pub trait PlayerService: Send + Sync {
@@ -310,7 +330,6 @@ impl NativePlayerService {
             message: error.message().into(),
         });
     }
-
 }
 
 impl PlayerService for NativePlayerService {
@@ -347,11 +366,21 @@ impl PlayerService for NativePlayerService {
         let report_interval_seconds = self.progress_report_interval_seconds;
         let session_id_for_open = session_id.clone();
         thread::spawn(move || {
-            let open_result = backend.open(MpvOpenRequest {
-                session_id: session_id_for_open.clone(),
-                window_id,
-                media_url: source.url,
+            let event_sink = Arc::new(NativeMpvEventSink {
+                sessions: sessions.clone(),
+                backend: backend.clone(),
+                host: host.clone(),
+                progress_reporter: progress_reporter.clone(),
+                report_interval_seconds,
             });
+            let open_result = backend.open(
+                MpvOpenRequest {
+                    session_id: session_id_for_open.clone(),
+                    window_id,
+                    media_url: source.url,
+                },
+                event_sink,
+            );
 
             match open_result {
                 Ok(()) => {
@@ -360,28 +389,25 @@ impl PlayerService for NativePlayerService {
                         return;
                     }
 
-                    let playing = sessions.update(&session_id_for_open, |stored| {
-                        stored.session.state = PlayerState::Playing;
+                    let buffering = sessions.update(&session_id_for_open, |stored| {
+                        if stored.session.state == PlayerState::Opening {
+                            stored.session.state = PlayerState::Buffering;
+                        }
                     });
-                    let Ok(playing) = playing else {
+                    let Ok(buffering) = buffering else {
                         let _ = backend.close(&session_id_for_open);
                         return;
                     };
-                    let _ = host.emit_state_changed(&playing);
-                    start_position_poller(
-                        sessions,
-                        backend,
-                        host,
-                        progress_reporter,
-                        session_id_for_open,
-                        report_interval_seconds,
-                    );
+                    if buffering.state == PlayerState::Buffering {
+                        let _ = host.emit_state_changed(&buffering);
+                    }
                 }
                 Err(error) => {
                     if !sessions.is_closed(&session_id_for_open) {
                         let _ = sessions.update(&session_id_for_open, |stored| {
                             stored.session.state = PlayerState::Error;
                         });
+                        let _ = host.destroy_video_surface(&session_id_for_open);
                         let _ = host.emit_error(&PlaybackErrorEvent {
                             session_id: Some(session_id_for_open.clone()),
                             code: error.code().into(),
@@ -447,6 +473,7 @@ impl PlayerService for NativePlayerService {
         self.backend.close(session_id).inspect_err(|error| {
             self.emit_error(Some(session_id.into()), error);
         })?;
+        self.host.destroy_video_surface(session_id)?;
         let session = self.sessions.update(session_id, |stored| {
             if let Some(position_seconds) = final_position {
                 stored.session.position_seconds = position_seconds;
@@ -458,6 +485,114 @@ impl PlayerService for NativePlayerService {
             .progress_reporter
             .report_progress(progress_from_session(&session, true));
         Ok(session)
+    }
+}
+
+struct NativeMpvEventSink {
+    sessions: Arc<PlaybackSessionStore>,
+    backend: Arc<dyn MpvBackend>,
+    host: Arc<dyn PlaybackHost>,
+    progress_reporter: Arc<dyn PlaybackProgressReporter>,
+    report_interval_seconds: u32,
+}
+
+impl MpvEventSink for NativeMpvEventSink {
+    fn on_mpv_event(&self, session_id: &str, event: MpvPlaybackEvent) {
+        match event {
+            MpvPlaybackEvent::Ready => self.handle_ready(session_id),
+            MpvPlaybackEvent::Ended | MpvPlaybackEvent::Shutdown => {
+                self.handle_terminal_state(session_id, PlayerState::Ended)
+            }
+            MpvPlaybackEvent::Error(error) => self.handle_error(session_id, error),
+        }
+    }
+}
+
+impl NativeMpvEventSink {
+    fn handle_ready(&self, session_id: &str) {
+        if self.sessions.is_closed(session_id) {
+            let _ = self.backend.close(session_id);
+            return;
+        }
+        let Ok(current) = self.sessions.get(session_id) else {
+            let _ = self.backend.close(session_id);
+            return;
+        };
+        if matches!(
+            current.session.state,
+            PlayerState::Playing | PlayerState::Closed | PlayerState::Ended | PlayerState::Error
+        ) {
+            return;
+        }
+
+        let Ok(session) = self.sessions.update(session_id, |stored| {
+            if !matches!(
+                stored.session.state,
+                PlayerState::Playing
+                    | PlayerState::Closed
+                    | PlayerState::Ended
+                    | PlayerState::Error
+            ) {
+                stored.session.state = PlayerState::Playing;
+            }
+        }) else {
+            let _ = self.backend.close(session_id);
+            return;
+        };
+
+        if session.state != PlayerState::Playing {
+            return;
+        }
+
+        let _ = self.host.show_video_surface(session_id);
+        let _ = self.host.emit_state_changed(&session);
+        start_position_poller(
+            self.sessions.clone(),
+            self.backend.clone(),
+            self.host.clone(),
+            self.progress_reporter.clone(),
+            session_id.into(),
+            self.report_interval_seconds,
+        );
+    }
+
+    fn handle_error(&self, session_id: &str, error: AppError) {
+        if self.sessions.is_closed(session_id) {
+            let _ = self.backend.close(session_id);
+            return;
+        }
+
+        let _ = self.sessions.update(session_id, |stored| {
+            stored.session.state = PlayerState::Error;
+        });
+        let _ = self.host.destroy_video_surface(session_id);
+        let _ = self.host.emit_error(&PlaybackErrorEvent {
+            session_id: Some(session_id.into()),
+            code: error.code().into(),
+            message: error.message().into(),
+        });
+        if let Ok(session) = self.sessions.get(session_id) {
+            let _ = self.host.emit_state_changed(&session.session);
+        }
+    }
+
+    fn handle_terminal_state(&self, session_id: &str, state: PlayerState) {
+        if self.sessions.is_closed(session_id) {
+            return;
+        }
+
+        let Ok(session) = self.sessions.update(session_id, |stored| {
+            if !matches!(
+                stored.session.state,
+                PlayerState::Error | PlayerState::Closed
+            ) {
+                stored.session.state = state;
+            }
+        }) else {
+            return;
+        };
+        let _ = self.host.destroy_video_surface(session_id);
+        let _ = self.host.emit_state_changed(&session);
     }
 }
 

@@ -102,6 +102,7 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
   }
 
   const activeSession = session ?? sessionQuery.data ?? null;
+  const status = activeSession ? titleCase(activeSession.state) : "Opening";
 
   return (
     <main className="player-window" aria-labelledby="player-window-title">
@@ -120,7 +121,7 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
             <span>Lumi</span>
             <h1 id="player-window-title">Lumi Player</h1>
           </div>
-          <strong>{activeSession?.state === "opening" ? "Opening" : "Session ready"}</strong>
+          <strong>{status}</strong>
         </div>
 
         {playbackError ? (
@@ -137,7 +138,7 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
           </div>
         ) : null}
 
-        {activeSession && activeSession.state !== "opening" ? (
+        {activeSession ? (
           <PlayerControls
             onSessionChange={handleSessionChange}
             session={activeSession}
@@ -153,4 +154,8 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
       </section>
     </main>
   );
+}
+
+function titleCase(value: string) {
+  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }

@@ -29,7 +29,7 @@ export function PlayerControls({
   const [volume, setVolume] = useState(100);
   const reducedMotion = useReducedMotion();
   const isPaused = session.state === "paused";
-  const isOpening = session.state === "opening";
+  const isLoading = session.state === "opening" || session.state === "buffering";
 
   async function send(nextCommand: PlaybackCommand) {
     const updated = await command.mutateAsync({
@@ -59,7 +59,7 @@ export function PlayerControls({
       <div className="player-control-buttons">
         <MotionButton
           aria-label="Seek back"
-          disabled={command.isPending || isOpening}
+          disabled={command.isPending || isLoading}
           onClick={() =>
             void send({
               kind: "seek",
@@ -72,7 +72,7 @@ export function PlayerControls({
         </MotionButton>
         <MotionButton
           aria-label={isPaused ? "Play" : "Pause"}
-          disabled={command.isPending || isOpening}
+          disabled={command.isPending || isLoading}
           onClick={() => void send({ kind: isPaused ? "play" : "pause" })}
           type="button"
         >
@@ -94,7 +94,7 @@ export function PlayerControls({
         </MotionButton>
         <MotionButton
           aria-label="Seek forward"
-          disabled={command.isPending || isOpening}
+          disabled={command.isPending || isLoading}
           onClick={() =>
             void send({
               kind: "seek",
@@ -109,7 +109,7 @@ export function PlayerControls({
           <Volume2 aria-hidden="true" size={15} />
           <input
             aria-label="Volume"
-            disabled={command.isPending || isOpening}
+            disabled={command.isPending || isLoading}
             max={100}
             min={0}
             onChange={(event) => void handleVolume(Number(event.target.value))}
