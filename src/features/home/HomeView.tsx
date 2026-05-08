@@ -1,6 +1,7 @@
 import { Info, Server } from "lucide-react";
 import { CinematicHero } from "../../components/layout";
 import { MediaRail } from "../../components/media";
+import { MotionButton } from "../../components/motion";
 import { formatMetadata } from "../../lib/media/format";
 import {
   useChildren,
@@ -51,21 +52,21 @@ export function HomeView({
         actions={
           featured ? (
             <>
-              <button
+              <MotionButton
                 className="primary-action"
                 onClick={() => onOpenMedia(featured)}
                 type="button"
               >
                 <Info aria-hidden="true" size={15} />
                 <span>More Info</span>
-              </button>
+              </MotionButton>
               <span className="status-chip">{server?.name ?? "Server"}</span>
             </>
           ) : (
-            <button className="primary-action" onClick={onOpenSettings} type="button">
+            <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
               <Server aria-hidden="true" size={15} />
               <span>Add Server</span>
-            </button>
+            </MotionButton>
           )
         }
         backdropUrl={heroBackdrop}

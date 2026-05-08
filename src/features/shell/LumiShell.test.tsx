@@ -240,6 +240,19 @@ describe("LumiShell", () => {
       configurable: true,
       value: startViewTransitionMock,
     });
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn((query: string) => ({
+        addEventListener: vi.fn(),
+        addListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        matches: false,
+        media: query,
+        onchange: null,
+        removeEventListener: vi.fn(),
+        removeListener: vi.fn(),
+      })),
+    });
     window.localStorage.clear();
 
     invokeMock.mockReset();
@@ -410,7 +423,7 @@ describe("LumiShell", () => {
 
     const libraries = await screen.findByRole("button", { name: "Libraries" });
     await user.click(libraries);
-    expect(screen.getByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
 
     const home = screen.getByRole("button", { name: "Home" });
     home.focus();
@@ -422,7 +435,7 @@ describe("LumiShell", () => {
     await user.keyboard("{ArrowUp}");
 
     expect(home).toHaveFocus();
-    expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
   });
 
   it("uses view transitions for primary route changes when available", async () => {
@@ -433,6 +446,29 @@ describe("LumiShell", () => {
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(startViewTransitionMock).toHaveBeenCalled();
+  });
+
+  it("skips view transitions for primary route changes when reduced motion is preferred", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn((query: string) => ({
+        addEventListener: vi.fn(),
+        addListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        onchange: null,
+        removeEventListener: vi.fn(),
+        removeListener: vi.fn(),
+      })),
+    });
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(startViewTransitionMock).not.toHaveBeenCalled();
   });
 
   it("moves from active sidebar navigation into the current media content with ArrowRight", async () => {
@@ -465,8 +501,7 @@ describe("LumiShell", () => {
 
     await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
 
-    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
-    const play = screen.getByRole("button", { name: "Play" });
+    const play = await screen.findByRole("button", { name: "Play" });
     expect(play).toBeEnabled();
     await user.click(play);
     expect(await screen.findByText("Playing")).toBeInTheDocument();
@@ -519,9 +554,9 @@ describe("LumiShell", () => {
 
     await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
 
-    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
-    expect(screen.getByText("A mapped movie.")).toBeInTheDocument();
-    expect(screen.getByText("Source resolves on play")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Play" })).toBeEnabled();
+    expect(await screen.findByText("A mapped movie.")).toBeInTheDocument();
+    expect(await screen.findByText("Source resolves on play")).toBeInTheDocument();
 
     const play = screen.getByRole("button", { name: "Play" });
     expect(play).toBeEnabled();
@@ -784,6 +819,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     const addServer = screen.getByRole("button", { name: "Add Server" });
     await user.click(addServer);
 
@@ -816,6 +852,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Search" }));
+    expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
     const searchInput = screen.getByLabelText("Search media");
     searchInput.focus();
     scrollIntoViewMock.mockClear();
@@ -825,6 +862,7 @@ describe("LumiShell", () => {
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add Server" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Add Emby Server" });
@@ -857,6 +895,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add Server" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Add Emby Server" });
@@ -900,6 +939,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add Server" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Add Emby Server" });

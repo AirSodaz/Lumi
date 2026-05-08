@@ -7,6 +7,9 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { MotionButton } from "../../components/motion";
+import { createSurfaceMotion } from "../../lib/motion/presets";
 import {
   usePlaybackCommand,
   type PlaybackCommand,
@@ -24,6 +27,7 @@ export function PlayerControls({
 }: PlayerControlsProps) {
   const command = usePlaybackCommand();
   const [volume, setVolume] = useState(100);
+  const reducedMotion = useReducedMotion();
   const isPaused = session.state === "paused";
 
   async function send(nextCommand: PlaybackCommand) {
@@ -40,13 +44,19 @@ export function PlayerControls({
   }
 
   return (
-    <section className="player-controls" aria-label="Playback controls">
+    <motion.section
+      aria-label="Playback controls"
+      className="player-controls"
+      data-motion-surface="player-controls"
+      exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      {...createSurfaceMotion(reducedMotion, 0)}
+    >
       <div>
         <strong>{session.state === "playing" ? "Playing" : titleCase(session.state)}</strong>
         <span>{formatPosition(session.positionSeconds)}</span>
       </div>
       <div className="player-control-buttons">
-        <button
+        <MotionButton
           aria-label="Seek back"
           disabled={command.isPending}
           onClick={() =>
@@ -58,20 +68,30 @@ export function PlayerControls({
           type="button"
         >
           <RotateCcw aria-hidden="true" size={15} />
-        </button>
-        <button
+        </MotionButton>
+        <MotionButton
           aria-label={isPaused ? "Play" : "Pause"}
           disabled={command.isPending}
           onClick={() => void send({ kind: isPaused ? "play" : "pause" })}
           type="button"
         >
-          {isPaused ? (
-            <Play aria-hidden="true" size={15} />
-          ) : (
-            <Pause aria-hidden="true" size={15} />
-          )}
-        </button>
-        <button
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              key={isPaused ? "play" : "pause"}
+              transition={reducedMotion ? { duration: 0.01 } : { duration: 0.14 }}
+            >
+              {isPaused ? (
+                <Play aria-hidden="true" size={15} />
+              ) : (
+                <Pause aria-hidden="true" size={15} />
+              )}
+            </motion.span>
+          </AnimatePresence>
+        </MotionButton>
+        <MotionButton
           aria-label="Seek forward"
           disabled={command.isPending}
           onClick={() =>
@@ -83,7 +103,7 @@ export function PlayerControls({
           type="button"
         >
           <RotateCw aria-hidden="true" size={15} />
-        </button>
+        </MotionButton>
         <label className="volume-control">
           <Volume2 aria-hidden="true" size={15} />
           <input
@@ -95,16 +115,16 @@ export function PlayerControls({
             value={volume}
           />
         </label>
-        <button
+        <MotionButton
           aria-label="Close player"
           disabled={command.isPending}
           onClick={() => void send({ kind: "close" })}
           type="button"
         >
           <X aria-hidden="true" size={15} />
-        </button>
+        </MotionButton>
       </div>
-    </section>
+    </motion.section>
   );
 }
 

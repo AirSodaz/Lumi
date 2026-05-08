@@ -3,6 +3,7 @@ import { useState } from "react";
 import { FocusScope } from "../../components/focus";
 import { CinematicHero, GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
+import { MotionButton } from "../../components/motion";
 import { formatMetadata } from "../../lib/media/format";
 import {
   useChildren,
@@ -35,14 +36,14 @@ export function LibrariesView({
       <section className="view-stack libraries-view" aria-labelledby="library-title">
         <CinematicHero
           actions={
-            <button
+            <MotionButton
               className="secondary-action"
               onClick={() => setSelectedLibrary(null)}
               type="button"
             >
               <ChevronLeft aria-hidden="true" size={16} />
               <span>Back to Libraries</span>
-            </button>
+            </MotionButton>
           }
           backdropUrl={selectedLibrary.backdropUrl ?? selectedLibrary.posterUrl ?? null}
           eyebrow={server?.name ?? "No server"}

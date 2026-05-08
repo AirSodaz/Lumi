@@ -14,10 +14,13 @@ import {
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { FocusableCard } from "../../components/focus";
 import { GlassPanel, MotionPage } from "../../components/layout";
+import { MotionButton } from "../../components/motion";
+import { dropdownMotion } from "../../lib/motion/presets";
 import {
   directionFromKey,
   focusElement,
@@ -256,7 +259,7 @@ export function LumiShell() {
             <strong className="brand-name">Lumi</strong>
             <Tooltip.Root>
               <Tooltip.Trigger asChild>
-                <button
+                <MotionButton
                   aria-controls="lumi-primary-sidebar"
                   aria-expanded={!sidebarCollapsed}
                   aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -269,7 +272,7 @@ export function LumiShell() {
                   ) : (
                     <PanelLeftClose aria-hidden="true" size={17} />
                   )}
-                </button>
+                </MotionButton>
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content className="tooltip-content" side="right">
@@ -296,9 +299,11 @@ export function LumiShell() {
           </nav>
         </aside>
         <main className="shell-content" onKeyDown={handleContentKeyDown}>
-          <MotionPage key={routeKey} routeKey={routeKey}>
-            {currentView}
-          </MotionPage>
+          <AnimatePresence mode="wait" initial={false}>
+            <MotionPage key={routeKey} routeKey={routeKey}>
+              {currentView}
+            </MotionPage>
+          </AnimatePresence>
         </main>
       </div>
     </Tooltip.Provider>
@@ -343,7 +348,7 @@ function AppChrome({
   return (
     <header className="windows-titlebar" aria-label="Windows title bar">
       <nav className="titlebar-navigation" aria-label="Window navigation">
-        <button
+        <MotionButton
           aria-label="Go back"
           className="titlebar-icon-button"
           disabled={!canGoBack}
@@ -351,8 +356,8 @@ function AppChrome({
           type="button"
         >
           <ChevronLeft aria-hidden="true" size={16} />
-        </button>
-        <button
+        </MotionButton>
+        <MotionButton
           aria-label="Go forward"
           className="titlebar-icon-button"
           disabled={!canGoForward}
@@ -360,7 +365,7 @@ function AppChrome({
           type="button"
         >
           <ChevronRight aria-hidden="true" size={16} />
-        </button>
+        </MotionButton>
       </nav>
       <div className="titlebar-menu-bar" role="menubar" aria-label="Application menu">
         <TitlebarMenu
@@ -413,30 +418,30 @@ function AppChrome({
         onMouseDown={handleDragMouseDown}
       />
       <div className="titlebar-window-controls" aria-label="Window controls">
-        <button
+        <MotionButton
           aria-label="Minimize window"
           className="titlebar-window-button"
           onClick={() => void runWindowCommand("minimize")}
           type="button"
         >
           <Minus aria-hidden="true" size={14} />
-        </button>
-        <button
+        </MotionButton>
+        <MotionButton
           aria-label="Maximize or restore window"
           className="titlebar-window-button"
           onClick={() => void runWindowCommand("toggleMaximize")}
           type="button"
         >
           <Square aria-hidden="true" size={12} />
-        </button>
-        <button
+        </MotionButton>
+        <MotionButton
           aria-label="Close window"
           className="titlebar-window-button close"
           onClick={() => void runWindowCommand("close")}
           type="button"
         >
           <X aria-hidden="true" size={16} />
-        </button>
+        </MotionButton>
       </div>
     </header>
   );
@@ -459,25 +464,33 @@ type TitlebarMenuProps = {
 function TitlebarMenu({ items, label }: TitlebarMenuProps) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger className="titlebar-menu-trigger" type="button">
-        {label}
+      <DropdownMenu.Trigger asChild>
+        <MotionButton className="titlebar-menu-trigger" type="button">
+          {label}
+        </MotionButton>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className="dropdown-content titlebar-menu-content" align="start">
-          {items.map((item) => (
-            <DropdownMenu.Group key={item.label}>
-              {item.separatorBefore ? <DropdownMenu.Separator className="titlebar-menu-separator" /> : null}
-              <DropdownMenu.Item
-                aria-current={item.selected ? "page" : undefined}
-                className="dropdown-item titlebar-menu-item"
-                disabled={item.disabled}
-                onSelect={item.onSelect}
-              >
-                <span>{item.label}</span>
-                {item.shortcut ? <span className="titlebar-menu-shortcut">{item.shortcut}</span> : null}
-              </DropdownMenu.Item>
-            </DropdownMenu.Group>
-          ))}
+        <DropdownMenu.Content align="start" asChild>
+          <motion.div
+            className="dropdown-content titlebar-menu-content"
+            data-motion-surface="dropdown"
+            {...dropdownMotion}
+          >
+            {items.map((item) => (
+              <DropdownMenu.Group key={item.label}>
+                {item.separatorBefore ? <DropdownMenu.Separator className="titlebar-menu-separator" /> : null}
+                <DropdownMenu.Item
+                  aria-current={item.selected ? "page" : undefined}
+                  className="dropdown-item titlebar-menu-item"
+                  disabled={item.disabled}
+                  onSelect={item.onSelect}
+                >
+                  <span>{item.label}</span>
+                  {item.shortcut ? <span className="titlebar-menu-shortcut">{item.shortcut}</span> : null}
+                </DropdownMenu.Item>
+              </DropdownMenu.Group>
+            ))}
+          </motion.div>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -514,6 +527,7 @@ function NavButton({
       className="nav-button"
       data-shell-nav-active={active ? "true" : undefined}
       focusScope="main-navigation"
+      motionKind="control"
       onKeyDown={handleKeyDown}
       onClick={onSelect}
     >

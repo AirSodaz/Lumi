@@ -1,5 +1,7 @@
+import { motion, useReducedMotion } from "motion/react";
 import type { LibraryItem } from "../../lib/tauriClient";
 import { formatMetadata } from "../../lib/media/format";
+import { createSurfaceMotion } from "../../lib/motion/presets";
 import { FocusableCard } from "../focus";
 
 type PosterCardProps = {
@@ -19,6 +21,8 @@ export function PosterCard({
   progressPercent,
   subtitle,
 }: PosterCardProps) {
+  const reducedMotion = useReducedMotion();
+
   if (loading || !item) {
     return (
       <FocusableCard
@@ -26,6 +30,7 @@ export function PosterCard({
         className="poster-card is-loading"
         disabled
         focusScope={focusScope}
+        motionKind="card"
       >
         <span className="poster-art" />
         <span className="poster-card-copy">
@@ -43,18 +48,21 @@ export function PosterCard({
       activateOnArrow={false}
       className="poster-card"
       focusScope={focusScope}
+      motionKind="card"
       onClick={() => onOpen?.(item)}
     >
-      <span
+      <motion.span
         className={item.posterUrl ? "poster-art has-image" : "poster-art"}
+        data-motion-surface="poster-art"
         style={
           item.posterUrl
             ? { backgroundImage: `url("${item.posterUrl}")` }
             : undefined
         }
+        {...createSurfaceMotion(reducedMotion, 0)}
       >
         {item.posterUrl ? null : <span>No artwork</span>}
-      </span>
+      </motion.span>
       <span className="poster-card-copy">
         <strong>{item.title}</strong>
         <span>{metadata}</span>
@@ -64,7 +72,12 @@ export function PosterCard({
           aria-label={`${Math.round(progressPercent)}% watched`}
           className="poster-progress"
         >
-          <span style={{ width: `${clampProgress(progressPercent)}%` }} />
+          <motion.span
+            animate={{ scaleX: clampProgress(progressPercent) / 100 }}
+            initial={{ scaleX: 0 }}
+            style={{ transformOrigin: "0 50%" }}
+            transition={reducedMotion ? { duration: 0.01 } : { duration: 0.24 }}
+          />
         </span>
       ) : null}
     </FocusableCard>

@@ -2,6 +2,7 @@ import { FormEvent, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Check,
   MonitorCog,
@@ -12,6 +13,13 @@ import {
   X,
 } from "lucide-react";
 import { CinematicHero, GlassPanel } from "../../components/layout";
+import { MotionButton } from "../../components/motion";
+import {
+  createSurfaceMotion,
+  dialogContentMotion,
+  dialogOverlayMotion,
+  dropdownMotion,
+} from "../../lib/motion/presets";
 import {
   useLoginManual,
   useServers,
@@ -32,6 +40,7 @@ const panels: Array<{ id: SettingsPanel; label: string }> = [
 
 export function SettingsView() {
   const [panel, setPanel] = useState<SettingsPanel>("servers");
+  const reducedMotion = useReducedMotion();
 
   return (
     <section className="settings-view" aria-labelledby="settings-title">
@@ -48,22 +57,30 @@ export function SettingsView() {
       <div className="settings-layout">
         <nav className="settings-tabs" aria-label="Settings sections">
           {panels.map((item) => (
-            <button
+            <MotionButton
               aria-current={panel === item.id ? "page" : undefined}
               key={item.id}
               onClick={() => setPanel(item.id)}
               type="button"
             >
               {item.label}
-            </button>
+            </MotionButton>
           ))}
         </nav>
-        <div className="settings-panel">
-          {panel === "servers" ? <ServersPanel /> : null}
-          {panel === "player" ? <PlayerPanel /> : null}
-          {panel === "appearance" ? <AppearancePanel /> : null}
-          {panel === "logs" ? <LogsPanel /> : null}
-        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            className="settings-panel"
+            data-motion-surface="settings-panel"
+            key={panel}
+            {...createSurfaceMotion(reducedMotion, 0)}
+            exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+          >
+            {panel === "servers" ? <ServersPanel /> : null}
+            {panel === "player" ? <PlayerPanel /> : null}
+            {panel === "appearance" ? <AppearancePanel /> : null}
+            {panel === "logs" ? <LogsPanel /> : null}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </section>
   );
@@ -97,9 +114,9 @@ function ServersPanel() {
               <Tooltip.Root>
                 <Tooltip.Trigger asChild>
                   <DropdownMenu.Trigger asChild>
-                    <button aria-label={`More actions for ${server.name}`} type="button">
+                    <MotionButton aria-label={`More actions for ${server.name}`} type="button">
                       <MoreHorizontal aria-hidden="true" size={16} />
-                    </button>
+                    </MotionButton>
                   </DropdownMenu.Trigger>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
@@ -110,9 +127,15 @@ function ServersPanel() {
                 </Tooltip.Portal>
               </Tooltip.Root>
               <DropdownMenu.Portal>
-                <DropdownMenu.Content className="dropdown-content" align="end">
-                  <DropdownMenu.Item className="dropdown-item">View Server</DropdownMenu.Item>
-                  <DropdownMenu.Item className="dropdown-item">Diagnostics</DropdownMenu.Item>
+                <DropdownMenu.Content align="end" asChild>
+                  <motion.div
+                    className="dropdown-content"
+                    data-motion-surface="dropdown"
+                    {...dropdownMotion}
+                  >
+                    <DropdownMenu.Item className="dropdown-item">View Server</DropdownMenu.Item>
+                    <DropdownMenu.Item className="dropdown-item">Diagnostics</DropdownMenu.Item>
+                  </motion.div>
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
@@ -163,77 +186,98 @@ function AddServerDialog() {
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger asChild>
-        <button className="primary-action" type="button">
+        <MotionButton className="primary-action" type="button">
           <Plus aria-hidden="true" size={15} />
           <span>Add Server</span>
-        </button>
+        </MotionButton>
       </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content
-          className="dialog-content"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            firstInputRef.current?.focus();
-          }}
-        >
-          <div className="dialog-title-row">
-            <Dialog.Title>Add Emby Server</Dialog.Title>
-            <Dialog.Close aria-label="Close" className="icon-button" type="button">
-              <X aria-hidden="true" size={16} />
-            </Dialog.Close>
-          </div>
-          <Dialog.Description className="sr-only">
-            Sign in to an Emby server with a manual URL.
-          </Dialog.Description>
-          <form className="dialog-form" onSubmit={handleSubmit}>
-            <label>
-              <span>Server URL</span>
-              <input
-                autoComplete="url"
-                onChange={(event) => setBaseUrl(event.target.value)}
-                ref={firstInputRef}
-                required
-                type="url"
-                value={baseUrl}
+      <AnimatePresence>
+        {open ? (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild forceMount>
+              <motion.div
+                className="dialog-overlay"
+                data-motion-surface="dialog-overlay"
+                {...dialogOverlayMotion}
               />
-            </label>
-            <label>
-              <span>Username</span>
-              <input
-                autoComplete="username"
-                onChange={(event) => setUsername(event.target.value)}
-                required
-                type="text"
-                value={username}
-              />
-            </label>
-            <label>
-              <span>Password</span>
-              <input
-                autoComplete="current-password"
-                onChange={(event) => setPassword(event.target.value)}
-                type="password"
-                value={password}
-              />
-            </label>
-            {error ? (
-              <div className="form-error" role="alert">
-                <strong>{error.message}</strong>
-                <span>{error.code}</span>
-              </div>
-            ) : null}
-            <div className="dialog-actions">
-              <Dialog.Close className="secondary-action" type="button">
-                Cancel
-              </Dialog.Close>
-              <button className="primary-action" disabled={login.isPending} type="submit">
-                {login.isPending ? "Connecting" : "Connect"}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
+            </Dialog.Overlay>
+            <Dialog.Content
+              asChild
+              forceMount
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                firstInputRef.current?.focus();
+              }}
+            >
+              <motion.div
+                className="dialog-content"
+                data-motion-surface="dialog-content"
+                {...dialogContentMotion}
+              >
+                <div className="dialog-title-row">
+                  <Dialog.Title>Add Emby Server</Dialog.Title>
+                  <Dialog.Close asChild>
+                    <MotionButton aria-label="Close" className="icon-button" type="button">
+                      <X aria-hidden="true" size={16} />
+                    </MotionButton>
+                  </Dialog.Close>
+                </div>
+                <Dialog.Description className="sr-only">
+                  Sign in to an Emby server with a manual URL.
+                </Dialog.Description>
+                <form className="dialog-form" onSubmit={handleSubmit}>
+                  <label>
+                    <span>Server URL</span>
+                    <input
+                      autoComplete="url"
+                      onChange={(event) => setBaseUrl(event.target.value)}
+                      ref={firstInputRef}
+                      required
+                      type="url"
+                      value={baseUrl}
+                    />
+                  </label>
+                  <label>
+                    <span>Username</span>
+                    <input
+                      autoComplete="username"
+                      onChange={(event) => setUsername(event.target.value)}
+                      required
+                      type="text"
+                      value={username}
+                    />
+                  </label>
+                  <label>
+                    <span>Password</span>
+                    <input
+                      autoComplete="current-password"
+                      onChange={(event) => setPassword(event.target.value)}
+                      type="password"
+                      value={password}
+                    />
+                  </label>
+                  {error ? (
+                    <div className="form-error" role="alert">
+                      <strong>{error.message}</strong>
+                      <span>{error.code}</span>
+                    </div>
+                  ) : null}
+                  <div className="dialog-actions">
+                    <Dialog.Close asChild>
+                      <MotionButton className="secondary-action" type="button">
+                        Cancel
+                      </MotionButton>
+                    </Dialog.Close>
+                    <MotionButton className="primary-action" disabled={login.isPending} type="submit">
+                      {login.isPending ? "Connecting" : "Connect"}
+                    </MotionButton>
+                  </div>
+                </form>
+              </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        ) : null}
+      </AnimatePresence>
     </Dialog.Root>
   );
 }

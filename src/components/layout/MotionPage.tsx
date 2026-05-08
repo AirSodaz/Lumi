@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { createRouteMotion } from "../../lib/motion/presets";
 
 type MotionPageProps = {
   children: ReactNode;
@@ -6,9 +8,17 @@ type MotionPageProps = {
 };
 
 export function MotionPage({ children, routeKey }: MotionPageProps) {
+  const reducedMotion = useReducedMotion();
+  const routeMotion = createRouteMotion(reducedMotion);
+
   return (
-    <div className="motion-page" data-route-key={routeKey}>
+    <motion.div
+      className="motion-page"
+      data-motion-surface="route"
+      data-route-key={routeKey}
+      {...routeMotion}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }

@@ -1,8 +1,10 @@
 import { ChevronLeft, Film, Play } from "lucide-react";
 import { useState } from "react";
+import { AnimatePresence } from "motion/react";
 import { FocusScope } from "../../components/focus";
 import { CinematicHero, GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
+import { MotionButton } from "../../components/motion";
 import { formatMetadata } from "../../lib/media/format";
 import {
   useChildren,
@@ -99,7 +101,7 @@ export function MediaDetailView({
       <CinematicHero
         actions={
           <>
-            <button
+            <MotionButton
               className="primary-action"
               disabled={!canPlay || openPlayback.isPending}
               onClick={handlePlay}
@@ -107,7 +109,7 @@ export function MediaDetailView({
             >
               <Play aria-hidden="true" size={15} />
               <span>{openPlayback.isPending ? "Opening" : "Play"}</span>
-            </button>
+            </MotionButton>
             <span className="status-chip">{playbackStatus}</span>
           </>
         }
@@ -128,12 +130,15 @@ export function MediaDetailView({
         </GlassPanel>
       ) : null}
 
-      {activeSession && activeSession.state !== "closed" ? (
-        <PlayerControls
-          onSessionChange={setActiveSession}
-          session={activeSession}
-        />
-      ) : null}
+      <AnimatePresence initial={false}>
+        {activeSession && activeSession.state !== "closed" ? (
+          <PlayerControls
+            key={activeSession.id}
+            onSessionChange={setActiveSession}
+            session={activeSession}
+          />
+        ) : null}
+      </AnimatePresence>
 
       {shouldLoadChildren ? (
         <section className="media-rail" aria-labelledby="detail-children">
@@ -205,9 +210,9 @@ type DetailBackButtonProps = {
 
 function DetailBackButton({ onBack, returnLabel }: DetailBackButtonProps) {
   return (
-    <button className="secondary-action back-action" onClick={onBack} type="button">
+    <MotionButton className="secondary-action back-action" onClick={onBack} type="button">
       <ChevronLeft aria-hidden="true" size={16} />
       <span>Back to {returnLabel}</span>
-    </button>
+    </MotionButton>
   );
 }
