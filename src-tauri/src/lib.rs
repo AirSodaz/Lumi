@@ -33,6 +33,7 @@ pub fn run() {
             commands::media::media_get_item,
             commands::media::media_get_home_rows,
             commands::playback::playback_open,
+            commands::playback::playback_get_session,
             commands::playback::playback_command,
             commands::settings::settings_get,
             commands::settings::settings_update,

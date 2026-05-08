@@ -84,10 +84,13 @@ pub struct PlaybackErrorEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MpvOpenRequest {
     pub session_id: String,
+    pub window_id: Option<i64>,
     pub media_url: String,
 }
 
 pub trait PlaybackHost: Send + Sync {
+    fn create_player_window(&self, session_id: &str) -> AppResult<Option<i64>>;
+
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()>;
 
     fn emit_position(&self, event: &PlaybackPositionEvent) -> AppResult<()>;
@@ -126,6 +129,8 @@ pub trait PlayerService: Send + Sync {
     ) -> AppResult<PlayerSession>;
 
     fn command(&self, session_id: &str, command: PlaybackCommand) -> AppResult<PlayerSession>;
+
+    fn session(&self, session_id: &str) -> AppResult<PlayerSession>;
 
     fn close(&self, session_id: &str) -> AppResult<PlayerSession>;
 }
@@ -315,6 +320,12 @@ impl PlayerService for NativePlayerService {
         source: ResolvedPlaybackSource,
     ) -> AppResult<PlayerSession> {
         let session_id = self.sessions.next_session_id();
+        let window_id = self
+            .host
+            .create_player_window(&session_id)
+            .inspect_err(|error| {
+                self.emit_error(Some(session_id.clone()), error);
+            })?;
         let opening = PlayerSession {
             id: session_id.clone(),
             server_id: request.server_id,
@@ -338,6 +349,7 @@ impl PlayerService for NativePlayerService {
         thread::spawn(move || {
             let open_result = backend.open(MpvOpenRequest {
                 session_id: session_id_for_open.clone(),
+                window_id,
                 media_url: source.url,
             });
 
@@ -384,6 +396,10 @@ impl PlayerService for NativePlayerService {
         });
 
         Ok(opening)
+    }
+
+    fn session(&self, session_id: &str) -> AppResult<PlayerSession> {
+        self.sessions.get(session_id).map(|stored| stored.session)
     }
 
     fn command(&self, session_id: &str, command: PlaybackCommand) -> AppResult<PlayerSession> {

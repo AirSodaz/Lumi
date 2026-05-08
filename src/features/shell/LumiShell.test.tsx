@@ -30,6 +30,7 @@ vi.mock("@tauri-apps/api/window", () => ({
   })),
 }));
 
+const originalLocation = window.location.href;
 const invokeMock = vi.mocked(invoke);
 const listenMock = vi.mocked(listen);
 let scrollIntoViewMock: Mock;
@@ -323,6 +324,17 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
       positionSeconds: 0,
     });
   }
+  if (command === "playback_get_session") {
+    return Promise.resolve({
+      id: args && typeof args === "object" && "sessionId" in args
+        ? (args as { sessionId?: string }).sessionId ?? "session-1"
+        : "session-1",
+      serverId: "server-1",
+      itemId: "movie-1",
+      state: "opening",
+      positionSeconds: 0,
+    });
+  }
   if (command === "playback_command") {
     return Promise.resolve({
       id: request?.sessionId ?? "session-1",
@@ -337,6 +349,7 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
 
 describe("LumiShell", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", originalLocation);
     Object.defineProperty(window.navigator, "userAgent", {
       configurable: true,
       value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -672,7 +685,7 @@ describe("LumiShell", () => {
     );
   });
 
-  it("updates an opening playback session from playback events", async () => {
+  it("keeps playback controls out of the main detail view after opening", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
@@ -682,6 +695,7 @@ describe("LumiShell", () => {
     await user.click(await screen.findByRole("button", { name: "Play" }));
 
     expect(await screen.findByText("Opening")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Playback controls")).not.toBeInTheDocument();
     emitTauriEvent("playback:state-changed", {
       id: "session-1",
       serverId: "server-1",
@@ -690,11 +704,71 @@ describe("LumiShell", () => {
       positionSeconds: 0,
     });
 
-    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(screen.queryByText("Playing")).not.toBeInTheDocument();
     expect(listenMock).toHaveBeenCalledWith(
       "playback:state-changed",
       expect.any(Function),
     );
+  });
+
+  it("renders the player window route and updates playback controls from events", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
+    expect(await screen.findByText("Opening")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("playback_get_session", {
+      sessionId: "session-1",
+    });
+    expect(screen.getByLabelText("Playback controls")).toBeInTheDocument();
+
+    emitTauriEvent("playback:state-changed", {
+      id: "session-1",
+      serverId: "server-1",
+      itemId: "movie-1",
+      state: "playing",
+      positionSeconds: 0,
+    });
+    emitTauriEvent("playback:position", {
+      sessionId: "session-1",
+      positionSeconds: 75,
+    });
+
+    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(await screen.findByText("1:15")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close player" }));
+    expect(invokeMock).toHaveBeenCalledWith("playback_command", {
+      request: {
+        sessionId: "session-1",
+        command: { kind: "close" },
+      },
+    });
+  });
+
+  it("shows player window errors without exposing stream URLs or tokens", async () => {
+    mockBrowsingCommands();
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+
+    render(<App />);
+
+    expect(await screen.findByText("Opening")).toBeInTheDocument();
+    emitTauriEvent("playback:error", {
+      sessionId: "session-1",
+      code: "playback.mpv_library_missing",
+      message: "Native mpv library could not be loaded",
+      detail: {
+        mediaUrl: "http://localhost/stream.mkv?api_key=token-value",
+      },
+    });
+
+    expect(await screen.findByText("Native mpv library could not be loaded")).toBeInTheDocument();
+    expect(screen.getByText("playback.mpv_library_missing")).toBeInTheDocument();
+    expect(screen.queryByText(/api_key=token-value/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/stream\.mkv/)).not.toBeInTheDocument();
   });
 
   it("opens Home library cards into the library browser", async () => {

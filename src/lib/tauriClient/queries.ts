@@ -34,6 +34,7 @@ export const queryKeys = {
     ["itemDetail", serverId, itemId] as const,
   materialState: ["materialState"] as const,
   mpvDiagnostic: ["mpvDiagnostic"] as const,
+  playbackSession: (sessionId: string) => ["playbackSession", sessionId] as const,
 };
 
 export function useServers() {
@@ -193,6 +194,15 @@ export function useUpdateSettings() {
 export function useOpenPlayback() {
   return useMutation({
     mutationFn: (request: PlayerOpenRequest) => playback.open(request),
+  });
+}
+
+export function usePlaybackSession(sessionId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.playbackSession(sessionId ?? "none"),
+    queryFn: () => playback.getSession(sessionId ?? ""),
+    enabled: Boolean(sessionId),
+    staleTime: QUERY_STALE_TIME_MS,
   });
 }
 

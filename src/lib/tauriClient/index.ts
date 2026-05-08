@@ -16,6 +16,7 @@ export {
   useMpvDiagnostic,
   useOpenPlayback,
   usePlaybackCommand,
+  usePlaybackSession,
   useServers,
   useSettings,
   useUpdateServerProfile,

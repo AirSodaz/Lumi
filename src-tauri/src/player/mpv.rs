@@ -51,7 +51,7 @@ impl RuntimeMpvBackend {
 impl MpvBackend for RuntimeMpvBackend {
     fn open(&self, request: MpvOpenRequest) -> AppResult<()> {
         let library = self.library()?;
-        let handle = library.create_handle()?;
+        let handle = library.create_handle(request.window_id)?;
         library.command(handle, &["loadfile", &request.media_url, "replace"])?;
         self.instances
             .lock()
@@ -226,12 +226,15 @@ impl MpvLibrary {
         }
     }
 
-    fn create_handle(&self) -> AppResult<*mut c_void> {
+    fn create_handle(&self, window_id: Option<i64>) -> AppResult<*mut c_void> {
         let handle = unsafe { (self.create)() };
         if handle.is_null() {
             return Err(playback_init_failed("mpv_create returned null"));
         }
 
+        if let Some(window_id) = window_id {
+            self.set_option(handle, "wid", &window_id.to_string())?;
+        }
         self.set_option(handle, "keep-open", "no")?;
         self.set_option(handle, "force-window", "yes")?;
 

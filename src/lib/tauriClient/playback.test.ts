@@ -59,4 +59,22 @@ describe("playback tauri client", () => {
       },
     });
   });
+
+  it("loads an existing playback session without source details", async () => {
+    invokeMock.mockResolvedValueOnce({
+      id: "session-1",
+      serverId: "server-1",
+      itemId: "movie-1",
+      state: "opening",
+      positionSeconds: 0,
+    });
+
+    const session = await playback.getSession("session-1");
+
+    expect(session.state).toBe("opening");
+    expect(JSON.stringify(session)).not.toContain("api_key");
+    expect(invokeMock).toHaveBeenCalledWith("playback_get_session", {
+      sessionId: "session-1",
+    });
+  });
 });

@@ -41,6 +41,7 @@ fn native_player_service_returns_opening_then_loads_source_asynchronously() {
     let open = backend.wait_for_open_request();
     assert_eq!(open.session_id, session.id);
     assert_eq!(open.media_url, "http://localhost/stream.mkv?api_key=secret");
+    assert_eq!(open.window_id, None);
 
     backend.complete_open(Ok(()));
 
@@ -81,6 +82,92 @@ fn native_player_service_open_does_not_wait_for_blocked_backend() {
         .expect("open should return before backend finishes")
         .expect("open should create an opening session");
     assert_eq!(session.state, PlayerState::Opening);
+}
+
+#[test]
+fn native_player_service_passes_embedded_window_target_to_backend() {
+    let host = Arc::new(FakePlaybackHost::with_window_id(4242));
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host, backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    assert_eq!(session.state, PlayerState::Opening);
+    let open = backend.wait_for_open_request();
+    assert_eq!(open.window_id, Some(4242));
+    backend.complete_open(Ok(()));
+}
+
+#[test]
+fn native_player_service_returns_window_errors_before_opening_backend() {
+    let host = Arc::new(FakePlaybackHost::failing_window());
+    let backend = Arc::new(FakeMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend.clone());
+
+    let error = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv?api_key=secret".into(),
+            },
+        )
+        .expect_err("window creation failure should reject playback open");
+
+    assert_eq!(error.code(), "playback.window_failed");
+    assert!(backend.opened.lock().unwrap().is_empty());
+    assert!(!format!("{error}").contains("api_key=secret"));
+    let errors = host.errors.lock().unwrap();
+    assert_eq!(
+        errors
+            .last()
+            .expect("window failure event")
+            .code,
+        "playback.window_failed"
+    );
+}
+
+#[test]
+fn native_player_service_returns_existing_sessions_without_source_url() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host, backend.clone());
+
+    let opened = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv?api_key=secret".into(),
+            },
+        )
+        .expect("open playback");
+
+    let loaded = service.session(&opened.id).expect("load session");
+
+    assert_eq!(loaded, opened);
+    assert!(!format!("{loaded:?}").contains("api_key=secret"));
+    backend.complete_open(Ok(()));
 }
 
 #[test]
@@ -291,16 +378,33 @@ fn native_player_service_returns_stable_missing_session_error() {
     assert!(error.recoverable());
 }
 
-#[derive(Default)]
 struct FakePlaybackHost {
     states: Mutex<Vec<PlayerSession>>,
     positions: Mutex<Vec<PlaybackPositionEvent>>,
     errors: Mutex<Vec<PlaybackErrorEvent>>,
+    window_result: Mutex<AppResult<Option<i64>>>,
     state_changed: Condvar,
     error_changed: Condvar,
 }
 
+impl Default for FakePlaybackHost {
+    fn default() -> Self {
+        Self {
+            states: Mutex::new(Vec::new()),
+            positions: Mutex::new(Vec::new()),
+            errors: Mutex::new(Vec::new()),
+            window_result: Mutex::new(Ok(None)),
+            state_changed: Condvar::new(),
+            error_changed: Condvar::new(),
+        }
+    }
+}
+
 impl PlaybackHost for FakePlaybackHost {
+    fn create_player_window(&self, _session_id: &str) -> AppResult<Option<i64>> {
+        self.window_result.lock().unwrap().clone()
+    }
+
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()> {
         self.states.lock().unwrap().push(session.clone());
         self.state_changed.notify_all();
@@ -320,6 +424,22 @@ impl PlaybackHost for FakePlaybackHost {
 }
 
 impl FakePlaybackHost {
+    fn with_window_id(window_id: i64) -> Self {
+        Self {
+            window_result: Mutex::new(Ok(Some(window_id))),
+            ..Default::default()
+        }
+    }
+
+    fn failing_window() -> Self {
+        Self {
+            window_result: Mutex::new(Err(lumi_lib::player::playback_window_failed(
+                "native player window was unavailable",
+            ))),
+            ..Default::default()
+        }
+    }
+
     fn wait_for_state(&self, state: PlayerState) -> PlayerSession {
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut states = self.states.lock().unwrap();

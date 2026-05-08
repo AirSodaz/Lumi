@@ -17,6 +17,9 @@ export const playback = {
   open(request: PlayerOpenRequest) {
     return invoke<PlayerSession>("playback_open", { request });
   },
+  getSession(sessionId: string) {
+    return invoke<PlayerSession>("playback_get_session", { sessionId });
+  },
   command(request: PlaybackCommandRequest) {
     return invoke<PlayerSession>("playback_command", { request });
   },

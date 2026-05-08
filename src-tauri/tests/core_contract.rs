@@ -251,6 +251,16 @@ impl PlayerService for MockPlayerService {
         })
     }
 
+    fn session(&self, session_id: &str) -> AppResult<PlayerSession> {
+        Ok(PlayerSession {
+            id: session_id.into(),
+            server_id: "server-1".into(),
+            item_id: "item-1".into(),
+            state: PlayerState::Opening,
+            position_seconds: 0,
+        })
+    }
+
     fn close(&self, session_id: &str) -> AppResult<PlayerSession> {
         Ok(PlayerSession {
             id: session_id.into(),

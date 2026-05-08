@@ -1,6 +1,5 @@
 import { ChevronLeft, Film, Play } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AnimatePresence } from "motion/react";
 import { FocusScope } from "../../components/focus";
 import { CinematicHero, GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
@@ -20,7 +19,6 @@ import {
   type LibraryItem,
   type PlayerSession,
 } from "../../lib/tauriClient";
-import { PlayerControls } from "../player/PlayerControls";
 
 type MediaDetailViewProps = {
   itemId: string;
@@ -182,15 +180,12 @@ export function MediaDetailView({
         </GlassPanel>
       ) : null}
 
-      <AnimatePresence initial={false}>
-        {activeSession && activeSession.state !== "closed" ? (
-          <PlayerControls
-            key={activeSession.id}
-            onSessionChange={setActiveSession}
-            session={activeSession}
-          />
-        ) : null}
-      </AnimatePresence>
+      {activeSession && activeSession.state === "opening" ? (
+        <GlassPanel className="playback-opening" aria-live="polite">
+          <strong>Opening</strong>
+          <span>Player window is starting</span>
+        </GlassPanel>
+      ) : null}
 
       {shouldLoadChildren ? (
         <section className="media-rail" aria-labelledby="detail-children">

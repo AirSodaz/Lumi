@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+#[cfg(target_os = "windows")]
+use tauri::WindowEvent;
 
 use crate::{
     app::AppState,
@@ -53,6 +56,16 @@ pub async fn playback_command(
     command_for_state(&state, host, request)
 }
 
+#[tauri::command]
+pub async fn playback_get_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> AppResult<PlayerSession> {
+    let host = Arc::new(TauriPlaybackHost::new(app));
+    get_session_for_state(&state, host, &session_id)
+}
+
 pub fn open_for_state(
     state: &AppState,
     host: Arc<dyn PlaybackHost>,
@@ -82,6 +95,14 @@ pub fn command_for_state(
     request: PlaybackCommandRequest,
 ) -> AppResult<PlayerSession> {
     player_service_for_state(state, host).command(&request.session_id, request.command)
+}
+
+pub fn get_session_for_state(
+    state: &AppState,
+    host: Arc<dyn PlaybackHost>,
+    session_id: &str,
+) -> AppResult<PlayerSession> {
+    player_service_for_state(state, host).session(session_id)
 }
 
 fn player_service_for_state(state: &AppState, host: Arc<dyn PlaybackHost>) -> NativePlayerService {
@@ -180,6 +201,24 @@ impl TauriPlaybackHost {
 }
 
 impl PlaybackHost for TauriPlaybackHost {
+    fn create_player_window(&self, session_id: &str) -> AppResult<Option<i64>> {
+        let label = format!("player-{session_id}");
+        let url = WebviewUrl::App(format!("index.html?view=player&sessionId={session_id}").into());
+        let window = if let Some(window) = self.app.get_webview_window(&label) {
+            window
+        } else {
+            WebviewWindowBuilder::new(&self.app, label, url)
+                .title("Lumi Player")
+                .inner_size(1120.0, 700.0)
+                .min_inner_size(760.0, 460.0)
+                .resizable(true)
+                .build()
+                .map_err(playback_window_failed)?
+        };
+
+        embedded_window_id_for(&window)
+    }
+
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()> {
         self.app
             .emit(events::PLAYBACK_STATE_CHANGED, session)
@@ -197,6 +236,102 @@ impl PlaybackHost for TauriPlaybackHost {
             .emit(events::PLAYBACK_ERROR, event)
             .map_err(playback_emit_failed)
     }
+}
+
+#[cfg(target_os = "windows")]
+fn embedded_window_id_for(window: &tauri::WebviewWindow) -> AppResult<Option<i64>> {
+    let handle = window.window_handle().map_err(playback_window_failed)?;
+    match handle.as_raw() {
+        RawWindowHandle::Win32(handle) => create_video_host_window(window, handle.hwnd.get() as isize),
+        _ => Err(playback_window_failed("unsupported native window handle")),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn embedded_window_id_for(_window: &tauri::WebviewWindow) -> AppResult<Option<i64>> {
+    Ok(None)
+}
+
+#[cfg(target_os = "windows")]
+fn create_video_host_window(
+    window: &tauri::WebviewWindow,
+    parent_hwnd: isize,
+) -> AppResult<Option<i64>> {
+    use windows_sys::Win32::Foundation::{HINSTANCE, HWND};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, HMENU, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
+    };
+
+    const CONTROL_REGION_HEIGHT: u32 = 172;
+
+    let class_name = wide_null("Static");
+    let size = window.inner_size().map_err(playback_window_failed)?;
+    let video_width = size.width.max(1);
+    let video_height = size.height.saturating_sub(CONTROL_REGION_HEIGHT).max(1);
+    let child = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            class_name.as_ptr(),
+            std::ptr::null(),
+            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+            0,
+            0,
+            video_width as i32,
+            video_height as i32,
+            parent_hwnd as HWND,
+            std::ptr::null_mut::<std::ffi::c_void>() as HMENU,
+            std::ptr::null_mut::<std::ffi::c_void>() as HINSTANCE,
+            std::ptr::null_mut(),
+        )
+    };
+
+    if child.is_null() {
+        return Err(playback_window_failed("native video host could not be created"));
+    }
+
+    let child = child as isize;
+    position_video_host(child, video_width, video_height);
+    window.on_window_event(move |event| match event {
+        WindowEvent::Resized(size)
+        | WindowEvent::ScaleFactorChanged {
+            new_inner_size: size,
+            ..
+        } => {
+            position_video_host(
+                child,
+                size.width.max(1),
+                size.height.saturating_sub(CONTROL_REGION_HEIGHT).max(1),
+            );
+        }
+        _ => {}
+    });
+
+    Ok(Some(child as i64))
+}
+
+#[cfg(target_os = "windows")]
+fn position_video_host(child: isize, width: u32, height: u32) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER,
+    };
+
+    let _ = unsafe {
+        SetWindowPos(
+            child as HWND,
+            std::ptr::null_mut(),
+            0,
+            0,
+            width as i32,
+            height as i32,
+            SWP_NOACTIVATE | SWP_NOZORDER,
+        )
+    };
+}
+
+#[cfg(target_os = "windows")]
+fn wide_null(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 struct EmbyProgressReporter {
@@ -221,4 +356,8 @@ fn playback_emit_failed(source: impl ToString) -> AppError {
     AppError::new("playback.event_emit_failed", "Playback event could not be emitted")
         .with_recoverable(true)
         .with_detail(serde_json::json!({ "source": source.to_string() }))
+}
+
+fn playback_window_failed(source: impl ToString) -> AppError {
+    crate::player::playback_window_failed(source)
 }

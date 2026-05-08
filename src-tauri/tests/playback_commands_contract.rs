@@ -47,7 +47,7 @@ fn playback_open_resolves_first_provider_source_without_exposing_url_to_react() 
         backend.clone(),
     );
     let profile = seed_profile_with_token(&state);
-    let host = Arc::new(FakePlaybackHost);
+    let host = Arc::new(FakePlaybackHost::default());
 
     let session = playback::open_for_state(
         &state,
@@ -109,7 +109,7 @@ fn playback_open_resolves_container_to_first_playable_descendant() {
 
     let session = playback::open_for_state(
         &state,
-        Arc::new(FakePlaybackHost),
+        Arc::new(FakePlaybackHost::default()),
         PlayerOpenRequest {
             server_id: profile.id,
             item_id: "library-1".into(),
@@ -157,7 +157,7 @@ fn playback_open_uses_transcoding_source_when_direct_stream_is_unavailable() {
 
     playback::open_for_state(
         &state,
-        Arc::new(FakePlaybackHost),
+        Arc::new(FakePlaybackHost::default()),
         PlayerOpenRequest {
             server_id: profile.id,
             item_id: "movie-1".into(),
@@ -204,7 +204,7 @@ fn playback_open_does_not_duplicate_existing_api_key() {
 
     playback::open_for_state(
         &state,
-        Arc::new(FakePlaybackHost),
+        Arc::new(FakePlaybackHost::default()),
         PlayerOpenRequest {
             server_id: profile.id,
             item_id: "movie-1".into(),
@@ -254,7 +254,7 @@ fn playback_open_resolves_file_protocol_sources_to_emby_static_streams() {
 
     playback::open_for_state(
         &state,
-        Arc::new(FakePlaybackHost),
+        Arc::new(FakePlaybackHost::default()),
         PlayerOpenRequest {
             server_id: profile.id,
             item_id: "movie-1".into(),
@@ -298,7 +298,7 @@ fn playback_open_returns_no_source_for_empty_container_without_creating_window()
 
     let error = playback::open_for_state(
         &state,
-        Arc::new(FakePlaybackHost),
+        Arc::new(FakePlaybackHost::default()),
         PlayerOpenRequest {
             server_id: profile.id,
             item_id: "library-1".into(),
@@ -390,7 +390,7 @@ fn playback_open_returns_source_errors_before_creating_player_session() {
 
     let error = playback::open_for_state(
         &state,
-        Arc::new(FakePlaybackHost),
+        Arc::new(FakePlaybackHost::default()),
         PlayerOpenRequest {
             server_id: profile.id,
             item_id: "movie-1".into(),
@@ -408,7 +408,7 @@ fn playback_open_returns_source_errors_before_creating_player_session() {
 fn playback_open_resolved_target_opens_without_provider_lookup() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(Vec::new(), backend.clone());
-    let host = Arc::new(FakePlaybackHost);
+    let host = Arc::new(FakePlaybackHost::default());
 
     let session = playback::open_resolved_for_state(
         &state,
@@ -439,6 +439,85 @@ fn playback_open_resolved_target_opens_without_provider_lookup() {
 }
 
 #[test]
+fn playback_open_resolved_target_passes_window_target_to_backend() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(Vec::new(), backend.clone());
+    let host = Arc::new(FakePlaybackHost {
+        window_id: Some(31337),
+    });
+
+    let session = playback::open_resolved_for_state(
+        &state,
+        host,
+        PlayerOpenRequest {
+            server_id: "server-1".into(),
+            item_id: "movie-1".into(),
+            media_source_id: None,
+        },
+        playback::ResolvedPlaybackTarget {
+            item_id: "movie-1".into(),
+            source: ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value".into(),
+            },
+        },
+    )
+    .expect("open playback with embedded window target");
+
+    assert_eq!(session.state, lumi_lib::player::PlayerState::Opening);
+    let opened = backend.wait_for_opened();
+    assert_eq!(opened.window_id, Some(31337));
+    assert!(!format!("{session:?}").contains("api_key=token-value"));
+}
+
+#[test]
+fn playback_get_session_returns_existing_session_without_source_url() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct",
+                        "DirectStreamUrl": "/Videos/movie-1/stream.mkv?api_key=secret-token",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
+        backend.clone(),
+    );
+    let profile = seed_profile_with_token(&state);
+    let host = Arc::new(FakePlaybackHost::default());
+    let opened = playback::open_for_state(
+        &state,
+        host.clone(),
+        PlayerOpenRequest {
+            server_id: profile.id,
+            item_id: "movie-1".into(),
+            media_source_id: None,
+        },
+    )
+    .expect("open playback");
+
+    let loaded = playback::get_session_for_state(&state, host, &opened.id).expect("load session");
+
+    assert_eq!(loaded, opened);
+    assert!(!format!("{loaded:?}").contains("secret-token"));
+    assert!(!format!("{loaded:?}").contains("stream.mkv"));
+}
+
+#[test]
 fn playback_command_delegates_to_existing_player_session() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(
@@ -466,7 +545,7 @@ fn playback_command_delegates_to_existing_player_session() {
         backend.clone(),
     );
     let profile = seed_profile_with_token(&state);
-    let host = Arc::new(FakePlaybackHost);
+    let host = Arc::new(FakePlaybackHost::default());
     let session = playback::open_for_state(
         &state,
         host.clone(),
@@ -572,9 +651,16 @@ impl EmbyHttpTransport for FakeEmbyTransport {
     }
 }
 
-struct FakePlaybackHost;
+#[derive(Default)]
+struct FakePlaybackHost {
+    window_id: Option<i64>,
+}
 
 impl PlaybackHost for FakePlaybackHost {
+    fn create_player_window(&self, _session_id: &str) -> AppResult<Option<i64>> {
+        Ok(self.window_id)
+    }
+
     fn emit_state_changed(&self, _session: &PlayerSession) -> AppResult<()> {
         Ok(())
     }
@@ -591,6 +677,12 @@ impl PlaybackHost for FakePlaybackHost {
 struct FailingPlaybackHost;
 
 impl PlaybackHost for FailingPlaybackHost {
+    fn create_player_window(&self, _session_id: &str) -> AppResult<Option<i64>> {
+        Err(lumi_lib::player::playback_window_failed(
+            "native event target was unavailable",
+        ))
+    }
+
     fn emit_state_changed(&self, _session: &PlayerSession) -> AppResult<()> {
         Err(lumi_lib::player::playback_window_failed(
             "native event target was unavailable",
