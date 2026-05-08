@@ -8,6 +8,7 @@ use lumi_lib::{
     player::{
         MpvBackend, MpvOpenRequest, PlaybackCommand, PlaybackErrorEvent, PlaybackHost,
         PlaybackPositionEvent, PlayerOpenRequest, PlayerSession, PlayerWindow,
+        ResolvedPlaybackSource,
     },
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
@@ -256,6 +257,40 @@ fn playback_open_returns_source_errors_before_creating_player_session() {
     assert_eq!(error.code(), "playback.source_not_found");
     assert!(error.recoverable());
     assert!(backend.opened.lock().unwrap().is_empty());
+}
+
+#[test]
+fn playback_open_resolved_target_opens_without_provider_lookup() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(Vec::new(), backend.clone());
+    let host = Arc::new(FakePlaybackHost);
+
+    let session = playback::open_resolved_for_state(
+        &state,
+        host,
+        PlayerOpenRequest {
+            server_id: "server-1".into(),
+            item_id: "library-1".into(),
+            media_source_id: Some("source-from-request".into()),
+        },
+        playback::ResolvedPlaybackTarget {
+            item_id: "movie-1".into(),
+            source: ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value".into(),
+            },
+        },
+    )
+    .expect("open playback from resolved target");
+
+    assert_eq!(session.server_id, "server-1");
+    assert_eq!(session.item_id, "movie-1");
+    let opened = backend.opened.lock().unwrap();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(
+        opened[0].media_url,
+        "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value"
+    );
 }
 
 #[test]

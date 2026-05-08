@@ -34,8 +34,14 @@ pub async fn playback_open(
     state: State<'_, AppState>,
     request: PlayerOpenRequest,
 ) -> AppResult<PlayerSession> {
+    let blocking_state = super::state_for_blocking(state.inner());
+    let request_for_resolve = request.clone();
+    let target = super::run_blocking_command(move || {
+        resolve_playback_target_for_state(&blocking_state, &request_for_resolve)
+    })
+    .await?;
     let host = Arc::new(TauriPlaybackHost::new(app));
-    open_for_state(&state, host, request)
+    open_resolved_for_state(state.inner(), host, request, target)
 }
 
 #[tauri::command]
@@ -53,7 +59,16 @@ pub fn open_for_state(
     host: Arc<dyn PlaybackHost>,
     request: PlayerOpenRequest,
 ) -> AppResult<PlayerSession> {
-    let target = resolve_playback_target(&emby_provider_for_state(state), &request)?;
+    let target = resolve_playback_target_for_state(state, &request)?;
+    open_resolved_for_state(state, host, request, target)
+}
+
+pub fn open_resolved_for_state(
+    state: &AppState,
+    host: Arc<dyn PlaybackHost>,
+    request: PlayerOpenRequest,
+    target: ResolvedPlaybackTarget,
+) -> AppResult<PlayerSession> {
     let request = PlayerOpenRequest {
         server_id: request.server_id,
         item_id: target.item_id,
@@ -74,9 +89,17 @@ fn player_service_for_state(state: &AppState, host: Arc<dyn PlaybackHost>) -> Na
     NativePlayerService::with_store(state.player_sessions(), host, state.player_backend())
 }
 
-struct ResolvedPlaybackTarget {
-    item_id: String,
-    source: ResolvedPlaybackSource,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedPlaybackTarget {
+    pub item_id: String,
+    pub source: ResolvedPlaybackSource,
+}
+
+pub fn resolve_playback_target_for_state(
+    state: &AppState,
+    request: &PlayerOpenRequest,
+) -> AppResult<ResolvedPlaybackTarget> {
+    resolve_playback_target(&emby_provider_for_state(state), request)
 }
 
 fn resolve_playback_target(

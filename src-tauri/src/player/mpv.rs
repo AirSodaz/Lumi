@@ -353,6 +353,7 @@ fn library_candidates_for(
     candidates.extend(default_library_names_for(os).into_iter().map(String::from));
     candidates.extend(app_local_library_paths(app_dir, os));
     candidates.extend(bundled_library_paths(resource_dir, os, arch));
+    candidates.extend(development_resource_library_paths(app_dir, os, arch));
     candidates
 }
 
@@ -397,6 +398,49 @@ fn bundled_library_paths(
         .into_iter()
         .map(|name| {
             resource_dir
+                .join("libmpv")
+                .join(platform_dir)
+                .join(name)
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect()
+}
+
+fn development_resource_library_paths(
+    app_dir: Option<&std::path::Path>,
+    os: &str,
+    arch: &str,
+) -> Vec<String> {
+    let Some(app_dir) = app_dir else {
+        return Vec::new();
+    };
+    let Some(profile_dir) = app_dir.file_name().and_then(|name| name.to_str()) else {
+        return Vec::new();
+    };
+    if !matches!(profile_dir, "debug" | "release") {
+        return Vec::new();
+    }
+
+    let Some(target_dir) = app_dir.parent() else {
+        return Vec::new();
+    };
+    if target_dir.file_name().and_then(|name| name.to_str()) != Some("target") {
+        return Vec::new();
+    }
+
+    let Some(crate_dir) = target_dir.parent() else {
+        return Vec::new();
+    };
+    let Some(platform_dir) = platform_resource_subdir_for(os, arch) else {
+        return Vec::new();
+    };
+
+    default_library_names_for(os)
+        .into_iter()
+        .map(|name| {
+            crate_dir
+                .join("resources")
                 .join("libmpv")
                 .join(platform_dir)
                 .join(name)
@@ -468,6 +512,33 @@ mod tests {
             .expect("bundled mpv candidate");
 
         assert!(bundled_index > app_local_index);
+    }
+
+    #[test]
+    fn dev_candidates_include_staged_source_resources_after_bundled_resources() {
+        let app_dir = Path::new("C:/repo/Lumi/src-tauri/target/debug");
+        let resource_dir = Path::new("C:/repo/Lumi/src-tauri/target/debug");
+        let candidates =
+            library_candidates_for(None, Some(app_dir), Some(resource_dir), "windows", "x86_64");
+
+        let normalized = candidates
+            .iter()
+            .map(|candidate| candidate.replace('\\', "/"))
+            .collect::<Vec<_>>();
+        let bundled_index = normalized
+            .iter()
+            .position(|candidate| {
+                candidate.ends_with("src-tauri/target/debug/libmpv/windows-x64/libmpv-2.dll")
+            })
+            .expect("bundled target resource candidate");
+        let dev_index = normalized
+            .iter()
+            .position(|candidate| {
+                candidate.ends_with("src-tauri/resources/libmpv/windows-x64/libmpv-2.dll")
+            })
+            .expect("staged source resource candidate");
+
+        assert!(dev_index > bundled_index);
     }
 
     #[test]

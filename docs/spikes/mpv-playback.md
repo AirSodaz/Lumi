@@ -36,6 +36,8 @@ pnpm tauri:build
 
 The script writes platform-specific files to `src-tauri/resources/libmpv/<platform>/`, and Tauri bundles that directory as `libmpv`. The source manifest is intentionally strict: each platform entry must pin `url`, `sha256`, `archiveType`, LGPL-compatible license metadata, source metadata, `mainLibraries`, and `copyGlobs`. If a platform has no audited manifest entry, the script fails before the build instead of downloading an unreviewed binary.
 
+The default Windows source is zhongfly `mpv-dev-lgpl-*` from `zhongfly/mpv-winbuild`. Lumi uses the broad-compatible `x86_64` build for Windows x64 and the `aarch64` build for Windows ARM64; `x86_64-v3` and shinchiro builds are not default release sources.
+
 ## Window Strategy
 
 P6 creates an independent Tauri webview window per playback session and passes the native window id to libmpv through `wid`. The player window uses `index.html?playerWindow=1`, which renders a minimal black player host surface while mpv owns the native video output.

@@ -1,5 +1,28 @@
 {
   "$schema": "https://lumi.local/schemas/libmpv-sources.v1.json",
   "schemaVersion": 1,
-  "sources": {}
+  "sources": {
+    "windows-x64": {
+      "url": "https://github.com/zhongfly/mpv-winbuild/releases/download/2026-05-07-4d944b2fad/mpv-dev-lgpl-x86_64-20260507-git-4d944b2fad.7z",
+      "sha256": "d2db1badfc908b0af893022c3e2a3d1953a3cd08780825b68705e483e153894e",
+      "archiveType": "7z",
+      "license": "LGPL-2.1-or-later",
+      "licenseUrl": "https://github.com/mpv-player/mpv/blob/master/Copyright",
+      "sourceName": "zhongfly/mpv-winbuild mpv-dev-lgpl x86_64 2026-05-07",
+      "sourceUrl": "https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-05-07-4d944b2fad",
+      "mainLibraries": ["libmpv-2.dll"],
+      "copyGlobs": ["libmpv-2.dll"]
+    },
+    "windows-arm64": {
+      "url": "https://github.com/zhongfly/mpv-winbuild/releases/download/2026-05-07-4d944b2fad/mpv-dev-lgpl-aarch64-20260507-git-4d944b2fad.7z",
+      "sha256": "c156dd28af668ab32bb4b8731c44107a820abd4ae3a792121778859cd86c194b",
+      "archiveType": "7z",
+      "license": "LGPL-2.1-or-later",
+      "licenseUrl": "https://github.com/mpv-player/mpv/blob/master/Copyright",
+      "sourceName": "zhongfly/mpv-winbuild mpv-dev-lgpl aarch64 2026-05-07",
+      "sourceUrl": "https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-05-07-4d944b2fad",
+      "mainLibraries": ["libmpv-2.dll"],
+      "copyGlobs": ["libmpv-2.dll"]
+    }
+  }
 }
