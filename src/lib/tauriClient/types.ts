@@ -18,18 +18,47 @@ export type AppError = {
 };
 
 export type ThemePreference = "system" | "light" | "dark";
+export type SubtitlePreference = "serverDefault" | "always" | "off";
+
+export type PlayerSettings = {
+  defaultVolume: number;
+  subtitlePreference: SubtitlePreference;
+};
 
 export type AppSettings = {
   theme: ThemePreference;
   materialEffectsEnabled: boolean;
+  player: PlayerSettings;
 };
 
-export type AppSettingsPatch = Partial<AppSettings>;
+export type AppSettingsPatch = Partial<
+  Pick<AppSettings, "materialEffectsEnabled" | "theme"> & PlayerSettings
+>;
+
+export type MaterialState = {
+  kind: "nativeMaterial" | "contentGlass" | "fallbackSurface" | string;
+  status: "available" | "fallback" | "disabled" | string;
+  reason: string;
+};
+
+export type MpvDiagnostic = {
+  status: "available" | "missing" | "error" | string;
+  message: string;
+};
+
+export type LogExport = {
+  fileName: string;
+  contents: string;
+};
 
 export type LoginManualRequest = {
   baseUrl: string;
   username: string;
   password: string;
+};
+
+export type LogoutRequest = {
+  serverId: string;
 };
 
 export type LibraryItem = {

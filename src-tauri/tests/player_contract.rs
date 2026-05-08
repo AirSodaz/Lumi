@@ -4,9 +4,10 @@ use lumi_lib::{
     errors::AppResult,
     player::{
         MpvBackend, MpvOpenRequest, NativePlayerService, PlaybackCommand, PlaybackErrorEvent,
-        PlaybackHost, PlaybackPositionEvent, PlayerOpenRequest, PlayerService, PlayerSession,
-        PlayerState, PlayerWindow, ResolvedPlaybackSource,
+        PlaybackHost, PlaybackPositionEvent, PlaybackProgressReporter, PlayerOpenRequest,
+        PlayerService, PlayerSession, PlayerState, PlayerWindow, ResolvedPlaybackSource,
     },
+    providers::PlaybackProgressUpdate,
 };
 
 #[test]
@@ -118,6 +119,63 @@ fn native_player_service_maps_commands_and_closes_sessions() {
 }
 
 #[test]
+fn native_player_service_reports_throttled_progress_and_final_position() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(FakeMpvBackend::with_position(96));
+    let reporter = Arc::new(FakeProgressReporter::default());
+    let service = NativePlayerService::with_progress_reporter(host, backend, reporter.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    service
+        .command(
+            &session.id,
+            PlaybackCommand::Seek {
+                position_seconds: 15,
+            },
+        )
+        .expect("first progress");
+    service
+        .command(
+            &session.id,
+            PlaybackCommand::Seek {
+                position_seconds: 20,
+            },
+        )
+        .expect("throttled progress");
+    service
+        .command(
+            &session.id,
+            PlaybackCommand::Seek {
+                position_seconds: 46,
+            },
+        )
+        .expect("next progress interval");
+    service.close(&session.id).expect("close playback");
+
+    let reports = reporter.reports.lock().unwrap();
+    assert_eq!(
+        reports
+            .iter()
+            .map(|report| (report.position_seconds, report.is_final))
+            .collect::<Vec<_>>(),
+        vec![(15, false), (46, false), (96, true)]
+    );
+}
+
+#[test]
 fn native_player_service_returns_stable_missing_session_error() {
     let service = NativePlayerService::new(
         Arc::new(FakePlaybackHost::default()),
@@ -167,6 +225,16 @@ impl PlaybackHost for FakePlaybackHost {
 struct FakeMpvBackend {
     opened: Mutex<Vec<MpvOpenRequest>>,
     commands: Mutex<Vec<(String, PlaybackCommand)>>,
+    position_seconds: Mutex<u32>,
+}
+
+impl FakeMpvBackend {
+    fn with_position(position_seconds: u32) -> Self {
+        Self {
+            position_seconds: Mutex::new(position_seconds),
+            ..Default::default()
+        }
+    }
 }
 
 impl MpvBackend for FakeMpvBackend {
@@ -188,6 +256,18 @@ impl MpvBackend for FakeMpvBackend {
     }
 
     fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {
-        Ok(Some(0))
+        Ok(Some(*self.position_seconds.lock().unwrap()))
+    }
+}
+
+#[derive(Default)]
+struct FakeProgressReporter {
+    reports: Mutex<Vec<PlaybackProgressUpdate>>,
+}
+
+impl PlaybackProgressReporter for FakeProgressReporter {
+    fn report_progress(&self, progress: PlaybackProgressUpdate) -> AppResult<()> {
+        self.reports.lock().unwrap().push(progress);
+        Ok(())
     }
 }

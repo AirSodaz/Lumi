@@ -44,4 +44,39 @@ describe("settings client", () => {
       patch: { theme: "dark", materialEffectsEnabled: false },
     });
   });
+
+  it("uses settings diagnostics and export commands", async () => {
+    invokeMock
+      .mockResolvedValueOnce({
+        kind: "fallbackSurface",
+        reason: "Native material probing is not implemented in this build",
+        status: "fallback",
+      })
+      .mockResolvedValueOnce({
+        message: "Native mpv backend is ready",
+        status: "available",
+      })
+      .mockResolvedValueOnce({
+        contents: "Lumi diagnostics export",
+        fileName: "lumi-logs-2026-05-08.txt",
+      });
+
+    await expect(settings.getMaterialState()).resolves.toEqual({
+      kind: "fallbackSurface",
+      reason: "Native material probing is not implemented in this build",
+      status: "fallback",
+    });
+    await expect(settings.diagnoseMpv()).resolves.toEqual({
+      message: "Native mpv backend is ready",
+      status: "available",
+    });
+    await expect(settings.exportLogs()).resolves.toEqual({
+      contents: "Lumi diagnostics export",
+      fileName: "lumi-logs-2026-05-08.txt",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("settings_get_material_state");
+    expect(invokeMock).toHaveBeenCalledWith("settings_diagnose_mpv");
+    expect(invokeMock).toHaveBeenCalledWith("settings_export_logs");
+  });
 });

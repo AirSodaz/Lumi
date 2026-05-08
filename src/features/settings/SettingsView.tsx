@@ -22,10 +22,17 @@ import {
 } from "../../lib/motion/presets";
 import {
   useLoginManual,
+  useLogout,
+  useExportLogs,
+  useMaterialState,
+  useMpvDiagnostic,
   useServers,
   useSettings,
   useUpdateSettings,
   type AppError,
+  type LogExport,
+  type ServerProfile,
+  type SubtitlePreference,
   type ThemePreference,
 } from "../../lib/tauriClient";
 
@@ -89,7 +96,9 @@ export function SettingsView() {
 
 function ServersPanel() {
   const serversQuery = useServers();
+  const logout = useLogout();
   const servers = serversQuery.data ?? [];
+  const [viewingServer, setViewingServer] = useState<ServerProfile | null>(null);
 
   return (
     <section className="settings-section" aria-labelledby="servers-title">
@@ -134,8 +143,25 @@ function ServersPanel() {
                     data-motion-surface="dropdown"
                     {...dropdownMotion}
                   >
-                    <DropdownMenu.Item className="dropdown-item">View Server</DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      className="dropdown-item"
+                      onSelect={() => setViewingServer(server)}
+                    >
+                      View Server
+                    </DropdownMenu.Item>
                     <DropdownMenu.Item className="dropdown-item">Diagnostics</DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      className="dropdown-item"
+                      onSelect={() => logout.mutate({ serverId: server.id })}
+                    >
+                      Sign out
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      className="dropdown-item danger"
+                      onSelect={() => logout.mutate({ serverId: server.id })}
+                    >
+                      Delete Server
+                    </DropdownMenu.Item>
                   </motion.div>
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
@@ -150,6 +176,14 @@ function ServersPanel() {
           </GlassPanel>
         ) : null}
       </div>
+      <ServerDetailDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingServer(null);
+          }
+        }}
+        server={viewingServer}
+      />
     </section>
   );
 }
@@ -284,6 +318,15 @@ function AddServerDialog() {
 }
 
 function PlayerPanel() {
+  const settings = useSettings();
+  const updateSettings = useUpdateSettings();
+  const diagnostic = useMpvDiagnostic();
+  const current = settings.data ?? defaultSettings();
+
+  function updateDefaultVolume(value: number) {
+    updateSettings.mutate({ defaultVolume: Math.max(0, Math.min(100, value)) });
+  }
+
   return (
     <section className="settings-section" aria-labelledby="player-title">
       <div className="section-heading">
@@ -294,13 +337,51 @@ function PlayerPanel() {
         <MonitorCog aria-hidden="true" size={18} />
       </div>
       <div className="settings-list">
+        <label className="settings-row control-row">
+          <span>
+            <strong>Default volume</strong>
+            <span>{current.player.defaultVolume}%</span>
+          </span>
+          <input
+            aria-label="Default volume"
+            key={current.player.defaultVolume}
+            max={100}
+            min={0}
+            onBlur={(event) => updateDefaultVolume(Number(event.currentTarget.value))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                updateDefaultVolume(Number(event.currentTarget.value));
+              }
+            }}
+            type="number"
+            defaultValue={current.player.defaultVolume}
+          />
+        </label>
+        <label className="settings-row control-row">
+          <span>
+            <strong>Subtitles</strong>
+            <span>{subtitleLabel(current.player.subtitlePreference)}</span>
+          </span>
+          <select
+            aria-label="Subtitle preference"
+            onChange={(event) =>
+              updateSettings.mutate({
+                subtitlePreference: event.target.value as SubtitlePreference,
+              })
+            }
+            value={current.player.subtitlePreference}
+          >
+            <option value="serverDefault">Server default</option>
+            <option value="always">Always show</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
         <div className="settings-row">
-          <strong>Default volume</strong>
-          <span>100%</span>
-        </div>
-        <div className="settings-row">
-          <strong>Subtitles</strong>
-          <span>Server default</span>
+          <strong>mpv path diagnostic</strong>
+          <span>
+            {diagnostic.data?.message ??
+              (diagnostic.isLoading ? "Checking native mpv" : "Diagnostic unavailable")}
+          </span>
         </div>
       </div>
     </section>
@@ -310,10 +391,8 @@ function PlayerPanel() {
 function AppearancePanel() {
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
-  const current = settings.data ?? {
-    theme: "system" as ThemePreference,
-    materialEffectsEnabled: true,
-  };
+  const material = useMaterialState();
+  const current = settings.data ?? defaultSettings();
 
   return (
     <section className="settings-section" aria-labelledby="appearance-title">
@@ -360,12 +439,27 @@ function AppearancePanel() {
             type="checkbox"
           />
         </label>
+        <div className="settings-row">
+          <strong>{materialTitle(material.data?.kind)}</strong>
+          <span>
+            {material.data?.reason ??
+              (material.isLoading ? "Checking material capability" : "Material state unavailable")}
+          </span>
+        </div>
       </div>
     </section>
   );
 }
 
 function LogsPanel() {
+  const exportLogs = useExportLogs();
+  const [exported, setExported] = useState<LogExport | null>(null);
+
+  async function handleExportLogs() {
+    const result = await exportLogs.mutateAsync();
+    setExported(result);
+  }
+
   return (
     <section className="settings-section" aria-labelledby="logs-title">
       <div className="section-heading">
@@ -378,11 +472,121 @@ function LogsPanel() {
       <div className="settings-list">
         <div className="settings-row">
           <strong>Status</strong>
-          <span>Clean</span>
+          <span>{exportLogs.isPending ? "Exporting" : "Ready to export"}</span>
         </div>
+        <div className="settings-row">
+          <strong>Recent logs</strong>
+          <MotionButton
+            className="secondary-action"
+            disabled={exportLogs.isPending}
+            onClick={() => void handleExportLogs()}
+            type="button"
+          >
+            Export logs
+          </MotionButton>
+        </div>
+        {exported ? (
+          <GlassPanel aria-label="Exported logs" className="log-export">
+            <strong>{exported.fileName}</strong>
+            <pre>{exported.contents}</pre>
+          </GlassPanel>
+        ) : null}
       </div>
     </section>
   );
+}
+
+type ServerDetailDialogProps = {
+  onOpenChange: (open: boolean) => void;
+  server: ServerProfile | null;
+};
+
+function ServerDetailDialog({ onOpenChange, server }: ServerDetailDialogProps) {
+  return (
+    <Dialog.Root open={Boolean(server)} onOpenChange={onOpenChange}>
+      <AnimatePresence>
+        {server ? (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild forceMount>
+              <motion.div
+                className="dialog-overlay"
+                data-motion-surface="dialog-overlay"
+                {...dialogOverlayMotion}
+              />
+            </Dialog.Overlay>
+            <Dialog.Content asChild forceMount>
+              <motion.div
+                className="dialog-content"
+                data-motion-surface="dialog-content"
+                {...dialogContentMotion}
+              >
+                <div className="dialog-title-row">
+                  <Dialog.Title>{server.name}</Dialog.Title>
+                  <Dialog.Close asChild>
+                    <MotionButton aria-label="Close" className="icon-button" type="button">
+                      <X aria-hidden="true" size={16} />
+                    </MotionButton>
+                  </Dialog.Close>
+                </div>
+                <Dialog.Description className="sr-only">
+                  Saved server connection details.
+                </Dialog.Description>
+                <div className="settings-list">
+                  <div className="settings-row">
+                    <strong>Server URL</strong>
+                    <span>{server.baseUrl}</span>
+                  </div>
+                  <div className="settings-row">
+                    <strong>User</strong>
+                    <span>{server.userId}</span>
+                  </div>
+                  <div className="settings-row">
+                    <strong>Provider</strong>
+                    <span>{server.providerKind}</span>
+                  </div>
+                </div>
+              </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        ) : null}
+      </AnimatePresence>
+    </Dialog.Root>
+  );
+}
+
+function defaultSettings() {
+  return {
+    materialEffectsEnabled: true,
+    player: {
+      defaultVolume: 100,
+      subtitlePreference: "serverDefault" as SubtitlePreference,
+    },
+    theme: "system" as ThemePreference,
+  };
+}
+
+function subtitleLabel(preference: SubtitlePreference) {
+  switch (preference) {
+    case "always":
+      return "Always show";
+    case "off":
+      return "Off";
+    case "serverDefault":
+    default:
+      return "Server default";
+  }
+}
+
+function materialTitle(kind: string | undefined) {
+  if (kind === "nativeMaterial") {
+    return "Native material";
+  }
+
+  if (kind === "contentGlass") {
+    return "Content glass";
+  }
+
+  return "Fallback surface";
 }
 
 function toAppError(error: unknown): AppError {

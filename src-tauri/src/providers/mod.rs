@@ -109,7 +109,7 @@ pub struct PlaybackProgressUpdate {
     pub server_id: String,
     pub item_id: String,
     pub position_seconds: u32,
-    pub played: bool,
+    pub is_final: bool,
 }
 
 pub trait MediaProvider: Send + Sync {

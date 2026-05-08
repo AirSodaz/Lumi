@@ -50,6 +50,31 @@ mod commands {
                 vec![profile]
             );
         }
+
+        #[test]
+        fn logout_deletes_server_profile_and_token() {
+            let state = test_state(vec![]);
+            let profile = seed_profile_with_token(&state);
+
+            auth_commands::logout_for_state(
+                &state,
+                auth_commands::LogoutRequest {
+                    server_id: profile.id.clone(),
+                },
+            )
+            .expect("logout server");
+
+            assert!(provider_commands::list_servers_for_state(&state)
+                .expect("list servers")
+                .is_empty());
+            assert_eq!(
+                state
+                    .credential_store()
+                    .get_token(&CredentialKey::server_token(&profile))
+                    .expect("read token"),
+                None
+            );
+        }
     }
 
     pub mod providers {

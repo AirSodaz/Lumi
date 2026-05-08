@@ -1050,6 +1050,7 @@ select:focus-visible {
 
 .search-panel input,
 .dialog-form input,
+.settings-row input[type="number"],
 .settings-row select {
   width: 100%;
   border: 1px solid var(--color-border);
@@ -1394,6 +1395,26 @@ select:focus-visible {
 
 .dropdown-item[data-highlighted] {
   background: var(--color-surface-content-glass-strong);
+}
+
+.dropdown-item.danger {
+  color: var(--color-accent-strong);
+}
+
+.log-export {
+  display: grid;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.log-export pre {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  color: var(--color-text-secondary);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
 }
 
 .tooltip-content {

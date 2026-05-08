@@ -22,6 +22,7 @@ use crate::{
 pub struct AppSettings {
     pub theme: ThemePreference,
     pub material_effects_enabled: bool,
+    pub player: PlayerSettings,
 }
 
 impl Default for AppSettings {
@@ -29,6 +30,7 @@ impl Default for AppSettings {
         Self {
             theme: ThemePreference::System,
             material_effects_enabled: true,
+            player: PlayerSettings::default(),
         }
     }
 }
@@ -41,11 +43,37 @@ pub enum ThemePreference {
     Dark,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerSettings {
+    pub default_volume: u8,
+    pub subtitle_preference: SubtitlePreference,
+}
+
+impl Default for PlayerSettings {
+    fn default() -> Self {
+        Self {
+            default_volume: 100,
+            subtitle_preference: SubtitlePreference::ServerDefault,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SubtitlePreference {
+    ServerDefault,
+    Always,
+    Off,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettingsPatch {
     pub theme: Option<ThemePreference>,
     pub material_effects_enabled: Option<bool>,
+    pub default_volume: Option<u8>,
+    pub subtitle_preference: Option<SubtitlePreference>,
 }
 
 pub struct AppState {
@@ -179,6 +207,14 @@ impl AppState {
 
         if let Some(material_effects_enabled) = patch.material_effects_enabled {
             settings.material_effects_enabled = material_effects_enabled;
+        }
+
+        if let Some(default_volume) = patch.default_volume {
+            settings.player.default_volume = default_volume.min(100);
+        }
+
+        if let Some(subtitle_preference) = patch.subtitle_preference {
+            settings.player.subtitle_preference = subtitle_preference;
         }
 
         Ok(settings.clone())

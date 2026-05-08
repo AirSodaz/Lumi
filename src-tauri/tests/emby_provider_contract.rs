@@ -9,7 +9,7 @@ use lumi_lib::{
             EmbyProvider,
         },
         HomeRowsRequest, LibraryItem, ListChildrenRequest, LoginRequest, MediaProvider,
-        ProviderKind, ServerProfile,
+        PlaybackProgressUpdate, ProviderKind, ServerProfile,
     },
 };
 use serde_json::{json, Value};
@@ -434,6 +434,64 @@ mod providers {
 
             assert_eq!(children.items[0].item_type, "video");
             assert_eq!(children.items[1].item_type, "musicVideo");
+        }
+
+        #[test]
+        fn report_progress_posts_playing_progress_with_position_ticks() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                204,
+                Value::Null,
+            )]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            provider
+                .report_progress(PlaybackProgressUpdate {
+                    server_id: profile.id,
+                    item_id: "movie-1".into(),
+                    position_seconds: 42,
+                    is_final: false,
+                })
+                .expect("report progress");
+
+            let request = transport.request_at(0);
+            assert_eq!(request.method, EmbyHttpMethod::Post);
+            assert_eq!(
+                request.url,
+                "http://localhost:8096/Sessions/Playing/Progress"
+            );
+            assert_eq!(request.header("X-Emby-Token"), Some("token-value"));
+            assert_eq!(request.body["ItemId"], "movie-1");
+            assert_eq!(request.body["PositionTicks"], 420000000u64);
+            assert_eq!(request.body["CanSeek"], true);
+        }
+
+        #[test]
+        fn report_progress_posts_stopped_for_final_position() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                204,
+                Value::Null,
+            )]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            provider
+                .report_progress(PlaybackProgressUpdate {
+                    server_id: profile.id,
+                    item_id: "movie-1".into(),
+                    position_seconds: 96,
+                    is_final: true,
+                })
+                .expect("report final progress");
+
+            let request = transport.request_at(0);
+            assert_eq!(request.method, EmbyHttpMethod::Post);
+            assert_eq!(
+                request.url,
+                "http://localhost:8096/Sessions/Playing/Stopped"
+            );
+            assert_eq!(request.body["ItemId"], "movie-1");
+            assert_eq!(request.body["PositionTicks"], 960000000u64);
         }
 
         #[test]

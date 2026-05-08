@@ -25,6 +25,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::bootstrap::get_bootstrap_status,
             commands::auth::auth_login_manual,
+            commands::auth::auth_logout,
             commands::providers::providers_list_servers,
             commands::providers::providers_list_libraries,
             commands::media::media_list_children,
@@ -33,7 +34,10 @@ pub fn run() {
             commands::playback::playback_open,
             commands::playback::playback_command,
             commands::settings::settings_get,
-            commands::settings::settings_update
+            commands::settings::settings_update,
+            commands::settings::settings_get_material_state,
+            commands::settings::settings_diagnose_mpv,
+            commands::settings::settings_export_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

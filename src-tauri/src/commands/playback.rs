@@ -10,12 +10,12 @@ use crate::{
     events,
     player::{
         playback_window_failed, NativePlayerService, PlaybackCommand, PlaybackErrorEvent,
-        PlaybackHost, PlaybackPositionEvent, PlayerOpenRequest, PlayerService, PlayerSession,
-        PlayerWindow, ResolvedPlaybackSource,
+        PlaybackHost, PlaybackPositionEvent, PlaybackProgressReporter, PlayerOpenRequest,
+        PlayerService, PlayerSession, PlayerWindow, ResolvedPlaybackSource,
     },
     providers::{
         emby::{is_container_item_type, is_playable_item_type, EmbyProvider},
-        MediaProvider, MediaSource,
+        MediaProvider, MediaSource, PlaybackProgressUpdate,
     },
 };
 
@@ -86,7 +86,12 @@ pub fn command_for_state(
 }
 
 fn player_service_for_state(state: &AppState, host: Arc<dyn PlaybackHost>) -> NativePlayerService {
-    NativePlayerService::with_store(state.player_sessions(), host, state.player_backend())
+    NativePlayerService::with_store_and_progress_reporter(
+        state.player_sessions(),
+        host,
+        state.player_backend(),
+        Arc::new(EmbyProgressReporter::new(state)),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,6 +220,24 @@ impl PlaybackHost for TauriPlaybackHost {
         self.app
             .emit(events::PLAYBACK_ERROR, event)
             .map_err(playback_window_failed)
+    }
+}
+
+struct EmbyProgressReporter {
+    local_state: AppState,
+}
+
+impl EmbyProgressReporter {
+    fn new(state: &AppState) -> Self {
+        Self {
+            local_state: super::state_for_blocking(state),
+        }
+    }
+}
+
+impl PlaybackProgressReporter for EmbyProgressReporter {
+    fn report_progress(&self, progress: PlaybackProgressUpdate) -> AppResult<()> {
+        emby_provider_for_state(&self.local_state).report_progress(progress)
     }
 }
 

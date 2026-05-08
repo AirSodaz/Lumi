@@ -11,7 +11,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::errors::{AppError, AppResult};
+use crate::{
+    errors::{AppError, AppResult},
+    providers::PlaybackProgressUpdate,
+};
 
 mod mpv;
 
@@ -101,6 +104,19 @@ pub trait PlaybackHost: Send + Sync {
     fn emit_error(&self, event: &PlaybackErrorEvent) -> AppResult<()>;
 }
 
+pub trait PlaybackProgressReporter: Send + Sync {
+    fn report_progress(&self, progress: PlaybackProgressUpdate) -> AppResult<()>;
+}
+
+#[derive(Default)]
+struct NoopPlaybackProgressReporter;
+
+impl PlaybackProgressReporter for NoopPlaybackProgressReporter {
+    fn report_progress(&self, _progress: PlaybackProgressUpdate) -> AppResult<()> {
+        Ok(())
+    }
+}
+
 pub trait MpvBackend: Send + Sync {
     fn open(&self, request: MpvOpenRequest) -> AppResult<()>;
 
@@ -128,6 +144,8 @@ pub struct PlaybackSessionStore {
     next_id: AtomicU64,
     sessions: Mutex<HashMap<String, StoredPlayerSession>>,
 }
+
+const PROGRESS_REPORT_INTERVAL_SECONDS: u32 = 30;
 
 impl PlaybackSessionStore {
     fn next_session_id(&self) -> String {
@@ -167,6 +185,34 @@ impl PlaybackSessionStore {
         Ok(session.session.clone())
     }
 
+    fn update_position(
+        &self,
+        session_id: &str,
+        position_seconds: u32,
+        report_interval_seconds: u32,
+    ) -> AppResult<(PlayerSession, bool)> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| AppError::state_lock_poisoned("player_sessions"))?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| session_not_found(session_id))?;
+
+        session.session.position_seconds = position_seconds;
+        let should_report = should_report_progress(
+            session.last_reported_position_seconds,
+            position_seconds,
+            report_interval_seconds,
+        );
+
+        if should_report {
+            session.last_reported_position_seconds = Some(position_seconds);
+        }
+
+        Ok((session.session.clone(), should_report))
+    }
+
     fn is_active(&self, session_id: &str) -> bool {
         self.sessions
             .lock()
@@ -188,12 +234,15 @@ impl PlaybackSessionStore {
 #[derive(Debug, Clone)]
 struct StoredPlayerSession {
     session: PlayerSession,
+    last_reported_position_seconds: Option<u32>,
 }
 
 pub struct NativePlayerService {
     sessions: Arc<PlaybackSessionStore>,
     host: Arc<dyn PlaybackHost>,
     backend: Arc<dyn MpvBackend>,
+    progress_reporter: Arc<dyn PlaybackProgressReporter>,
+    progress_report_interval_seconds: u32,
 }
 
 impl NativePlayerService {
@@ -206,10 +255,39 @@ impl NativePlayerService {
         host: Arc<dyn PlaybackHost>,
         backend: Arc<dyn MpvBackend>,
     ) -> Self {
+        Self::with_store_and_progress_reporter(
+            sessions,
+            host,
+            backend,
+            Arc::new(NoopPlaybackProgressReporter),
+        )
+    }
+
+    pub fn with_progress_reporter(
+        host: Arc<dyn PlaybackHost>,
+        backend: Arc<dyn MpvBackend>,
+        progress_reporter: Arc<dyn PlaybackProgressReporter>,
+    ) -> Self {
+        Self::with_store_and_progress_reporter(
+            Arc::new(PlaybackSessionStore::default()),
+            host,
+            backend,
+            progress_reporter,
+        )
+    }
+
+    pub fn with_store_and_progress_reporter(
+        sessions: Arc<PlaybackSessionStore>,
+        host: Arc<dyn PlaybackHost>,
+        backend: Arc<dyn MpvBackend>,
+        progress_reporter: Arc<dyn PlaybackProgressReporter>,
+    ) -> Self {
         Self {
             sessions,
             host,
             backend,
+            progress_reporter,
+            progress_report_interval_seconds: PROGRESS_REPORT_INTERVAL_SECONDS,
         }
     }
 
@@ -229,6 +307,8 @@ impl NativePlayerService {
         let sessions = self.sessions.clone();
         let backend = self.backend.clone();
         let host = self.host.clone();
+        let progress_reporter = self.progress_reporter.clone();
+        let report_interval_seconds = self.progress_report_interval_seconds;
 
         thread::spawn(move || {
             while sessions.is_active(&session_id) {
@@ -239,13 +319,21 @@ impl NativePlayerService {
                 let Ok(Some(position_seconds)) = backend.position_seconds(&session_id) else {
                     continue;
                 };
-                let _ = sessions.update(&session_id, |stored| {
-                    stored.session.position_seconds = position_seconds;
-                });
+                let Ok((session, should_report)) = sessions.update_position(
+                    &session_id,
+                    position_seconds,
+                    report_interval_seconds,
+                ) else {
+                    continue;
+                };
                 let _ = host.emit_position(&PlaybackPositionEvent {
                     session_id: session_id.clone(),
                     position_seconds,
                 });
+                if should_report {
+                    let _ =
+                        progress_reporter.report_progress(progress_from_session(&session, false));
+                }
             }
         });
     }
@@ -269,6 +357,7 @@ impl PlayerService for NativePlayerService {
 
         self.sessions.insert(StoredPlayerSession {
             session: opening.clone(),
+            last_reported_position_seconds: None,
         })?;
         self.emit_state(&opening)?;
 
@@ -305,30 +394,48 @@ impl PlayerService for NativePlayerService {
                 self.emit_error(Some(session_id.into()), error);
             })?;
 
-        let session = self.sessions.update(session_id, |stored| {
+        let mut session = self.sessions.update(session_id, |stored| {
             apply_command_to_session(&mut stored.session, &command);
         })?;
-        self.emit_state(&session)?;
 
         if let PlaybackCommand::Seek { position_seconds } = command {
+            let (seeked, should_report) = self.sessions.update_position(
+                session_id,
+                position_seconds,
+                self.progress_report_interval_seconds,
+            )?;
+            session = seeked;
             self.host.emit_position(&PlaybackPositionEvent {
                 session_id: session_id.into(),
                 position_seconds,
             })?;
+            if should_report {
+                let _ = self
+                    .progress_reporter
+                    .report_progress(progress_from_session(&session, false));
+            }
         }
 
+        self.emit_state(&session)?;
         Ok(session)
     }
 
     fn close(&self, session_id: &str) -> AppResult<PlayerSession> {
         self.sessions.get(session_id)?;
+        let final_position = self.backend.position_seconds(session_id).ok().flatten();
         self.backend.close(session_id).inspect_err(|error| {
             self.emit_error(Some(session_id.into()), error);
         })?;
         let session = self.sessions.update(session_id, |stored| {
+            if let Some(position_seconds) = final_position {
+                stored.session.position_seconds = position_seconds;
+            }
             stored.session.state = PlayerState::Closed;
         })?;
         self.emit_state(&session)?;
+        let _ = self
+            .progress_reporter
+            .report_progress(progress_from_session(&session, true));
         Ok(session)
     }
 }
@@ -352,6 +459,31 @@ fn apply_command_to_session(session: &mut PlayerSession, command: &PlaybackComma
         }
         PlaybackCommand::SetVolume { .. } => {}
         PlaybackCommand::Close => session.state = PlayerState::Closed,
+    }
+}
+
+fn progress_from_session(session: &PlayerSession, is_final: bool) -> PlaybackProgressUpdate {
+    PlaybackProgressUpdate {
+        server_id: session.server_id.clone(),
+        item_id: session.item_id.clone(),
+        position_seconds: session.position_seconds,
+        is_final,
+    }
+}
+
+fn should_report_progress(
+    last_reported_position_seconds: Option<u32>,
+    position_seconds: u32,
+    report_interval_seconds: u32,
+) -> bool {
+    if position_seconds == 0 {
+        return false;
+    }
+
+    match last_reported_position_seconds {
+        None => true,
+        Some(last) if position_seconds < last => true,
+        Some(last) => position_seconds.saturating_sub(last) >= report_interval_seconds,
     }
 }
 

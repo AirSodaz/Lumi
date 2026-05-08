@@ -384,7 +384,9 @@ impl MediaProvider for EmbyProvider {
     }
 
     fn report_progress(&self, _progress: PlaybackProgressUpdate) -> AppResult<()> {
-        Ok(())
+        let (profile, token) = self.profile_and_token(&_progress.server_id)?;
+        let client = self.client(&profile.base_url)?;
+        client.report_progress(_progress, &token)
     }
 }
 
@@ -599,6 +601,23 @@ impl EmbyClient {
 
         self.get_playback_sources(user_id, item_id, token)
             .unwrap_or_default()
+    }
+
+    fn report_progress(&self, progress: PlaybackProgressUpdate, token: &str) -> AppResult<()> {
+        let path = if progress.is_final {
+            "Sessions/Playing/Stopped"
+        } else {
+            "Sessions/Playing/Progress"
+        };
+        let body = json!({
+            "ItemId": progress.item_id,
+            "PositionTicks": seconds_to_runtime_ticks(progress.position_seconds),
+            "CanSeek": true,
+        });
+        let response = self.send(EmbyHttpMethod::Post, path, &[], token_headers(token), body)?;
+
+        self.ensure_success(response, ErrorContext::Media)
+            .map(|_| ())
     }
 
     fn send(
@@ -873,4 +892,8 @@ pub fn is_container_item_type(item_type: &str) -> bool {
 
 fn runtime_ticks_to_seconds(ticks: u64) -> u32 {
     (ticks / 10_000_000).min(u32::MAX as u64) as u32
+}
+
+fn seconds_to_runtime_ticks(seconds: u32) -> u64 {
+    u64::from(seconds) * 10_000_000
 }

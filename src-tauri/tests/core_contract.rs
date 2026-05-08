@@ -88,7 +88,7 @@ fn media_provider_trait_exposes_v1_capabilities() {
             server_id: "server-1".into(),
             item_id: "item-1".into(),
             position_seconds: 42,
-            played: false,
+            is_final: false,
         })
         .expect("progress report");
 }

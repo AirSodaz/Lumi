@@ -11,6 +11,7 @@ import { providers } from "./providers";
 import { settings } from "./settings";
 import type {
   AppSettingsPatch,
+  LogoutRequest,
   LoginManualRequest,
   PlaybackCommandRequest,
   PlayerOpenRequest,
@@ -30,6 +31,8 @@ export const queryKeys = {
     ["homeRows", serverId, libraryIds.join(":")] as const,
   itemDetail: (serverId: string, itemId: string) =>
     ["itemDetail", serverId, itemId] as const,
+  materialState: ["materialState"] as const,
+  mpvDiagnostic: ["mpvDiagnostic"] as const,
 };
 
 export function useServers() {
@@ -112,11 +115,46 @@ export function useLoginManual() {
   });
 }
 
+export function useLogout() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: LogoutRequest) => auth.logout(request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.servers });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      void queryClient.invalidateQueries({ queryKey: ["homeRows"] });
+    },
+  });
+}
+
 export function useSettings() {
   return useQuery({
     queryKey: queryKeys.settings,
     queryFn: settings.get,
     staleTime: QUERY_STALE_TIME_MS,
+  });
+}
+
+export function useMaterialState() {
+  return useQuery({
+    queryKey: queryKeys.materialState,
+    queryFn: settings.getMaterialState,
+    staleTime: QUERY_STALE_TIME_MS,
+  });
+}
+
+export function useMpvDiagnostic() {
+  return useQuery({
+    queryKey: queryKeys.mpvDiagnostic,
+    queryFn: settings.diagnoseMpv,
+    staleTime: QUERY_STALE_TIME_MS,
+  });
+}
+
+export function useExportLogs() {
+  return useMutation({
+    mutationFn: settings.exportLogs,
   });
 }
 

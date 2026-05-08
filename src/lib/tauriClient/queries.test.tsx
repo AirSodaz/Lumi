@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import {
+  useLogout,
   useChildren,
   useHomeRows,
   useItemDetail,
@@ -197,6 +198,19 @@ describe("tauri query hooks", () => {
     await waitFor(() => expect(result.current.data?.item.title).toBe("Demo Movie"));
     expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
       request: { serverId: "server-1", itemId: "movie-1" },
+    });
+  });
+
+  it("invalidates servers after logout", async () => {
+    invokeMock.mockResolvedValueOnce(null);
+
+    const { result } = renderHook(() => useLogout(), { wrapper });
+
+    result.current.mutate({ serverId: "server-1" });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invokeMock).toHaveBeenCalledWith("auth_logout", {
+      request: { serverId: "server-1" },
     });
   });
 });
