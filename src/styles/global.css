@@ -827,22 +827,52 @@ select:focus-visible {
   justify-content: space-between;
 }
 
-.rail-items,
+.rail-items {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(200px, 260px);
+  gap: 12px;
+  margin: -10px -12px -12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 12px 14px 22px;
+  scroll-padding-inline: 14px;
+  overscroll-behavior-inline: contain;
+}
+
 .library-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   column-gap: 14px;
   row-gap: 18px;
 }
 
-.rail-items[data-grid-orientation="portrait"],
-.library-grid[data-grid-orientation="portrait"] {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.rail-items[data-grid-orientation="portrait"] {
+  grid-auto-columns: minmax(144px, 184px);
 }
 
-.rail-items[data-grid-orientation="landscape"],
+.library-grid[data-grid-orientation="portrait"] {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.rail-items[data-grid-orientation="landscape"] {
+  grid-auto-columns: minmax(220px, 288px);
+}
+
+.rail-items[data-card-size="compact"] {
+  grid-auto-columns: minmax(184px, 236px);
+}
+
+.rail-items[data-card-size="compact"][data-grid-orientation="portrait"] {
+  grid-auto-columns: minmax(132px, 168px);
+}
+
+.rail-items[data-card-size="compact"][data-grid-orientation="landscape"] {
+  grid-auto-columns: minmax(200px, 260px);
+}
+
 .library-grid[data-grid-orientation="landscape"] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .poster-card,
@@ -1400,14 +1430,12 @@ select:focus-visible {
     grid-template-columns: minmax(154px, 32%) minmax(0, 1fr);
   }
 
-  .rail-items[data-grid-orientation="portrait"],
   .library-grid[data-grid-orientation="portrait"] {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
-  .rail-items[data-grid-orientation="landscape"],
   .library-grid[data-grid-orientation="landscape"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .settings-layout {

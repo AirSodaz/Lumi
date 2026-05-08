@@ -52,6 +52,8 @@ export function PosterCard({
   const metadata = subtitle ?? formatMetadata(item);
   const presentation = getMediaCardPresentation(item);
   const cardOrientation = orientation ?? presentation.orientation;
+  const artworkUrl = getArtworkUrl(item, cardOrientation);
+  const fallbackCopy = getFallbackCopy(cardOrientation);
 
   return (
     <FocusableCard
@@ -64,16 +66,16 @@ export function PosterCard({
       onClick={() => onOpen?.(item)}
     >
       <motion.span
-        className={item.posterUrl ? "poster-art has-image" : "poster-art"}
+        className={artworkUrl ? "poster-art has-image" : "poster-art"}
         data-motion-surface="poster-art"
         style={
-          item.posterUrl
-            ? { backgroundImage: `url("${item.posterUrl}")` }
+          artworkUrl
+            ? { backgroundImage: `url("${artworkUrl}")` }
             : undefined
         }
         {...createSurfaceMotion(reducedMotion, 0)}
       >
-        {item.posterUrl ? null : <span>{presentation.fallbackCopy}</span>}
+        {artworkUrl ? null : <span>{fallbackCopy}</span>}
       </motion.span>
       <span className="poster-card-copy">
         <strong>{item.title}</strong>
@@ -98,4 +100,16 @@ export function PosterCard({
 
 function clampProgress(progress: number) {
   return Math.min(100, Math.max(0, progress));
+}
+
+function getArtworkUrl(item: LibraryItem, orientation: MediaCardOrientation) {
+  if (orientation === "landscape") {
+    return item.backdropUrl ?? item.posterUrl ?? null;
+  }
+
+  return item.posterUrl ?? null;
+}
+
+function getFallbackCopy(orientation: MediaCardOrientation) {
+  return orientation === "portrait" ? "No poster" : "No thumbnail";
 }

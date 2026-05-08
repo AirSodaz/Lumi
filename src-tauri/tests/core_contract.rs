@@ -8,9 +8,9 @@ use lumi_lib::{
     player::ResolvedPlaybackSource,
     player::{PlaybackCommand, PlayerOpenRequest, PlayerService, PlayerSession, PlayerState},
     providers::{
-        LibraryItem, LibraryItemDetail, ListChildrenRequest, LoginRequest, MediaProvider,
-        MediaSource, PagedResult, PlaybackProgressUpdate, ProviderKind, ProviderRegistry,
-        ServerProfile,
+        HomeRows, HomeRowsRequest, LibraryItem, LibraryItemDetail, ListChildrenRequest,
+        LoginRequest, MediaProvider, MediaSource, PagedResult, PlaybackProgressUpdate,
+        ProviderKind, ProviderRegistry, ServerProfile,
     },
 };
 
@@ -69,6 +69,16 @@ fn media_provider_trait_exposes_v1_capabilities() {
             .title,
         "Demo"
     );
+    assert!(provider
+        .get_home_rows(HomeRowsRequest {
+            server_id: "server-1".into(),
+            library_ids: vec!["library-1".into()],
+            continue_watching_limit: Some(10),
+            latest_limit: Some(10),
+        })
+        .expect("home rows")
+        .latest_by_library
+        .is_empty());
     assert!(provider
         .get_playback_sources("server-1", "item-1")
         .expect("sources")
@@ -181,8 +191,17 @@ impl MediaProvider for MockProvider {
                 year: None,
                 runtime_seconds: None,
                 overview: None,
+                played_percentage: None,
+                playback_position_seconds: None,
             },
             media_sources: Vec::new(),
+        })
+    }
+
+    fn get_home_rows(&self, _request: HomeRowsRequest) -> AppResult<HomeRows> {
+        Ok(HomeRows {
+            continue_watching: Vec::new(),
+            latest_by_library: Vec::new(),
         })
     }
 

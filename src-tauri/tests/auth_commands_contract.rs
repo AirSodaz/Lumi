@@ -10,7 +10,7 @@ use lumi_lib::{
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
-        ListChildrenRequest, LoginRequest, ProviderKind, ServerProfile,
+        HomeRowsRequest, ListChildrenRequest, LoginRequest, ProviderKind, ServerProfile,
     },
 };
 use serde_json::{json, Value};
@@ -135,6 +135,54 @@ mod commands {
             assert_eq!(children.items[0].title, "Demo Movie");
             assert_eq!(detail.item.overview, Some("A detail payload".into()));
             assert!(detail.media_sources.is_empty());
+        }
+
+        #[test]
+        fn get_home_rows_returns_resume_and_latest_sections() {
+            let state = test_state(vec![
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Items": [{
+                            "Id": "resume-1",
+                            "Name": "Resume Movie",
+                            "Type": "Movie",
+                            "UserData": {
+                                "PlayedPercentage": 25.0,
+                                "PlaybackPositionTicks": 9000000000u64
+                            }
+                        }]
+                    }),
+                ),
+                FakeResponse::json(
+                    200,
+                    json!([{
+                        "Id": "latest-1",
+                        "Name": "Latest Movie",
+                        "Type": "Movie"
+                    }]),
+                ),
+            ]);
+            let profile = seed_profile_with_token(&state);
+
+            let rows = media_commands::get_home_rows_for_state(
+                &state,
+                HomeRowsRequest {
+                    server_id: profile.id,
+                    library_ids: vec!["library-1".into()],
+                    continue_watching_limit: Some(10),
+                    latest_limit: Some(10),
+                },
+            )
+            .expect("get home rows via command helper");
+
+            assert_eq!(rows.continue_watching[0].title, "Resume Movie");
+            assert_eq!(
+                rows.continue_watching[0].playback_position_seconds,
+                Some(900)
+            );
+            assert_eq!(rows.latest_by_library[0].library_id, "library-1");
+            assert_eq!(rows.latest_by_library[0].items[0].title, "Latest Movie");
         }
     }
 }

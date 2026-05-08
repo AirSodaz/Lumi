@@ -45,6 +45,7 @@ type ShellPlatform = "macos" | "windows";
 
 type ShellRoute =
   | { kind: "view"; view: ViewId }
+  | { kind: "library"; libraryId: string }
   | { itemId: string; kind: "mediaDetail"; returnView: ReturnView; serverId: string };
 
 type RouteHistory = {
@@ -83,7 +84,12 @@ export function LumiShell() {
   const selectedServerId = servers[0]?.id ?? null;
   const librariesQuery = useLibraries(selectedServerId);
   const libraries = librariesQuery.data ?? [];
-  const activeView = route.kind === "mediaDetail" ? route.returnView : route.view;
+  const activeView =
+    route.kind === "mediaDetail"
+      ? route.returnView
+      : route.kind === "library"
+        ? "libraries"
+        : route.view;
   const routeKey = routeIdentity(route);
 
   function runRouteTransition(updateRoute: () => void) {
@@ -133,6 +139,13 @@ export function LumiShell() {
       kind: "mediaDetail",
       returnView,
       serverId: item.serverId,
+    });
+  }
+
+  function openLibrary(item: LibraryItem) {
+    setRouteWithTransition({
+      kind: "library",
+      libraryId: item.id,
     });
   }
 
@@ -198,6 +211,20 @@ export function LumiShell() {
         serverId={route.serverId}
       />
     );
+  } else if (route.kind === "library") {
+    currentView = (
+      <LibrariesView
+        libraries={libraries}
+        loading={librariesQuery.isLoading}
+        onBackToLibraries={() =>
+          setRouteWithTransition({ kind: "view", view: "libraries" })
+        }
+        onOpenLibrary={openLibrary}
+        onOpenMedia={(item) => openMediaDetail(item, "libraries")}
+        selectedLibraryId={route.libraryId}
+        servers={servers}
+      />
+    );
   } else {
     switch (route.view) {
       case "libraries":
@@ -205,7 +232,12 @@ export function LumiShell() {
           <LibrariesView
             libraries={libraries}
             loading={librariesQuery.isLoading}
+            onBackToLibraries={() =>
+              setRouteWithTransition({ kind: "view", view: "libraries" })
+            }
+            onOpenLibrary={openLibrary}
             onOpenMedia={(item) => openMediaDetail(item, "libraries")}
+            selectedLibraryId={null}
             servers={servers}
           />
         );
@@ -222,6 +254,7 @@ export function LumiShell() {
           <HomeView
             libraries={libraries}
             librariesLoading={librariesQuery.isLoading}
+            onOpenLibrary={openLibrary}
             onOpenMedia={(item) => openMediaDetail(item, "home")}
             onOpenSettings={() =>
               setRouteWithTransition({ kind: "view", view: "settings" })
@@ -630,9 +663,15 @@ function writeSidebarCollapsedPreference(collapsed: boolean) {
 }
 
 function routeIdentity(route: ShellRoute) {
-  return route.kind === "mediaDetail"
-    ? `media-${route.serverId}-${route.itemId}`
-    : route.view;
+  if (route.kind === "mediaDetail") {
+    return `media-${route.serverId}-${route.itemId}`;
+  }
+
+  if (route.kind === "library") {
+    return `library-${route.libraryId}`;
+  }
+
+  return route.view;
 }
 
 function pushRoute(history: RouteHistory, nextRoute: ShellRoute): RouteHistory {

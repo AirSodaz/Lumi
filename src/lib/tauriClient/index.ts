@@ -6,6 +6,7 @@ export { providers } from "./providers";
 export {
   queryKeys,
   useChildren,
+  useHomeRows,
   useItemDetail,
   useLibraries,
   useLoginManual,
@@ -21,6 +22,9 @@ export type {
   AppSettings,
   AppSettingsPatch,
   GetItemRequest,
+  HomeRows,
+  HomeRowsRequest,
+  LatestLibraryItems,
   LibraryItem,
   LibraryItemDetail,
   ListChildrenRequest,

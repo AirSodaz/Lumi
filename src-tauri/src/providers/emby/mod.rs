@@ -9,8 +9,9 @@ use crate::{
     errors::{AppError, AppResult},
     persistence::{CredentialKey, CredentialStore, LocalStore},
     providers::{
-        LibraryItem, LibraryItemDetail, ListChildrenRequest, LoginRequest, MediaProvider,
-        MediaSource, PagedResult, PlaybackProgressUpdate, ProviderKind, ServerProfile,
+        HomeRows, HomeRowsRequest, LatestLibraryItems, LibraryItem, LibraryItemDetail,
+        ListChildrenRequest, LoginRequest, MediaProvider, MediaSource, PagedResult,
+        PlaybackProgressUpdate, ProviderKind, ServerProfile,
     },
 };
 
@@ -19,6 +20,10 @@ const EMBY_DEVICE_NAME: &str = "Lumi Desktop";
 const EMBY_DEVICE_ID: &str = "lumi-desktop";
 const EMBY_CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CHILDREN_PAGE_SIZE: usize = 50;
+const HOME_CONTINUE_WATCHING_LIMIT: usize = 10;
+const HOME_LATEST_LIMIT: usize = 10;
+const ITEM_FIELDS: &str = "Overview,SortName,PrimaryImageAspectRatio,MediaSources";
+const HOME_ITEM_FIELDS: &str = "Overview,SortName,PrimaryImageAspectRatio";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EmbyHttpMethod {
@@ -331,6 +336,47 @@ impl MediaProvider for EmbyProvider {
         })
     }
 
+    fn get_home_rows(&self, request: HomeRowsRequest) -> AppResult<HomeRows> {
+        let (profile, token) = self.profile_and_token(&request.server_id)?;
+        let client = self.client(&profile.base_url)?;
+        let continue_watching_limit = request
+            .continue_watching_limit
+            .unwrap_or(HOME_CONTINUE_WATCHING_LIMIT);
+        let latest_limit = request.latest_limit.unwrap_or(HOME_LATEST_LIMIT);
+        let continue_watching = client
+            .list_resume_items(&profile.user_id, continue_watching_limit, &token)?
+            .into_iter()
+            .map(|item| client.map_item(item, &profile.id))
+            .collect::<AppResult<Vec<_>>>()?;
+        let latest_by_library = request
+            .library_ids
+            .into_iter()
+            .map(|library_id| {
+                let items = client
+                    .list_latest_items(&profile.user_id, &library_id, latest_limit, &token)?
+                    .into_iter()
+                    .map(|item| client.map_item(item, &profile.id))
+                    .collect::<AppResult<Vec<_>>>()?;
+
+                Ok(LatestLibraryItems { library_id, items })
+            })
+            .collect::<AppResult<Vec<_>>>()?;
+
+        for item in &continue_watching {
+            self.local_store.cache_media_item(item)?;
+        }
+        for row in &latest_by_library {
+            for item in &row.items {
+                self.local_store.cache_media_item(item)?;
+            }
+        }
+
+        Ok(HomeRows {
+            continue_watching,
+            latest_by_library,
+        })
+    }
+
     fn get_playback_sources(&self, server_id: &str, item_id: &str) -> AppResult<Vec<MediaSource>> {
         let (profile, token) = self.profile_and_token(server_id)?;
         let client = self.client(&profile.base_url)?;
@@ -435,10 +481,7 @@ impl EmbyClient {
         let mut query = vec![
             ("StartIndex", start_index.to_string()),
             ("Limit", limit.to_string()),
-            (
-                "Fields",
-                "Overview,SortName,PrimaryImageAspectRatio,MediaSources".into(),
-            ),
+            ("Fields", ITEM_FIELDS.into()),
             ("Recursive", "false".into()),
         ];
 
@@ -457,15 +500,59 @@ impl EmbyClient {
             .and_then(decode_json::<EmbyItemsResponse>)
     }
 
+    fn list_resume_items(
+        &self,
+        user_id: &str,
+        limit: usize,
+        token: &str,
+    ) -> AppResult<Vec<EmbyItem>> {
+        let path = format!("Users/{user_id}/Items/Resume");
+        let response = self.send(
+            EmbyHttpMethod::Get,
+            &path,
+            &[
+                ("Limit", limit.to_string()),
+                ("Fields", HOME_ITEM_FIELDS.into()),
+                ("EnableUserData", "true".into()),
+            ],
+            token_headers(token),
+            Value::Null,
+        )?;
+        self.ensure_success(response, ErrorContext::Media)
+            .and_then(decode_json::<EmbyItemsResponse>)
+            .map(|response| response.items)
+    }
+
+    fn list_latest_items(
+        &self,
+        user_id: &str,
+        parent_id: &str,
+        limit: usize,
+        token: &str,
+    ) -> AppResult<Vec<EmbyItem>> {
+        let path = format!("Users/{user_id}/Items/Latest");
+        let response = self.send(
+            EmbyHttpMethod::Get,
+            &path,
+            &[
+                ("ParentId", parent_id.into()),
+                ("Limit", limit.to_string()),
+                ("Fields", HOME_ITEM_FIELDS.into()),
+                ("EnableUserData", "true".into()),
+            ],
+            token_headers(token),
+            Value::Null,
+        )?;
+        self.ensure_success(response, ErrorContext::Media)
+            .and_then(decode_json::<Vec<EmbyItem>>)
+    }
+
     fn get_item(&self, user_id: &str, item_id: &str, token: &str) -> AppResult<EmbyItem> {
         let path = format!("Users/{user_id}/Items/{item_id}");
         let response = self.send(
             EmbyHttpMethod::Get,
             &path,
-            &[(
-                "Fields",
-                "Overview,SortName,PrimaryImageAspectRatio,MediaSources".into(),
-            )],
+            &[("Fields", ITEM_FIELDS.into())],
             token_headers(token),
             Value::Null,
         )?;
@@ -578,6 +665,14 @@ impl EmbyClient {
         let backdrop_tag = item
             .backdrop_image_tags
             .and_then(|tags| tags.into_iter().next());
+        let played_percentage = item
+            .user_data
+            .as_ref()
+            .and_then(|user_data| user_data.played_percentage);
+        let playback_position_seconds = item
+            .user_data
+            .and_then(|user_data| user_data.playback_position_ticks)
+            .map(runtime_ticks_to_seconds);
 
         Ok(LibraryItem {
             id: item.id.clone(),
@@ -596,6 +691,8 @@ impl EmbyClient {
             year: item.production_year,
             runtime_seconds: item.run_time_ticks.map(runtime_ticks_to_seconds),
             overview: item.overview,
+            played_percentage,
+            playback_position_seconds,
         })
     }
 
@@ -696,12 +793,20 @@ struct EmbyItem {
     image_tags: Option<EmbyImageTags>,
     primary_image_tag: Option<String>,
     backdrop_image_tags: Option<Vec<String>>,
+    user_data: Option<EmbyUserData>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct EmbyImageTags {
     primary: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct EmbyUserData {
+    played_percentage: Option<f64>,
+    playback_position_ticks: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]

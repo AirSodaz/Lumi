@@ -8,7 +8,8 @@ use lumi_lib::{
             Clock, EmbyHttpMethod, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport,
             EmbyProvider,
         },
-        LibraryItem, ListChildrenRequest, LoginRequest, MediaProvider, ProviderKind, ServerProfile,
+        HomeRowsRequest, LibraryItem, ListChildrenRequest, LoginRequest, MediaProvider,
+        ProviderKind, ServerProfile,
     },
 };
 use serde_json::{json, Value};
@@ -180,6 +181,8 @@ mod providers {
                     year: None,
                     runtime_seconds: None,
                     overview: None,
+                    played_percentage: None,
+                    playback_position_seconds: None,
                 }]
             );
 
@@ -208,6 +211,88 @@ mod providers {
             assert!(children_request.url.contains("StartIndex=21"));
             assert!(children_request.url.contains("Limit=50"));
             assert_eq!(children_request.header("X-Emby-Token"), Some("token-value"));
+        }
+
+        #[test]
+        fn lists_home_rows_from_resume_and_latest_by_library() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Items": [{
+                            "Id": "resume-1",
+                            "Name": "Resume Movie",
+                            "Type": "Movie",
+                            "RunTimeTicks": 72000000000u64,
+                            "ImageTags": { "Primary": "resume-poster" },
+                            "UserData": {
+                                "PlayedPercentage": 42.5,
+                                "PlaybackPositionTicks": 18000000000u64
+                            }
+                        }]
+                    }),
+                ),
+                FakeResponse::json(
+                    200,
+                    json!([{
+                        "Id": "latest-movie-1",
+                        "Name": "Latest Movie",
+                        "Type": "Movie",
+                        "ProductionYear": 2026
+                    }]),
+                ),
+                FakeResponse::json(
+                    200,
+                    json!([{
+                        "Id": "latest-episode-1",
+                        "Name": "Latest Episode",
+                        "Type": "Episode",
+                        "RunTimeTicks": 18000000000u64
+                    }]),
+                ),
+            ]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            let rows = provider
+                .get_home_rows(HomeRowsRequest {
+                    server_id: profile.id,
+                    library_ids: vec!["library-1".into(), "library-2".into()],
+                    continue_watching_limit: Some(10),
+                    latest_limit: Some(10),
+                })
+                .expect("home rows");
+
+            assert_eq!(rows.continue_watching.len(), 1);
+            assert_eq!(rows.continue_watching[0].title, "Resume Movie");
+            assert_eq!(rows.continue_watching[0].played_percentage, Some(42.5));
+            assert_eq!(
+                rows.continue_watching[0].playback_position_seconds,
+                Some(1800)
+            );
+            assert_eq!(rows.latest_by_library.len(), 2);
+            assert_eq!(rows.latest_by_library[0].library_id, "library-1");
+            assert_eq!(rows.latest_by_library[0].items[0].title, "Latest Movie");
+            assert_eq!(rows.latest_by_library[1].library_id, "library-2");
+            assert_eq!(rows.latest_by_library[1].items[0].title, "Latest Episode");
+
+            let resume_request = transport.request_at(0);
+            assert_eq!(resume_request.method, EmbyHttpMethod::Get);
+            assert!(resume_request
+                .url
+                .starts_with("http://localhost:8096/Users/user-1/Items/Resume?"));
+            assert!(resume_request.url.contains("Limit=10"));
+            assert!(resume_request.url.contains("EnableUserData=true"));
+
+            let first_latest_request = transport.request_at(1);
+            assert!(first_latest_request
+                .url
+                .starts_with("http://localhost:8096/Users/user-1/Items/Latest?"));
+            assert!(first_latest_request.url.contains("ParentId=library-1"));
+            assert!(first_latest_request.url.contains("Limit=10"));
+
+            let second_latest_request = transport.request_at(2);
+            assert!(second_latest_request.url.contains("ParentId=library-2"));
         }
 
         #[test]

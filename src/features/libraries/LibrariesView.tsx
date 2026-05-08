@@ -1,5 +1,4 @@
 import { ChevronLeft, Film, Library, type LucideIcon } from "lucide-react";
-import { useState } from "react";
 import { FocusScope } from "../../components/focus";
 import { GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
@@ -19,17 +18,24 @@ import {
 type LibrariesViewProps = {
   libraries: LibraryItem[];
   loading: boolean;
+  onBackToLibraries: () => void;
+  onOpenLibrary: (item: LibraryItem) => void;
   onOpenMedia: (item: LibraryItem) => void;
+  selectedLibraryId?: string | null;
   servers: ServerProfile[];
 };
 
 export function LibrariesView({
   libraries,
   loading,
+  onBackToLibraries,
+  onOpenLibrary,
   onOpenMedia,
+  selectedLibraryId = null,
   servers,
 }: LibrariesViewProps) {
-  const [selectedLibrary, setSelectedLibrary] = useState<LibraryItem | null>(null);
+  const selectedLibrary =
+    libraries.find((library) => library.id === selectedLibraryId) ?? null;
   const server = servers[0] ?? null;
   const children = useChildren(
     selectedLibrary ? server?.id : null,
@@ -58,7 +64,7 @@ export function LibrariesView({
           <div className="toolbar-cluster">
             <MotionButton
               className="secondary-action"
-              onClick={() => setSelectedLibrary(null)}
+              onClick={onBackToLibraries}
               type="button"
             >
               <ChevronLeft aria-hidden="true" size={16} />
@@ -122,7 +128,7 @@ export function LibrariesView({
           ariaLabel="Media libraries"
           focusScope="library-grid"
           items={libraries}
-          onOpenMedia={setSelectedLibrary}
+          onOpenMedia={onOpenLibrary}
         />
       )}
     </section>

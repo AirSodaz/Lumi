@@ -44,6 +44,8 @@ export type LibraryItem = {
   year?: number | null;
   runtimeSeconds?: number | null;
   overview?: string | null;
+  playedPercentage?: number | null;
+  playbackPositionSeconds?: number | null;
 };
 
 export type MediaSource = {
@@ -70,6 +72,23 @@ export type ListChildrenRequest = {
   serverId: string;
   parentId?: string | null;
   cursor?: string | null;
+};
+
+export type HomeRowsRequest = {
+  serverId: string;
+  libraryIds: string[];
+  continueWatchingLimit?: number | null;
+  latestLimit?: number | null;
+};
+
+export type HomeRows = {
+  continueWatching: LibraryItem[];
+  latestByLibrary: LatestLibraryItems[];
+};
+
+export type LatestLibraryItems = {
+  libraryId: string;
+  items: LibraryItem[];
 };
 
 export type GetItemRequest = {

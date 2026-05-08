@@ -3,31 +3,40 @@ import { PosterCard } from "./PosterCard";
 import type { LibraryItem } from "../../lib/tauriClient";
 import {
   getMediaCardPresentation,
-  getMediaGridColumns,
+  type MediaCardOrientation,
 } from "../../lib/media/presentation";
 
 type MediaRailProps = {
+  cardSize?: MediaRailCardSize;
   emptyText: string;
   entry?: boolean;
   items: LibraryItem[];
   loading?: boolean;
   onOpenMedia: (item: LibraryItem) => void;
+  orientation?: MediaCardOrientation;
+  showProgress?: boolean;
   title: string;
 };
 
+type MediaRailCardSize = "compact" | "default";
+
 export function MediaRail({
+  cardSize = "default",
   emptyText,
   entry = false,
   items,
   loading = false,
   onOpenMedia,
+  orientation,
+  showProgress = false,
   title,
 }: MediaRailProps) {
   const focusScope = `${title}-rail`;
-  const columns = getMediaGridColumns(items);
-  const gridOrientation = items[0]
+  const columns = Math.max(1, items.length);
+  const inferredOrientation = items[0]
     ? getMediaCardPresentation(items[0]).orientation
     : "landscape";
+  const gridOrientation = orientation ?? inferredOrientation;
 
   return (
     <section className="media-rail" aria-labelledby={focusScope}>
@@ -39,6 +48,7 @@ export function MediaRail({
           aria-label={`${title} media`}
           className="rail-items"
           columns={columns}
+          data-card-size={cardSize}
           data-grid-orientation={gridOrientation}
           entry={entry}
           focusKey={items.map((item) => item.id).join(":")}
@@ -50,6 +60,8 @@ export function MediaRail({
               item={item}
               key={item.id}
               onOpen={onOpenMedia}
+              orientation={orientation}
+              progressPercent={showProgress ? item.playedPercentage ?? undefined : undefined}
             />
           ))}
         </FocusScope>

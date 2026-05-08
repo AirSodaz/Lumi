@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app::AppState,
     errors::AppResult,
-    providers::{LibraryItem, LibraryItemDetail, ListChildrenRequest, MediaProvider, PagedResult},
+    providers::{
+        HomeRows, HomeRowsRequest, LibraryItem, LibraryItemDetail, ListChildrenRequest,
+        MediaProvider, PagedResult,
+    },
 };
 
 use super::auth::emby_provider_for_state;
@@ -47,4 +50,17 @@ pub fn get_item_for_state(
     request: GetItemRequest,
 ) -> AppResult<LibraryItemDetail> {
     emby_provider_for_state(state).get_item(&request.server_id, &request.item_id)
+}
+
+#[tauri::command]
+pub async fn media_get_home_rows(
+    state: State<'_, AppState>,
+    request: HomeRowsRequest,
+) -> AppResult<HomeRows> {
+    let state = super::state_for_blocking(state.inner());
+    super::run_blocking_command(move || get_home_rows_for_state(&state, request)).await
+}
+
+pub fn get_home_rows_for_state(state: &AppState, request: HomeRowsRequest) -> AppResult<HomeRows> {
+    emby_provider_for_state(state).get_home_rows(request)
 }

@@ -131,5 +131,7 @@ fn demo_library_item(server_id: &str, item_id: &str, title: &str) -> LibraryItem
         year: Some(2026),
         runtime_seconds: Some(7200),
         overview: Some("A cached demo item".into()),
+        played_percentage: None,
+        playback_position_seconds: None,
     }
 }

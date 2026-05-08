@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   GetItemRequest,
+  HomeRows,
+  HomeRowsRequest,
   LibraryItem,
   LibraryItemDetail,
   ListChildrenRequest,
@@ -15,5 +17,9 @@ export const media = {
 
   getItem(request: GetItemRequest) {
     return invoke<LibraryItemDetail>("media_get_item", { request });
+  },
+
+  getHomeRows(request: HomeRowsRequest) {
+    return invoke<HomeRows>("media_get_home_rows", { request });
   },
 };

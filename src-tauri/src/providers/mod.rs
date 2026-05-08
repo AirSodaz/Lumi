@@ -32,7 +32,7 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryItem {
     pub id: String,
@@ -46,9 +46,11 @@ pub struct LibraryItem {
     pub year: Option<u16>,
     pub runtime_seconds: Option<u32>,
     pub overview: Option<String>,
+    pub played_percentage: Option<f64>,
+    pub playback_position_seconds: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryItemDetail {
     pub item: LibraryItem,
@@ -61,6 +63,29 @@ pub struct ListChildrenRequest {
     pub server_id: String,
     pub parent_id: Option<String>,
     pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeRowsRequest {
+    pub server_id: String,
+    pub library_ids: Vec<String>,
+    pub continue_watching_limit: Option<usize>,
+    pub latest_limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HomeRows {
+    pub continue_watching: Vec<LibraryItem>,
+    pub latest_by_library: Vec<LatestLibraryItems>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LatestLibraryItems {
+    pub library_id: String,
+    pub items: Vec<LibraryItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,6 +122,8 @@ pub trait MediaProvider: Send + Sync {
     fn list_children(&self, request: ListChildrenRequest) -> AppResult<PagedResult<LibraryItem>>;
 
     fn get_item(&self, server_id: &str, item_id: &str) -> AppResult<LibraryItemDetail>;
+
+    fn get_home_rows(&self, request: HomeRowsRequest) -> AppResult<HomeRows>;
 
     fn get_playback_sources(&self, server_id: &str, item_id: &str) -> AppResult<Vec<MediaSource>>;
 

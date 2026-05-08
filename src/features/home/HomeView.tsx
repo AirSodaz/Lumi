@@ -6,7 +6,7 @@ import { MotionButton } from "../../components/motion";
 import { formatMetadata } from "../../lib/media/format";
 import { createSurfaceMotion } from "../../lib/motion/presets";
 import {
-  useChildren,
+  useHomeRows,
   type LibraryItem,
   type ServerProfile,
 } from "../../lib/tauriClient";
@@ -14,6 +14,7 @@ import {
 type HomeViewProps = {
   libraries: LibraryItem[];
   librariesLoading: boolean;
+  onOpenLibrary: (item: LibraryItem) => void;
   onOpenMedia: (item: LibraryItem) => void;
   onOpenSettings: () => void;
   servers: ServerProfile[];
@@ -23,6 +24,7 @@ type HomeViewProps = {
 export function HomeView({
   libraries,
   librariesLoading,
+  onOpenLibrary,
   onOpenMedia,
   onOpenSettings,
   servers,
@@ -30,16 +32,22 @@ export function HomeView({
 }: HomeViewProps) {
   const reducedMotion = useReducedMotion();
   const server = servers[0] ?? null;
-  const firstLibrary = libraries[0] ?? null;
-  const firstChildren = useChildren(firstLibrary ? server?.id : null, firstLibrary?.id ?? null);
+  const libraryIds = libraries.map((library) => library.id);
+  const homeRows = useHomeRows(server?.id, libraryIds);
   const loading =
     serversLoading ||
     librariesLoading ||
-    firstChildren.isLoading;
-  const mediaItems = firstChildren.data?.items ?? [];
-  const latest = mediaItems.slice(0, 10);
+    homeRows.isLoading;
+  const continueWatching = homeRows.data?.continueWatching ?? [];
+  const latestByLibrary = libraries.map((library) => ({
+    items:
+      homeRows.data?.latestByLibrary.find((row) => row.libraryId === library.id)
+        ?.items ?? [],
+    library,
+  }));
+  const firstLatest = latestByLibrary.find((row) => row.items.length > 0)?.items[0] ?? null;
   const hasServers = servers.length > 0;
-  const featured = latest[0] ?? null;
+  const featured = continueWatching[0] ?? firstLatest;
   const featuredTitle = featured?.title ?? (server ? server.name : "Connect your Emby library");
   const featuredDescription =
     featured?.overview ??
@@ -63,12 +71,14 @@ export function HomeView({
                 ? `${servers.length} server connected`
                 : "Add an Emby server to browse"}
             </span>
-            <span>{latest.length > 0 ? `${latest.length} latest items` : "Library waiting"}</span>
+            <span>
+              {libraries.length > 0 ? `${libraries.length} libraries` : "Library waiting"}
+            </span>
           </div>
         </div>
         <div className="toolbar-cluster">
           {server ? (
-            <span className="status-chip">{firstLibrary?.title ?? "Library browser"}</span>
+            <span className="status-chip">{server.name}</span>
           ) : (
             <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
               <Server aria-hidden="true" size={15} />
@@ -114,28 +124,34 @@ export function HomeView({
 
       <MediaRail
         emptyText="Start watching and progress will appear here."
-        entry={false}
-        items={[]}
-        loading={false}
+        entry={continueWatching.length > 0}
+        items={continueWatching}
+        loading={loading}
         onOpenMedia={onOpenMedia}
+        showProgress
         title="Continue Watching"
       />
       <MediaRail
-        emptyText={server ? "No media found" : "Connect a server first"}
-        entry
-        items={latest}
+        cardSize="compact"
+        emptyText={server ? "No libraries found" : "Connect a server first"}
+        entry={continueWatching.length === 0 && libraries.length > 0}
+        items={libraries}
         loading={loading}
-        onOpenMedia={onOpenMedia}
-        title="Latest"
+        onOpenMedia={onOpenLibrary}
+        orientation="landscape"
+        title="Media Libraries"
       />
-      <MediaRail
-        emptyText="Recommendations will appear after Lumi learns your library."
-        entry={false}
-        items={[]}
-        loading={false}
-        onOpenMedia={onOpenMedia}
-        title="Recommended"
-      />
+      {latestByLibrary.map(({ items, library }) => (
+        <MediaRail
+          emptyText={server ? "No latest media found" : "Connect a server first"}
+          entry={false}
+          items={items}
+          key={library.id}
+          loading={loading}
+          onOpenMedia={onOpenMedia}
+          title={`Latest in ${library.title}`}
+        />
+      ))}
     </section>
   );
 }

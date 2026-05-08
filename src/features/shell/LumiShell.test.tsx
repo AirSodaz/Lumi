@@ -157,6 +157,7 @@ type CommandArgs = {
   request?: {
     command?: unknown;
     itemId?: string;
+    libraryIds?: string[];
     mediaSourceId?: string | null;
     parentId?: string | null;
     serverId?: string;
@@ -192,6 +193,33 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
   if (command === "providers_list_libraries") {
     return Promise.resolve([moviesLibrary, tvLibrary]);
   }
+  if (command === "media_get_home_rows") {
+    return Promise.resolve({
+      continueWatching: [
+        {
+          ...demoMovie,
+          playedPercentage: 45,
+          playbackPositionSeconds: 1800,
+        },
+      ],
+      latestByLibrary: [
+        {
+          libraryId: "library-1",
+          items: [
+            secondMovie,
+            thirdMovie,
+            fourthMovie,
+            fifthMovie,
+            sixthMovie,
+          ],
+        },
+        {
+          libraryId: "library-2",
+          items: [demoSeries],
+        },
+      ],
+    });
+  }
   if (command === "media_list_children") {
     const parentId = request?.parentId;
     const itemsByParent: Record<string, LibraryItem[]> = {
@@ -218,6 +246,10 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
     const details: Record<string, LibraryItemDetail> = {
       "movie-1": itemDetail(demoMovie),
       "movie-2": itemDetail(secondMovie),
+      "movie-3": itemDetail(thirdMovie),
+      "movie-4": itemDetail(fourthMovie),
+      "movie-5": itemDetail(fifthMovie),
+      "movie-6": itemDetail(sixthMovie),
       "video-1": itemDetail(demoVideo),
       "folder-1": itemDetail(nestedFolder),
       "series-1": itemDetail(demoSeries),
@@ -531,15 +563,19 @@ describe("LumiShell", () => {
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
-  it("renders Home media rails from provider DTOs and opens media detail", async () => {
+  it("renders Emby-style Home rails from provider DTOs and opens media detail", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Latest" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Continue Watching" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Media Libraries" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Latest in Movies" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Latest in TV Shows" })).toBeInTheDocument();
     await screen.findByRole("button", { name: /Demo Movie/ });
+    expect(screen.getByLabelText("45% watched")).toBeInTheDocument();
     expect(screen.getAllByText("No poster").length).toBeGreaterThan(0);
 
     await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
@@ -558,6 +594,36 @@ describe("LumiShell", () => {
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
         request: { serverId: "server-1", itemId: "movie-1" },
+      }),
+    );
+  });
+
+  it("opens Home library cards into the library browser", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const moviesLibraryCard = await screen.findByRole("button", { name: "Movies" });
+    const mediaLibrariesRail = moviesLibraryCard.closest(".media-rail");
+    if (!(mediaLibrariesRail instanceof HTMLElement)) {
+      throw new Error("Expected Movies to render inside the Media Libraries rail");
+    }
+    const mediaLibrariesItems = mediaLibrariesRail.querySelector(".rail-items");
+    expect(mediaLibrariesItems).toHaveAttribute("data-grid-orientation", "landscape");
+    expect(mediaLibrariesItems).toHaveAttribute("data-card-size", "compact");
+    expect(within(mediaLibrariesRail).getByRole("button", { name: "Movies" })).toHaveAttribute(
+      "data-card-orientation",
+      "landscape",
+    );
+
+    await user.click(moviesLibraryCard);
+
+    expect(await screen.findByRole("heading", { name: "Movies" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Demo Movie/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_list_children", {
+        request: { serverId: "server-1", parentId: "library-1", cursor: null },
       }),
     );
   });
@@ -644,6 +710,13 @@ describe("LumiShell", () => {
     invokeMock.mockImplementation((command: string, args?: unknown) => {
       const request = (args as CommandArgs | undefined)?.request;
 
+      if (command === "media_get_home_rows") {
+        return Promise.resolve({
+          continueWatching: [nestedFolder],
+          latestByLibrary: [],
+        });
+      }
+
       if (command === "media_list_children" && request?.parentId === "library-1") {
         return Promise.resolve({
           items: [nestedFolder],
@@ -679,6 +752,13 @@ describe("LumiShell", () => {
     mockBrowsingCommands();
     invokeMock.mockImplementation((command: string, args?: unknown) => {
       const request = (args as CommandArgs | undefined)?.request;
+
+      if (command === "media_get_home_rows") {
+        return Promise.resolve({
+          continueWatching: [demoVideo],
+          latestByLibrary: [],
+        });
+      }
 
       if (command === "media_list_children" && request?.parentId === "library-1") {
         return Promise.resolve({
@@ -734,6 +814,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: /Movies/ }));
 
     expect(await screen.findByRole("heading", { name: "Movies" })).toBeInTheDocument();
@@ -748,47 +829,38 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
   });
 
-  it("moves Home media-card focus from the rail with arrow keys and opens detail with Enter", async () => {
+  it("moves Home latest rail focus horizontally and opens detail with Enter", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
     render(<App />);
 
-    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
     const second = await screen.findByRole("button", { name: /Second Movie/ });
+    const third = await screen.findByRole("button", { name: /Third Movie/ });
 
-    expect(firstMovie).not.toHaveFocus();
-
-    await user.keyboard("{ArrowDown}");
-    expect(firstMovie).toHaveFocus();
-
+    second.focus();
     await user.keyboard("{ArrowRight}");
 
-    expect(second).toHaveFocus();
+    expect(third).toHaveFocus();
     expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
 
     await user.keyboard("{Enter}");
-    expect(await screen.findByRole("heading", { name: "Second Movie" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Third Movie" })).toBeInTheDocument();
   });
 
-  it("moves Home portrait media-card focus as a 5-column grid and scrolls focused cards into view", async () => {
+  it("keeps Home latest rail as a single horizontal row", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
     render(<App />);
 
-    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
     const second = await screen.findByRole("button", { name: /Second Movie/ });
-    const sixth = await screen.findByRole("button", { name: /Sixth Movie/ });
+    const third = await screen.findByRole("button", { name: /Third Movie/ });
     scrollIntoViewMock.mockClear();
 
-    firstMovie.focus();
+    second.focus();
     await user.keyboard("{ArrowRight}");
-    expect(second).toHaveFocus();
-
-    firstMovie.focus();
-    await user.keyboard("{ArrowDown}");
-    expect(sixth).toHaveFocus();
+    expect(third).toHaveFocus();
     expect(scrollIntoViewMock).toHaveBeenCalled();
 
     second.focus();
@@ -803,6 +875,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: /Movies/ }));
 
     const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
@@ -835,6 +908,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Libraries" }));
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: /TV Shows/ }));
     await user.click(await screen.findByRole("button", { name: /Demo Series/ }));
 
@@ -856,7 +930,7 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Episode 1" })).toBeInTheDocument();
   });
 
-  it("only loads the first Home library on initial render", async () => {
+  it("loads Home rows instead of the first library children on initial render", async () => {
     mockBrowsingCommands();
 
     render(<App />);
@@ -864,15 +938,26 @@ describe("LumiShell", () => {
     await screen.findByRole("button", { name: /Demo Movie/ });
 
     await waitFor(() => {
+      const homeRowsRequests = invokeMock.mock.calls.filter(
+        ([command]) => command === "media_get_home_rows",
+      );
       const childRequests = invokeMock.mock.calls.filter(
         ([command]) => command === "media_list_children",
       );
-      expect(childRequests).toEqual([
+      expect(homeRowsRequests).toEqual([
         [
-          "media_list_children",
-          { request: { serverId: "server-1", parentId: "library-1", cursor: null } },
+          "media_get_home_rows",
+          {
+            request: {
+              continueWatchingLimit: 10,
+              latestLimit: 10,
+              libraryIds: ["library-1", "library-2"],
+              serverId: "server-1",
+            },
+          },
         ],
       ]);
+      expect(childRequests).toEqual([]);
     });
   });
 

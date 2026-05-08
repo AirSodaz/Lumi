@@ -17,6 +17,8 @@ import type {
 } from "./types";
 
 const QUERY_STALE_TIME_MS = 60_000;
+const HOME_CONTINUE_WATCHING_LIMIT = 10;
+const HOME_LATEST_LIMIT = 10;
 
 export const queryKeys = {
   settings: ["settings"] as const,
@@ -24,6 +26,8 @@ export const queryKeys = {
   libraries: (serverId: string) => ["libraries", serverId] as const,
   children: (serverId: string, parentId: string | null, cursor: string | null) =>
     ["children", serverId, parentId ?? "root", cursor ?? "first"] as const,
+  homeRows: (serverId: string, libraryIds: readonly string[]) =>
+    ["homeRows", serverId, libraryIds.join(":")] as const,
   itemDetail: (serverId: string, itemId: string) =>
     ["itemDetail", serverId, itemId] as const,
 };
@@ -59,6 +63,24 @@ export function useChildren(
         cursor: cursor ?? null,
       }),
     enabled: Boolean(serverId),
+    staleTime: QUERY_STALE_TIME_MS,
+  });
+}
+
+export function useHomeRows(
+  serverId: string | null | undefined,
+  libraryIds: readonly string[],
+) {
+  return useQuery({
+    queryKey: queryKeys.homeRows(serverId ?? "none", libraryIds),
+    queryFn: () =>
+      media.getHomeRows({
+        continueWatchingLimit: HOME_CONTINUE_WATCHING_LIMIT,
+        latestLimit: HOME_LATEST_LIMIT,
+        libraryIds: [...libraryIds],
+        serverId: serverId ?? "",
+      }),
+    enabled: Boolean(serverId && libraryIds.length > 0),
     staleTime: QUERY_STALE_TIME_MS,
   });
 }

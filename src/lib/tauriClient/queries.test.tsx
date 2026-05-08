@@ -3,7 +3,13 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { useChildren, useItemDetail, useLibraries, useServers } from "./queries";
+import {
+  useChildren,
+  useHomeRows,
+  useItemDetail,
+  useLibraries,
+  useServers,
+} from "./queries";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -94,6 +100,69 @@ describe("tauri query hooks", () => {
     await waitFor(() => expect(result.current.data?.items[0]?.title).toBe("Demo Movie"));
     expect(invokeMock).toHaveBeenCalledWith("media_list_children", {
       request: { serverId: "server-1", parentId: "library-1", cursor: null },
+    });
+  });
+
+  it("loads home rows only when server and libraries are available", async () => {
+    invokeMock.mockResolvedValueOnce({
+      continueWatching: [
+        {
+          id: "movie-1",
+          providerKind: "emby",
+          serverId: "server-1",
+          itemType: "movie",
+          title: "Demo Movie",
+          playedPercentage: 45,
+          playbackPositionSeconds: 1800,
+        },
+      ],
+      latestByLibrary: [
+        {
+          libraryId: "library-1",
+          items: [
+            {
+              id: "movie-2",
+              providerKind: "emby",
+              serverId: "server-1",
+              itemType: "movie",
+              title: "Latest Movie",
+            },
+          ],
+        },
+      ],
+    });
+
+    const { result, rerender } = renderHook(
+      ({ libraryIds, serverId }) => useHomeRows(serverId, libraryIds),
+      {
+        initialProps: {
+          libraryIds: [] as string[],
+          serverId: null as string | null,
+        },
+        wrapper,
+      },
+    );
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    rerender({ libraryIds: [], serverId: "server-1" });
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    rerender({ libraryIds: ["library-1"], serverId: "server-1" });
+
+    await waitFor(() =>
+      expect(result.current.data?.continueWatching[0]?.title).toBe("Demo Movie"),
+    );
+    expect(invokeMock).toHaveBeenCalledWith("media_get_home_rows", {
+      request: {
+        continueWatchingLimit: 10,
+        latestLimit: 10,
+        libraryIds: ["library-1"],
+        serverId: "server-1",
+      },
     });
   });
 

@@ -52,4 +52,19 @@ describe("PosterCard", () => {
       "landscape",
     );
   });
+
+  it("prefers backdrop artwork for landscape cards", () => {
+    const item = {
+      ...mediaItem("folder"),
+      backdropUrl: "https://example.test/backdrop.jpg",
+      posterUrl: "https://example.test/poster.jpg",
+    };
+    const { container } = render(
+      <PosterCard focusScope="test-cards" item={item} orientation="landscape" />,
+    );
+
+    expect(container.querySelector(".poster-art")).toHaveStyle({
+      backgroundImage: 'url("https://example.test/backdrop.jpg")',
+    });
+  });
 });
