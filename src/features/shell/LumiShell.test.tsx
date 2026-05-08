@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import App from "../../App";
 import type { LibraryItem, LibraryItemDetail, ServerProfile } from "../../lib/tauriClient";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 const windowApiMocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -16,6 +17,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(),
+}));
+
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: vi.fn(() => ({
     close: windowApiMocks.close,
@@ -26,8 +31,10 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 const invokeMock = vi.mocked(invoke);
+const listenMock = vi.mocked(listen);
 let scrollIntoViewMock: Mock;
 let startViewTransitionMock: Mock;
+const eventListeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
 
 const demoServer: ServerProfile = {
   id: "server-1",
@@ -312,7 +319,7 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
       id: "session-1",
       serverId: request?.serverId ?? "server-1",
       itemId: request?.itemId ?? "movie-1",
-      state: "playing",
+      state: "opening",
       positionSeconds: 0,
     });
   }
@@ -371,8 +378,19 @@ describe("LumiShell", () => {
       })),
     });
     window.localStorage.clear();
+    eventListeners.clear();
 
     invokeMock.mockReset();
+    listenMock.mockReset();
+    listenMock.mockImplementation((event, handler) => {
+      const listeners = eventListeners.get(event) ?? new Set();
+      listeners.add(handler as (event: { payload: unknown }) => void);
+      eventListeners.set(event, listeners);
+
+      return Promise.resolve(() => {
+        listeners.delete(handler as (event: { payload: unknown }) => void);
+      });
+    });
     invokeMock.mockImplementation((command: string) => {
       if (command === "settings_get") {
         return Promise.resolve({
@@ -639,7 +657,7 @@ describe("LumiShell", () => {
     const play = await screen.findByRole("button", { name: "Play" });
     expect(play).toBeEnabled();
     await user.click(play);
-    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(await screen.findByText("Opening")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("playback_open", {
       request: {
         serverId: "server-1",
@@ -651,6 +669,31 @@ describe("LumiShell", () => {
       expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
         request: { serverId: "server-1", itemId: "movie-1" },
       }),
+    );
+  });
+
+  it("updates an opening playback session from playback events", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
+    await user.click(await screen.findByRole("button", { name: "Play" }));
+
+    expect(await screen.findByText("Opening")).toBeInTheDocument();
+    emitTauriEvent("playback:state-changed", {
+      id: "session-1",
+      serverId: "server-1",
+      itemId: "movie-1",
+      state: "playing",
+      positionSeconds: 0,
+    });
+
+    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(listenMock).toHaveBeenCalledWith(
+      "playback:state-changed",
+      expect.any(Function),
     );
   });
 
@@ -804,7 +847,7 @@ describe("LumiShell", () => {
     expect(play).toBeEnabled();
     await user.click(play);
 
-    expect(await screen.findByText("Playing")).toBeInTheDocument();
+    expect(await screen.findByText("Opening")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("playback_open", {
       request: {
         serverId: "server-1",
@@ -893,25 +936,21 @@ describe("LumiShell", () => {
   it("shows playback errors without exposing raw stream URLs or tokens", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
-    invokeMock.mockImplementation((command: string, args?: unknown) => {
-      if (command === "playback_open") {
-        return Promise.reject({
-          code: "playback.mpv_library_missing",
-          message: "Native mpv library could not be loaded",
-          recoverable: true,
-          detail: {
-            mediaUrl: "http://localhost/stream.mkv?api_key=token-value",
-          },
-        });
-      }
-
-      return mockBrowsingCommandsFallback(command, args);
-    });
 
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
     await user.click(await screen.findByRole("button", { name: "Play" }));
+
+    expect(await screen.findByText("Opening")).toBeInTheDocument();
+    emitTauriEvent("playback:error", {
+      sessionId: "session-1",
+      code: "playback.mpv_library_missing",
+      message: "Native mpv library could not be loaded",
+      detail: {
+        mediaUrl: "http://localhost/stream.mkv?api_key=token-value",
+      },
+    });
 
     expect(await screen.findByText("Native mpv library could not be loaded")).toBeInTheDocument();
     expect(screen.getByText("playback.mpv_library_missing")).toBeInTheDocument();
@@ -1276,3 +1315,13 @@ describe("LumiShell", () => {
     expect(passwordInput).toHaveValue("wrong");
   });
 });
+
+function emitTauriEvent(event: string, payload: unknown) {
+  const listeners = eventListeners.get(event);
+  if (!listeners) {
+    return;
+  }
+  for (const listener of listeners) {
+    listener({ payload });
+  }
+}

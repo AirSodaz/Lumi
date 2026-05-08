@@ -608,7 +608,7 @@ impl EmbyClient {
         response
             .media_sources
             .into_iter()
-            .filter_map(|source| self.map_media_source(source, token).transpose())
+            .filter_map(|source| self.map_media_source(item_id, source, token).transpose())
             .collect::<AppResult<Vec<_>>>()
     }
 
@@ -750,11 +750,16 @@ impl EmbyClient {
         })
     }
 
-    fn map_media_source(&self, source: EmbyMediaSource, token: &str) -> AppResult<Option<MediaSource>> {
-        let Some(raw_url) = self.playable_source_url(&source) else {
+    fn map_media_source(
+        &self,
+        item_id: &str,
+        source: EmbyMediaSource,
+        token: &str,
+    ) -> AppResult<Option<MediaSource>> {
+        let Some(raw_url) = self.playable_source_url(item_id, &source)? else {
             return Ok(None);
         };
-        let url = self.playback_url(raw_url, token)?;
+        let url = self.playback_url(&raw_url, token)?;
 
         Ok(Some(MediaSource {
             id: source.id,
@@ -763,12 +768,29 @@ impl EmbyClient {
         }))
     }
 
-    fn playable_source_url<'a>(&self, source: &'a EmbyMediaSource) -> Option<&'a str> {
-        source
-            .direct_stream_url
+    fn playable_source_url(
+        &self,
+        item_id: &str,
+        source: &EmbyMediaSource,
+    ) -> AppResult<Option<String>> {
+        if let Some(url) = source.direct_stream_url.as_deref() {
+            return Ok(Some(url.into()));
+        }
+        if let Some(url) = source.transcoding_url.as_deref() {
+            return Ok(Some(url.into()));
+        }
+        if let Some(path) = source.path.as_deref().filter(is_absolute_http_url) {
+            return Ok(Some(path.into()));
+        }
+        if source
+            .path
             .as_deref()
-            .or(source.transcoding_url.as_deref())
-            .or_else(|| source.path.as_deref().filter(is_absolute_http_url))
+            .is_some_and(|path| !path.trim().is_empty())
+        {
+            return Ok(Some(static_stream_path(item_id, &source.id)));
+        }
+
+        Ok(None)
     }
 
     fn image_url(&self, item_id: &str, image_type: &str, tag: &str) -> AppResult<String> {
@@ -802,6 +824,22 @@ impl EmbyClient {
                 .with_detail(json!({ "path": path, "source": error.to_string() }))
         })
     }
+}
+
+fn static_stream_path(item_id: &str, media_source_id: &str) -> String {
+    let mut url = Url::parse("http://lumi.local").expect("static base URL is valid");
+    url.path_segments_mut()
+        .expect("static base URL can be a base")
+        .extend(["Videos", item_id, "stream"]);
+    url.query_pairs_mut()
+        .append_pair("static", "true")
+        .append_pair("MediaSourceId", media_source_id);
+
+    format!(
+        "{}?{}",
+        url.path().trim_start_matches('/'),
+        url.query().unwrap_or_default()
+    )
 }
 
 #[derive(Debug, Clone, Copy)]

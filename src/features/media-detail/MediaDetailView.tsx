@@ -1,5 +1,5 @@
 import { ChevronLeft, Film, Play } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { FocusScope } from "../../components/focus";
 import { CinematicHero, GlassPanel } from "../../components/layout";
@@ -14,6 +14,8 @@ import {
   useChildren,
   useItemDetail,
   useOpenPlayback,
+  playback,
+  playbackEventToAppError,
   type AppError,
   type LibraryItem,
   type PlayerSession,
@@ -49,6 +51,42 @@ export function MediaDetailView({
     ? playableTypes.has(item.itemType) || containerPlaybackTypes.has(item.itemType)
     : false;
   const children = useChildren(shouldLoadChildren ? serverId : null, item?.id ?? null);
+
+  useEffect(() => {
+    const unlistenTasks = [
+      playback.onStateChanged((session) => {
+        setActiveSession((current) =>
+          current?.id === session.id ? session : current,
+        );
+        if (session.state !== "error") {
+          setPlaybackError(null);
+        }
+      }),
+      playback.onPosition((event) => {
+        setActiveSession((current) =>
+          current?.id === event.sessionId
+            ? { ...current, positionSeconds: event.positionSeconds }
+            : current,
+        );
+      }),
+      playback.onError((event) => {
+        setActiveSession((current) => {
+          if (event.sessionId && current?.id !== event.sessionId) {
+            return current;
+          }
+
+          setPlaybackError(playbackEventToAppError(event));
+          return current ? { ...current, state: "error" } : current;
+        });
+      }),
+    ];
+
+    return () => {
+      void Promise.all(unlistenTasks).then((unlisteners) => {
+        unlisteners.forEach((unlisten) => unlisten());
+      });
+    };
+  }, []);
 
   if (detail.isLoading) {
     return (

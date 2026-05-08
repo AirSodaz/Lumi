@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Condvar, Mutex},
+    time::{Duration, Instant},
+};
 
 use lumi_lib::{
     app::AppState,
@@ -7,8 +10,7 @@ use lumi_lib::{
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
     player::{
         MpvBackend, MpvOpenRequest, PlaybackCommand, PlaybackErrorEvent, PlaybackHost,
-        PlaybackPositionEvent, PlayerOpenRequest, PlayerSession, PlayerWindow,
-        ResolvedPlaybackSource,
+        PlaybackPositionEvent, PlayerOpenRequest, PlayerSession, ResolvedPlaybackSource,
     },
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
@@ -59,9 +61,9 @@ fn playback_open_resolves_first_provider_source_without_exposing_url_to_react() 
     .expect("open playback");
 
     assert_eq!(session.item_id, "movie-1");
-    let opened = backend.opened.lock().unwrap();
-    assert_eq!(opened.len(), 1);
-    assert_eq!(opened[0].media_url, "http://localhost:8096/Videos/movie-1/stream.mkv?MediaSourceId=source-1&api_key=token-value");
+    assert_eq!(session.state, lumi_lib::player::PlayerState::Opening);
+    let opened = backend.wait_for_opened();
+    assert_eq!(opened.media_url, "http://localhost:8096/Videos/movie-1/stream.mkv?MediaSourceId=source-1&api_key=token-value");
 }
 
 #[test]
@@ -117,10 +119,9 @@ fn playback_open_resolves_container_to_first_playable_descendant() {
     .expect("open container playback");
 
     assert_eq!(session.item_id, "movie-1");
-    let opened = backend.opened.lock().unwrap();
-    assert_eq!(opened.len(), 1);
+    let opened = backend.wait_for_opened();
     assert_eq!(
-        opened[0].media_url,
+        opened.media_url,
         "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value"
     );
 }
@@ -165,10 +166,9 @@ fn playback_open_uses_transcoding_source_when_direct_stream_is_unavailable() {
     )
     .expect("open transcoded playback");
 
-    let opened = backend.opened.lock().unwrap();
-    assert_eq!(opened.len(), 1);
+    let opened = backend.wait_for_opened();
     assert_eq!(
-        opened[0].media_url,
+        opened.media_url,
         "http://localhost:8096/Videos/movie-1/master.m3u8?MediaSourceId=source-1&api_key=token-value"
     );
 }
@@ -213,15 +213,14 @@ fn playback_open_does_not_duplicate_existing_api_key() {
     )
     .expect("open playback");
 
-    let opened = backend.opened.lock().unwrap();
     assert_eq!(
-        opened[0].media_url,
+        backend.wait_for_opened().media_url,
         "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value"
     );
 }
 
 #[test]
-fn playback_open_rejects_local_path_sources_without_creating_window() {
+fn playback_open_resolves_file_protocol_sources_to_emby_static_streams() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(
         vec![
@@ -238,9 +237,13 @@ fn playback_open_rejects_local_path_sources_without_creating_window() {
                 json!({
                     "MediaSources": [{
                         "Id": "source-1",
-                        "Name": "Direct Play Path",
-                        "Path": "D:\\Media\\Movies\\demo.mkv",
-                        "SupportsDirectStream": true
+                        "Name": "720p - 2 Mbps",
+                        "Container": "mp4",
+                        "Protocol": "File",
+                        "Path": "/media/movies/demo.mp4",
+                        "SupportsDirectPlay": true,
+                        "SupportsDirectStream": true,
+                        "SupportsTranscoding": true
                     }]
                 }),
             ),
@@ -249,7 +252,7 @@ fn playback_open_rejects_local_path_sources_without_creating_window() {
     );
     let profile = seed_profile_with_token(&state);
 
-    let error = playback::open_for_state(
+    playback::open_for_state(
         &state,
         Arc::new(FakePlaybackHost),
         PlayerOpenRequest {
@@ -258,10 +261,13 @@ fn playback_open_rejects_local_path_sources_without_creating_window() {
             media_source_id: None,
         },
     )
-    .expect_err("local filesystem path should not be treated as an Emby stream URL");
+    .expect("file protocol sources should resolve through Emby static streams");
 
-    assert_eq!(error.code(), "playback.no_source");
-    assert!(backend.opened.lock().unwrap().is_empty());
+    let opened = backend.wait_for_opened();
+    assert_eq!(
+        opened.media_url,
+        "http://localhost:8096/Videos/movie-1/stream?static=true&MediaSourceId=source-1&api_key=token-value"
+    );
 }
 
 #[test]
@@ -307,7 +313,7 @@ fn playback_open_returns_no_source_for_empty_container_without_creating_window()
 }
 
 #[test]
-fn playback_open_window_failure_does_not_expose_stream_url() {
+fn playback_open_event_failure_does_not_expose_stream_url() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(
         vec![
@@ -344,7 +350,7 @@ fn playback_open_window_failure_does_not_expose_stream_url() {
             media_source_id: None,
         },
     )
-    .expect_err("window failure should fail");
+    .expect_err("event failure should fail");
 
     let rendered = format!("{error}");
     assert_eq!(error.code(), "playback.window_failed");
@@ -424,10 +430,10 @@ fn playback_open_resolved_target_opens_without_provider_lookup() {
 
     assert_eq!(session.server_id, "server-1");
     assert_eq!(session.item_id, "movie-1");
-    let opened = backend.opened.lock().unwrap();
-    assert_eq!(opened.len(), 1);
+    assert_eq!(session.state, lumi_lib::player::PlayerState::Opening);
+    let opened = backend.wait_for_opened();
     assert_eq!(
-        opened[0].media_url,
+        opened.media_url,
         "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value"
     );
 }
@@ -569,13 +575,6 @@ impl EmbyHttpTransport for FakeEmbyTransport {
 struct FakePlaybackHost;
 
 impl PlaybackHost for FakePlaybackHost {
-    fn create_player_window(&self, session_id: &str) -> AppResult<PlayerWindow> {
-        Ok(PlayerWindow {
-            label: format!("player-{session_id}"),
-            window_id: 42,
-        })
-    }
-
     fn emit_state_changed(&self, _session: &PlayerSession) -> AppResult<()> {
         Ok(())
     }
@@ -592,14 +591,10 @@ impl PlaybackHost for FakePlaybackHost {
 struct FailingPlaybackHost;
 
 impl PlaybackHost for FailingPlaybackHost {
-    fn create_player_window(&self, _session_id: &str) -> AppResult<PlayerWindow> {
-        Err(lumi_lib::player::playback_window_failed(
-            "native window was unavailable",
-        ))
-    }
-
     fn emit_state_changed(&self, _session: &PlayerSession) -> AppResult<()> {
-        Ok(())
+        Err(lumi_lib::player::playback_window_failed(
+            "native event target was unavailable",
+        ))
     }
 
     fn emit_position(&self, _event: &PlaybackPositionEvent) -> AppResult<()> {
@@ -615,11 +610,13 @@ impl PlaybackHost for FailingPlaybackHost {
 struct FakeMpvBackend {
     opened: Mutex<Vec<MpvOpenRequest>>,
     commands: Mutex<Vec<(String, PlaybackCommand)>>,
+    opened_changed: Condvar,
 }
 
 impl MpvBackend for FakeMpvBackend {
     fn open(&self, request: MpvOpenRequest) -> AppResult<()> {
         self.opened.lock().unwrap().push(request);
+        self.opened_changed.notify_all();
         Ok(())
     }
 
@@ -637,5 +634,21 @@ impl MpvBackend for FakeMpvBackend {
 
     fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {
         Ok(Some(0))
+    }
+}
+
+impl FakeMpvBackend {
+    fn wait_for_opened(&self) -> MpvOpenRequest {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut opened = self.opened.lock().unwrap();
+        loop {
+            if let Some(request) = opened.first() {
+                return request.clone();
+            }
+            let now = Instant::now();
+            assert!(now < deadline, "timed out waiting for backend open");
+            let timeout = deadline.saturating_duration_since(now);
+            opened = self.opened_changed.wait_timeout(opened, timeout).unwrap().0;
+        }
     }
 }

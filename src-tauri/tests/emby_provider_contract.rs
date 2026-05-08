@@ -440,6 +440,50 @@ mod providers {
         }
 
         #[test]
+        fn get_item_maps_file_protocol_sources_to_emby_static_streams() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Id": "episode-1",
+                        "Name": "Demo Episode",
+                        "Type": "Episode",
+                        "Overview": "A file-backed episode"
+                    }),
+                ),
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "MediaSources": [{
+                            "Id": "mediasource_episode-1",
+                            "Name": "720p - 2 Mbps",
+                            "Container": "mp4",
+                            "Protocol": "File",
+                            "Path": "/media/tv/demo/episode-1.mp4",
+                            "SupportsDirectPlay": true,
+                            "SupportsDirectStream": true,
+                            "SupportsTranscoding": true
+                        }]
+                    }),
+                ),
+            ]));
+            let provider = test_provider(local_store, credential_store, transport);
+
+            let detail = provider
+                .get_item(&profile.id, "episode-1")
+                .expect("get item detail");
+
+            assert_eq!(detail.media_sources.len(), 1);
+            assert_eq!(detail.media_sources[0].id, "mediasource_episode-1");
+            assert_eq!(detail.media_sources[0].name, "720p - 2 Mbps");
+            assert_eq!(
+                detail.media_sources[0].url,
+                "http://localhost:8096/Videos/episode-1/stream?static=true&MediaSourceId=mediasource_episode-1&api_key=token-value"
+            );
+        }
+
+        #[test]
         fn get_series_detail_does_not_request_playback_sources() {
             let (local_store, credential_store, profile) = initialized_profile_with_token();
             let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(

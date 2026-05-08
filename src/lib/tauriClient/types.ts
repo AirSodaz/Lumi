@@ -148,6 +148,17 @@ export type PlayerSession = {
   positionSeconds: number;
 };
 
+export type PlaybackPositionEvent = {
+  sessionId: string;
+  positionSeconds: number;
+};
+
+export type PlaybackErrorEvent = {
+  sessionId?: string | null;
+  code: string;
+  message: string;
+};
+
 export type PlayerOpenRequest = {
   serverId: string;
   itemId: string;

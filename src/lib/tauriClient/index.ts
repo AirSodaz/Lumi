@@ -1,7 +1,7 @@
 export { auth } from "./auth";
 export { getBootstrapStatus } from "./bootstrap";
 export { media } from "./media";
-export { playback } from "./playback";
+export { playback, playbackEventToAppError } from "./playback";
 export { providers } from "./providers";
 export {
   queryKeys,
@@ -42,6 +42,8 @@ export type {
   MpvDiagnostic,
   PlaybackCommand,
   PlaybackCommandRequest,
+  PlaybackErrorEvent,
+  PlaybackPositionEvent,
   PagedResult,
   PlayerOpenRequest,
   PlayerSession,

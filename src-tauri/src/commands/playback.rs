@@ -1,17 +1,16 @@
 use std::sync::Arc;
 
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State, WindowBuilder};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::{
     app::AppState,
     errors::{AppError, AppResult},
     events,
     player::{
-        playback_window_failed, NativePlayerService, PlaybackCommand, PlaybackErrorEvent,
-        PlaybackHost, PlaybackPositionEvent, PlaybackProgressReporter, PlayerOpenRequest,
-        PlayerService, PlayerSession, PlayerWindow, ResolvedPlaybackSource,
+        NativePlayerService, PlaybackCommand, PlaybackErrorEvent, PlaybackHost,
+        PlaybackPositionEvent, PlaybackProgressReporter, PlayerOpenRequest, PlayerService,
+        PlayerSession, ResolvedPlaybackSource,
     },
     providers::{
         emby::{is_container_item_type, is_playable_item_type, EmbyProvider},
@@ -181,41 +180,22 @@ impl TauriPlaybackHost {
 }
 
 impl PlaybackHost for TauriPlaybackHost {
-    fn create_player_window(&self, session_id: &str) -> AppResult<PlayerWindow> {
-        let label = format!("player-{session_id}");
-        let window = if let Some(window) = self.app.get_window(&label) {
-            window
-        } else {
-            WindowBuilder::new(&self.app, label.clone())
-            .title("Lumi Player")
-            .inner_size(1120.0, 700.0)
-            .resizable(true)
-            .build()
-            .map_err(playback_window_failed)?
-        };
-
-        let handle = window.window_handle().map_err(playback_window_failed)?;
-        let window_id = window_id_from_raw(handle.as_raw())?;
-
-        Ok(PlayerWindow { label, window_id })
-    }
-
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()> {
         self.app
             .emit(events::PLAYBACK_STATE_CHANGED, session)
-            .map_err(playback_window_failed)
+            .map_err(playback_emit_failed)
     }
 
     fn emit_position(&self, event: &PlaybackPositionEvent) -> AppResult<()> {
         self.app
             .emit(events::PLAYBACK_POSITION, event)
-            .map_err(playback_window_failed)
+            .map_err(playback_emit_failed)
     }
 
     fn emit_error(&self, event: &PlaybackErrorEvent) -> AppResult<()> {
         self.app
             .emit(events::PLAYBACK_ERROR, event)
-            .map_err(playback_window_failed)
+            .map_err(playback_emit_failed)
     }
 }
 
@@ -237,12 +217,8 @@ impl PlaybackProgressReporter for EmbyProgressReporter {
     }
 }
 
-fn window_id_from_raw(handle: RawWindowHandle) -> AppResult<i64> {
-    match handle {
-        RawWindowHandle::Win32(handle) => Ok(handle.hwnd.get() as i64),
-        RawWindowHandle::AppKit(handle) => Ok(handle.ns_view.as_ptr() as i64),
-        RawWindowHandle::Xlib(handle) => Ok(handle.window as i64),
-        RawWindowHandle::Xcb(handle) => Ok(handle.window.get() as i64),
-        _ => Err(playback_window_failed("unsupported native window handle")),
-    }
+fn playback_emit_failed(source: impl ToString) -> AppError {
+    AppError::new("playback.event_emit_failed", "Playback event could not be emitted")
+        .with_recoverable(true)
+        .with_detail(serde_json::json!({ "source": source.to_string() }))
 }

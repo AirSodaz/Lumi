@@ -1,19 +1,23 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{mpsc, Arc, Condvar, Mutex},
+    thread,
+    time::{Duration, Instant},
+};
 
 use lumi_lib::{
-    errors::AppResult,
+    errors::{AppError, AppResult},
     player::{
         MpvBackend, MpvOpenRequest, NativePlayerService, PlaybackCommand, PlaybackErrorEvent,
         PlaybackHost, PlaybackPositionEvent, PlaybackProgressReporter, PlayerOpenRequest,
-        PlayerService, PlayerSession, PlayerState, PlayerWindow, ResolvedPlaybackSource,
+        PlayerService, PlayerSession, PlayerState, ResolvedPlaybackSource,
     },
     providers::PlaybackProgressUpdate,
 };
 
 #[test]
-fn native_player_service_opens_window_loads_source_and_emits_state() {
+fn native_player_service_returns_opening_then_loads_source_asynchronously() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let session = service
@@ -30,23 +34,120 @@ fn native_player_service_opens_window_loads_source_and_emits_state() {
         )
         .expect("open playback");
 
-    assert_eq!(session.state, PlayerState::Playing);
+    assert_eq!(session.state, PlayerState::Opening);
     assert_eq!(session.server_id, "server-1");
     assert_eq!(session.item_id, "movie-1");
 
-    let open = backend.opened.lock().unwrap();
-    assert_eq!(open.len(), 1);
-    assert_eq!(open[0].session_id, session.id);
-    assert_eq!(open[0].window_id, 42);
+    let open = backend.wait_for_open_request();
+    assert_eq!(open.session_id, session.id);
+    assert_eq!(open.media_url, "http://localhost/stream.mkv?api_key=secret");
+
+    backend.complete_open(Ok(()));
+
     assert_eq!(
-        open[0].media_url,
-        "http://localhost/stream.mkv?api_key=secret"
+        host.wait_for_state(PlayerState::Playing).state,
+        PlayerState::Playing
     );
+}
+
+#[test]
+fn native_player_service_open_does_not_wait_for_blocked_backend() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host, backend.clone());
+    let (result_tx, result_rx) = mpsc::channel();
+
+    let handle = thread::spawn(move || {
+        let result = service.open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        );
+        result_tx.send(result).expect("send open result");
+    });
+
+    backend.wait_for_open_request();
+    let immediate = result_rx.recv_timeout(Duration::from_millis(50));
+    backend.complete_open(Ok(()));
+    handle.join().expect("open caller thread should finish");
+
+    let session = immediate
+        .expect("open should return before backend finishes")
+        .expect("open should create an opening session");
+    assert_eq!(session.state, PlayerState::Opening);
+}
+
+#[test]
+fn native_player_service_reports_backend_open_errors_as_events() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv?api_key=secret".into(),
+            },
+        )
+        .expect("open playback");
+
+    assert_eq!(session.state, PlayerState::Opening);
+    backend.wait_for_open_request();
+    backend.complete_open(Err(playback_test_error()));
+
+    let error = host.wait_for_error("playback.test_open_failed");
+    assert_eq!(error.session_id.as_deref(), Some(session.id.as_str()));
+    assert!(!format!("{error:?}").contains("api_key=secret"));
+    assert_eq!(
+        host.wait_for_state(PlayerState::Error).state,
+        PlayerState::Error
+    );
+}
+
+#[test]
+fn native_player_service_close_during_opening_prevents_late_playing_state() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(BlockingMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    backend.wait_for_open_request();
+    let closed = service.close(&session.id).expect("close opening playback");
+    assert_eq!(closed.state, PlayerState::Closed);
+
+    backend.complete_open(Ok(()));
+    backend.wait_for_close_count(2);
 
     let states = host.states.lock().unwrap();
+    assert!(!states.iter().any(|state| state.state == PlayerState::Playing));
     assert_eq!(
-        states.last().expect("state event").state,
-        PlayerState::Playing
+        states.last().expect("closed state event").state,
+        PlayerState::Closed
     );
 }
 
@@ -195,18 +296,14 @@ struct FakePlaybackHost {
     states: Mutex<Vec<PlayerSession>>,
     positions: Mutex<Vec<PlaybackPositionEvent>>,
     errors: Mutex<Vec<PlaybackErrorEvent>>,
+    state_changed: Condvar,
+    error_changed: Condvar,
 }
 
 impl PlaybackHost for FakePlaybackHost {
-    fn create_player_window(&self, session_id: &str) -> AppResult<PlayerWindow> {
-        Ok(PlayerWindow {
-            label: format!("player-{session_id}"),
-            window_id: 42,
-        })
-    }
-
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()> {
         self.states.lock().unwrap().push(session.clone());
+        self.state_changed.notify_all();
         Ok(())
     }
 
@@ -217,7 +314,46 @@ impl PlaybackHost for FakePlaybackHost {
 
     fn emit_error(&self, event: &PlaybackErrorEvent) -> AppResult<()> {
         self.errors.lock().unwrap().push(event.clone());
+        self.error_changed.notify_all();
         Ok(())
+    }
+}
+
+impl FakePlaybackHost {
+    fn wait_for_state(&self, state: PlayerState) -> PlayerSession {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut states = self.states.lock().unwrap();
+        loop {
+            if let Some(session) = states.iter().find(|session| session.state == state) {
+                return session.clone();
+            }
+            let now = Instant::now();
+            assert!(now < deadline, "timed out waiting for {state:?}");
+            let timeout = deadline.saturating_duration_since(now);
+            states = self
+                .state_changed
+                .wait_timeout(states, timeout)
+                .unwrap()
+                .0;
+        }
+    }
+
+    fn wait_for_error(&self, code: &str) -> PlaybackErrorEvent {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut errors = self.errors.lock().unwrap();
+        loop {
+            if let Some(error) = errors.iter().find(|error| error.code == code) {
+                return error.clone();
+            }
+            let now = Instant::now();
+            assert!(now < deadline, "timed out waiting for {code}");
+            let timeout = deadline.saturating_duration_since(now);
+            errors = self
+                .error_changed
+                .wait_timeout(errors, timeout)
+                .unwrap()
+                .0;
+        }
     }
 }
 
@@ -258,6 +394,89 @@ impl MpvBackend for FakeMpvBackend {
     fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {
         Ok(Some(*self.position_seconds.lock().unwrap()))
     }
+}
+
+#[derive(Default)]
+struct BlockingMpvBackend {
+    opened: Mutex<Vec<MpvOpenRequest>>,
+    commands: Mutex<Vec<(String, PlaybackCommand)>>,
+    open_started: Condvar,
+    open_outcome: Mutex<Option<AppResult<()>>>,
+    open_completed: Condvar,
+}
+
+impl BlockingMpvBackend {
+    fn wait_for_open_request(&self) -> MpvOpenRequest {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut opened = self.opened.lock().unwrap();
+        loop {
+            if let Some(request) = opened.first() {
+                return request.clone();
+            }
+            let now = Instant::now();
+            assert!(now < deadline, "timed out waiting for backend open");
+            let timeout = deadline.saturating_duration_since(now);
+            opened = self.open_started.wait_timeout(opened, timeout).unwrap().0;
+        }
+    }
+
+    fn complete_open(&self, result: AppResult<()>) {
+        *self.open_outcome.lock().unwrap() = Some(result);
+        self.open_completed.notify_all();
+    }
+
+    fn wait_for_close_count(&self, expected: usize) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let count = self
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(_, command)| matches!(command, PlaybackCommand::Close))
+                .count();
+            if count >= expected {
+                return;
+            }
+            assert!(Instant::now() < deadline, "timed out waiting for close");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+impl MpvBackend for BlockingMpvBackend {
+    fn open(&self, request: MpvOpenRequest) -> AppResult<()> {
+        self.opened.lock().unwrap().push(request);
+        self.open_started.notify_all();
+
+        let mut outcome = self.open_outcome.lock().unwrap();
+        loop {
+            if let Some(result) = outcome.take() {
+                return result;
+            }
+            outcome = self.open_completed.wait(outcome).unwrap();
+        }
+    }
+
+    fn command(&self, session_id: &str, command: PlaybackCommand) -> AppResult<()> {
+        self.commands
+            .lock()
+            .unwrap()
+            .push((session_id.into(), command));
+        Ok(())
+    }
+
+    fn close(&self, session_id: &str) -> AppResult<()> {
+        self.command(session_id, PlaybackCommand::Close)
+    }
+
+    fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {
+        Ok(None)
+    }
+}
+
+fn playback_test_error() -> AppError {
+    AppError::new("playback.test_open_failed", "Playback backend failed").with_recoverable(true)
 }
 
 #[derive(Default)]

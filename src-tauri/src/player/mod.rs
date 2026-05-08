@@ -82,21 +82,12 @@ pub struct PlaybackErrorEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlayerWindow {
-    pub label: String,
-    pub window_id: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MpvOpenRequest {
     pub session_id: String,
-    pub window_id: i64,
     pub media_url: String,
 }
 
 pub trait PlaybackHost: Send + Sync {
-    fn create_player_window(&self, session_id: &str) -> AppResult<PlayerWindow>;
-
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()>;
 
     fn emit_position(&self, event: &PlaybackPositionEvent) -> AppResult<()>;
@@ -229,6 +220,18 @@ impl PlaybackSessionStore {
             })
             .unwrap_or(false)
     }
+
+    fn is_closed(&self, session_id: &str) -> bool {
+        self.sessions
+            .lock()
+            .map(|sessions| {
+                sessions
+                    .get(session_id)
+                    .map(|stored| stored.session.state == PlayerState::Closed)
+                    .unwrap_or(true)
+            })
+            .unwrap_or(true)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -303,40 +306,6 @@ impl NativePlayerService {
         });
     }
 
-    fn start_position_poller(&self, session_id: String) {
-        let sessions = self.sessions.clone();
-        let backend = self.backend.clone();
-        let host = self.host.clone();
-        let progress_reporter = self.progress_reporter.clone();
-        let report_interval_seconds = self.progress_report_interval_seconds;
-
-        thread::spawn(move || {
-            while sessions.is_active(&session_id) {
-                thread::sleep(Duration::from_secs(1));
-                if !sessions.is_active(&session_id) {
-                    break;
-                }
-                let Ok(Some(position_seconds)) = backend.position_seconds(&session_id) else {
-                    continue;
-                };
-                let Ok((session, should_report)) = sessions.update_position(
-                    &session_id,
-                    position_seconds,
-                    report_interval_seconds,
-                ) else {
-                    continue;
-                };
-                let _ = host.emit_position(&PlaybackPositionEvent {
-                    session_id: session_id.clone(),
-                    position_seconds,
-                });
-                if should_report {
-                    let _ =
-                        progress_reporter.report_progress(progress_from_session(&session, false));
-                }
-            }
-        });
-    }
 }
 
 impl PlayerService for NativePlayerService {
@@ -346,7 +315,6 @@ impl PlayerService for NativePlayerService {
         source: ResolvedPlaybackSource,
     ) -> AppResult<PlayerSession> {
         let session_id = self.sessions.next_session_id();
-        let player_window = self.create_window_or_emit(&session_id)?;
         let opening = PlayerSession {
             id: session_id.clone(),
             server_id: request.server_id,
@@ -361,24 +329,61 @@ impl PlayerService for NativePlayerService {
         })?;
         self.emit_state(&opening)?;
 
-        if let Err(error) = self.backend.open(MpvOpenRequest {
-            session_id: session_id.clone(),
-            window_id: player_window.window_id,
-            media_url: source.url,
-        }) {
-            let _ = self.sessions.update(&session_id, |stored| {
-                stored.session.state = PlayerState::Error;
+        let sessions = self.sessions.clone();
+        let backend = self.backend.clone();
+        let host = self.host.clone();
+        let progress_reporter = self.progress_reporter.clone();
+        let report_interval_seconds = self.progress_report_interval_seconds;
+        let session_id_for_open = session_id.clone();
+        thread::spawn(move || {
+            let open_result = backend.open(MpvOpenRequest {
+                session_id: session_id_for_open.clone(),
+                media_url: source.url,
             });
-            self.emit_error(Some(session_id), &error);
-            return Err(error);
-        }
 
-        let playing = self.sessions.update(&opening.id, |stored| {
-            stored.session.state = PlayerState::Playing;
-        })?;
-        self.emit_state(&playing)?;
-        self.start_position_poller(playing.id.clone());
-        Ok(playing)
+            match open_result {
+                Ok(()) => {
+                    if sessions.is_closed(&session_id_for_open) {
+                        let _ = backend.close(&session_id_for_open);
+                        return;
+                    }
+
+                    let playing = sessions.update(&session_id_for_open, |stored| {
+                        stored.session.state = PlayerState::Playing;
+                    });
+                    let Ok(playing) = playing else {
+                        let _ = backend.close(&session_id_for_open);
+                        return;
+                    };
+                    let _ = host.emit_state_changed(&playing);
+                    start_position_poller(
+                        sessions,
+                        backend,
+                        host,
+                        progress_reporter,
+                        session_id_for_open,
+                        report_interval_seconds,
+                    );
+                }
+                Err(error) => {
+                    if !sessions.is_closed(&session_id_for_open) {
+                        let _ = sessions.update(&session_id_for_open, |stored| {
+                            stored.session.state = PlayerState::Error;
+                        });
+                        let _ = host.emit_error(&PlaybackErrorEvent {
+                            session_id: Some(session_id_for_open.clone()),
+                            code: error.code().into(),
+                            message: error.message().into(),
+                        });
+                        if let Ok(session) = sessions.get(&session_id_for_open) {
+                            let _ = host.emit_state_changed(&session.session);
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(opening)
     }
 
     fn command(&self, session_id: &str, command: PlaybackCommand) -> AppResult<PlayerSession> {
@@ -440,16 +445,6 @@ impl PlayerService for NativePlayerService {
     }
 }
 
-impl NativePlayerService {
-    fn create_window_or_emit(&self, session_id: &str) -> AppResult<PlayerWindow> {
-        self.host
-            .create_player_window(session_id)
-            .inspect_err(|error| {
-                self.emit_error(Some(session_id.into()), error);
-            })
-    }
-}
-
 fn apply_command_to_session(session: &mut PlayerSession, command: &PlaybackCommand) {
     match command {
         PlaybackCommand::Play => session.state = PlayerState::Playing,
@@ -460,6 +455,39 @@ fn apply_command_to_session(session: &mut PlayerSession, command: &PlaybackComma
         PlaybackCommand::SetVolume { .. } => {}
         PlaybackCommand::Close => session.state = PlayerState::Closed,
     }
+}
+
+fn start_position_poller(
+    sessions: Arc<PlaybackSessionStore>,
+    backend: Arc<dyn MpvBackend>,
+    host: Arc<dyn PlaybackHost>,
+    progress_reporter: Arc<dyn PlaybackProgressReporter>,
+    session_id: String,
+    report_interval_seconds: u32,
+) {
+    thread::spawn(move || {
+        while sessions.is_active(&session_id) {
+            thread::sleep(Duration::from_secs(1));
+            if !sessions.is_active(&session_id) {
+                break;
+            }
+            let Ok(Some(position_seconds)) = backend.position_seconds(&session_id) else {
+                continue;
+            };
+            let Ok((session, should_report)) =
+                sessions.update_position(&session_id, position_seconds, report_interval_seconds)
+            else {
+                continue;
+            };
+            let _ = host.emit_position(&PlaybackPositionEvent {
+                session_id: session_id.clone(),
+                position_seconds,
+            });
+            if should_report {
+                let _ = progress_reporter.report_progress(progress_from_session(&session, false));
+            }
+        }
+    });
 }
 
 fn progress_from_session(session: &PlayerSession, is_final: bool) -> PlaybackProgressUpdate {
