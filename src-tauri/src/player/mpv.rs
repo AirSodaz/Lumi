@@ -27,13 +27,21 @@ type MpvErrorString = unsafe extern "C" fn(c_int) -> *const c_char;
 const MPV_FORMAT_DOUBLE: c_int = 5;
 
 pub struct RuntimeMpvBackend {
+    resource_dir: Option<PathBuf>,
     library: Mutex<Option<Arc<MpvLibrary>>>,
     instances: Mutex<HashMap<String, RuntimeMpvInstance>>,
 }
 
 impl Default for RuntimeMpvBackend {
     fn default() -> Self {
+        Self::new(None)
+    }
+}
+
+impl RuntimeMpvBackend {
+    pub fn new(resource_dir: Option<PathBuf>) -> Self {
         Self {
+            resource_dir,
             library: Mutex::new(None),
             instances: Mutex::new(HashMap::new()),
         }
@@ -130,7 +138,7 @@ impl RuntimeMpvBackend {
             return Ok(library);
         }
 
-        let library = Arc::new(MpvLibrary::load()?);
+        let library = Arc::new(MpvLibrary::load(self.resource_dir.as_deref())?);
         *self
             .library
             .lock()
@@ -162,8 +170,8 @@ unsafe impl Send for MpvLibrary {}
 unsafe impl Sync for MpvLibrary {}
 
 impl MpvLibrary {
-    fn load() -> AppResult<Self> {
-        let candidates = library_candidates();
+    fn load(resource_dir: Option<&std::path::Path>) -> AppResult<Self> {
+        let candidates = library_candidates(resource_dir);
         Self::load_from_candidates(candidates)
     }
 
@@ -171,7 +179,7 @@ impl MpvLibrary {
         let mut last_error = String::from("no candidate paths");
 
         for candidate in &candidates {
-            let library = unsafe { Library::new(candidate) };
+            let library = load_library_candidate(candidate);
             match library {
                 Ok(library) => return Self::from_library(library, candidates.clone()),
                 Err(error) => last_error = error.to_string(),
@@ -298,50 +306,123 @@ impl MpvLibrary {
     }
 }
 
-fn library_candidates() -> Vec<String> {
+#[cfg(target_os = "windows")]
+fn load_library_candidate(candidate: &str) -> Result<Library, libloading::Error> {
+    use libloading::os::windows::{Library as WindowsLibrary, LOAD_WITH_ALTERED_SEARCH_PATH};
+
+    let path = std::path::Path::new(candidate);
+    if path.is_absolute() {
+        unsafe {
+            WindowsLibrary::load_with_flags(candidate, LOAD_WITH_ALTERED_SEARCH_PATH)
+                .map(Into::into)
+        }
+    } else {
+        unsafe { Library::new(candidate) }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn load_library_candidate(candidate: &str) -> Result<Library, libloading::Error> {
+    unsafe { Library::new(candidate) }
+}
+
+fn library_candidates(resource_dir: Option<&std::path::Path>) -> Vec<String> {
+    library_candidates_for(
+        env::var("LUMI_LIBMPV_PATH").ok().as_deref(),
+        current_exe_dir().as_deref(),
+        resource_dir,
+        env::consts::OS,
+        env::consts::ARCH,
+    )
+}
+
+fn library_candidates_for(
+    env_path: Option<&str>,
+    app_dir: Option<&std::path::Path>,
+    resource_dir: Option<&std::path::Path>,
+    os: &str,
+    arch: &str,
+) -> Vec<String> {
     let mut candidates = Vec::new();
-    if let Ok(path) = env::var("LUMI_LIBMPV_PATH") {
+    if let Some(path) = env_path {
         if !path.trim().is_empty() {
-            candidates.push(path);
+            candidates.push(path.to_string());
         }
     }
 
-    candidates.extend(default_library_names().into_iter().map(String::from));
-    candidates.extend(app_local_library_paths());
+    candidates.extend(default_library_names_for(os).into_iter().map(String::from));
+    candidates.extend(app_local_library_paths(app_dir, os));
+    candidates.extend(bundled_library_paths(resource_dir, os, arch));
     candidates
 }
 
-#[cfg(target_os = "windows")]
-fn default_library_names() -> Vec<&'static str> {
-    vec!["mpv-2.dll", "libmpv-2.dll", "libmpv.dll"]
+fn default_library_names_for(os: &str) -> Vec<&'static str> {
+    match os {
+        "windows" => vec!["mpv-2.dll", "libmpv-2.dll", "libmpv.dll"],
+        "macos" => vec!["libmpv.2.dylib", "libmpv.dylib"],
+        _ => vec!["libmpv.so.2", "libmpv.so"],
+    }
 }
 
-#[cfg(target_os = "macos")]
-fn default_library_names() -> Vec<&'static str> {
-    vec!["libmpv.2.dylib", "libmpv.dylib"]
-}
-
-#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-fn default_library_names() -> Vec<&'static str> {
-    vec!["libmpv.so.2", "libmpv.so"]
-}
-
-fn app_local_library_paths() -> Vec<String> {
+fn current_exe_dir() -> Option<PathBuf> {
     let Ok(exe) = env::current_exe() else {
+        return None;
+    };
+    exe.parent().map(PathBuf::from)
+}
+
+fn app_local_library_paths(app_dir: Option<&std::path::Path>, os: &str) -> Vec<String> {
+    let Some(dir) = app_dir else {
         return Vec::new();
     };
-    let Some(dir) = exe.parent() else {
-        return Vec::new();
-    };
-    default_library_names()
+    default_library_names_for(os)
         .into_iter()
-        .map(|name| PathBuf::from(dir).join(name).to_string_lossy().into_owned())
+        .map(|name| dir.join(name).to_string_lossy().into_owned())
         .collect()
+}
+
+fn bundled_library_paths(
+    resource_dir: Option<&std::path::Path>,
+    os: &str,
+    arch: &str,
+) -> Vec<String> {
+    let Some(resource_dir) = resource_dir else {
+        return Vec::new();
+    };
+    let Some(platform_dir) = platform_resource_subdir_for(os, arch) else {
+        return Vec::new();
+    };
+
+    default_library_names_for(os)
+        .into_iter()
+        .map(|name| {
+            resource_dir
+                .join("libmpv")
+                .join(platform_dir)
+                .join(name)
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect()
+}
+
+fn platform_resource_subdir_for(os: &str, arch: &str) -> Option<&'static str> {
+    match (os, arch) {
+        ("windows", "x86_64") => Some("windows-x64"),
+        ("windows", "aarch64") => Some("windows-arm64"),
+        ("macos", "x86_64") => Some("macos-x64"),
+        ("macos", "aarch64") => Some("macos-arm64"),
+        ("linux", "x86_64") => Some("linux-x64"),
+        ("linux", "aarch64") => Some("linux-arm64"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::MpvLibrary;
+    use std::path::Path;
+
+    use super::{library_candidates_for, platform_resource_subdir_for, MpvLibrary};
 
     #[test]
     fn missing_runtime_library_maps_to_stable_error_code() {
@@ -355,5 +436,82 @@ mod tests {
 
         assert_eq!(error.code(), "playback.mpv_library_missing");
         assert!(error.recoverable());
+    }
+
+    #[test]
+    fn bundled_candidates_are_checked_after_env_system_and_app_local_paths() {
+        let app_dir = Path::new("C:/Program Files/Lumi");
+        let resource_dir = Path::new("C:/Program Files/Lumi/resources");
+        let candidates = library_candidates_for(
+            Some("D:/mpv/custom/mpv-2.dll"),
+            Some(app_dir),
+            Some(resource_dir),
+            "windows",
+            "x86_64",
+        );
+
+        assert_eq!(candidates[0], "D:/mpv/custom/mpv-2.dll");
+        assert_eq!(
+            &candidates[1..4],
+            ["mpv-2.dll", "libmpv-2.dll", "libmpv.dll"]
+        );
+
+        let app_local_index = candidates
+            .iter()
+            .map(|candidate| candidate.replace('\\', "/"))
+            .position(|candidate| candidate.ends_with("Lumi/mpv-2.dll"))
+            .expect("app-local mpv candidate");
+        let bundled_index = candidates
+            .iter()
+            .map(|candidate| candidate.replace('\\', "/"))
+            .position(|candidate| candidate.ends_with("resources/libmpv/windows-x64/mpv-2.dll"))
+            .expect("bundled mpv candidate");
+
+        assert!(bundled_index > app_local_index);
+    }
+
+    #[test]
+    fn platform_resource_subdir_maps_supported_release_targets() {
+        assert_eq!(
+            platform_resource_subdir_for("windows", "x86_64"),
+            Some("windows-x64")
+        );
+        assert_eq!(
+            platform_resource_subdir_for("windows", "aarch64"),
+            Some("windows-arm64")
+        );
+        assert_eq!(
+            platform_resource_subdir_for("macos", "x86_64"),
+            Some("macos-x64")
+        );
+        assert_eq!(
+            platform_resource_subdir_for("macos", "aarch64"),
+            Some("macos-arm64")
+        );
+        assert_eq!(
+            platform_resource_subdir_for("linux", "x86_64"),
+            Some("linux-x64")
+        );
+        assert_eq!(
+            platform_resource_subdir_for("linux", "aarch64"),
+            Some("linux-arm64")
+        );
+        assert_eq!(platform_resource_subdir_for("linux", "arm"), None);
+    }
+
+    #[test]
+    fn blank_env_override_is_ignored() {
+        let candidates = library_candidates_for(
+            Some("  "),
+            None,
+            Some(Path::new("/opt/lumi/resources")),
+            "linux",
+            "x86_64",
+        );
+
+        assert_eq!(candidates[0], "libmpv.so.2");
+        assert!(!candidates
+            .iter()
+            .any(|candidate| candidate.trim().is_empty()));
     }
 }

@@ -14,9 +14,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
+            let resource_dir = app.path().resource_dir().ok();
             std::fs::create_dir_all(&app_data_dir)?;
-            app.manage(app::AppState::persistent(
+            app.manage(app::AppState::persistent_with_resource_dir(
                 app_data_dir.join("lumi.sqlite3"),
+                resource_dir,
             )?);
             Ok(())
         })

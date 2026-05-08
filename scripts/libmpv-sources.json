@@ -1,0 +1,5 @@
+{
+  "$schema": "https://lumi.local/schemas/libmpv-sources.v1.json",
+  "schemaVersion": 1,
+  "sources": {}
+}

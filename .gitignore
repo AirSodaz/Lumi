@@ -27,3 +27,7 @@ dist-ssr
 *.sw?
 
 .superpowers/brainstorm
+
+# Generated release resources
+src-tauri/resources/libmpv/*
+!src-tauri/resources/libmpv/.gitkeep

@@ -1,5 +1,5 @@
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 
@@ -76,13 +76,21 @@ impl Default for AppState {
 
 impl AppState {
     pub fn persistent(database_path: impl AsRef<Path>) -> AppResult<Self> {
+        Self::persistent_with_resource_dir(database_path, None)
+    }
+
+    pub fn persistent_with_resource_dir(
+        database_path: impl AsRef<Path>,
+        resource_dir: Option<PathBuf>,
+    ) -> AppResult<Self> {
         let database = Database::open(database_path)?;
         database.initialize()?;
-        Ok(Self::with_services(
+        Ok(Self::with_services_and_player(
             Arc::new(LocalStore::new(database)),
             Arc::new(SystemCredentialStore::new()?),
             Arc::new(ReqwestEmbyHttpTransport::new()?),
             Arc::new(SystemClock),
+            Arc::new(RuntimeMpvBackend::new(resource_dir)),
         ))
     }
 

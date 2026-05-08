@@ -17,6 +17,7 @@ Load order:
 1. `LUMI_LIBMPV_PATH`, when set.
 2. Platform library names from the system loader path.
 3. Platform library names next to the Lumi executable.
+4. Bundled Tauri resource libraries under `$RESOURCE/libmpv/<platform>/`.
 
 Current names:
 
@@ -25,6 +26,15 @@ Current names:
 - Linux/dev fallback: `libmpv.so.2`, `libmpv.so`
 
 If no library can be loaded, playback returns recoverable `playback.mpv_library_missing` with candidate paths and the `LUMI_LIBMPV_PATH` hint. Missing libmpv is a runtime playback diagnostic, not a build failure.
+
+Release bundles can stage libmpv with:
+
+```powershell
+pwsh ./scripts/download-libmpv.ps1 -Platform auto -Manifest ./scripts/libmpv-sources.json
+pnpm tauri:build
+```
+
+The script writes platform-specific files to `src-tauri/resources/libmpv/<platform>/`, and Tauri bundles that directory as `libmpv`. The source manifest is intentionally strict: each platform entry must pin `url`, `sha256`, `archiveType`, LGPL-compatible license metadata, source metadata, `mainLibraries`, and `copyGlobs`. If a platform has no audited manifest entry, the script fails before the build instead of downloading an unreviewed binary.
 
 ## Window Strategy
 
@@ -55,6 +65,8 @@ P6 emits `playback:state-changed`, `playback:position`, and `playback:error`. Po
 mpv/libmpv is LGPL-oriented for dynamic linking, but mpv builds can include optional GPL components depending on how they are produced. Lumi must distribute libmpv as a replaceable dynamic library, include license notices, and document the exact binary source used for Windows and macOS release artifacts.
 
 Do not silently bundle a GPL-constrained build into default Lumi releases.
+
+Every staged bundle includes `LIBMPV_SOURCE.json` beside the copied dynamic libraries. Release notes and third-party notices must use that file as the source of truth for binary provenance.
 
 ## Alternatives Considered
 
