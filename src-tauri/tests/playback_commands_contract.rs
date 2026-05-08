@@ -126,6 +126,145 @@ fn playback_open_resolves_container_to_first_playable_descendant() {
 }
 
 #[test]
+fn playback_open_uses_transcoding_source_when_direct_stream_is_unavailable() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Transcode",
+                        "TranscodingUrl": "/Videos/movie-1/master.m3u8?MediaSourceId=source-1",
+                        "SupportsDirectStream": false
+                    }]
+                }),
+            ),
+        ],
+        backend.clone(),
+    );
+    let profile = seed_profile_with_token(&state);
+
+    playback::open_for_state(
+        &state,
+        Arc::new(FakePlaybackHost),
+        PlayerOpenRequest {
+            server_id: profile.id,
+            item_id: "movie-1".into(),
+            media_source_id: None,
+        },
+    )
+    .expect("open transcoded playback");
+
+    let opened = backend.opened.lock().unwrap();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(
+        opened[0].media_url,
+        "http://localhost:8096/Videos/movie-1/master.m3u8?MediaSourceId=source-1&api_key=token-value"
+    );
+}
+
+#[test]
+fn playback_open_does_not_duplicate_existing_api_key() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct",
+                        "DirectStreamUrl": "/Videos/movie-1/stream.mkv?api_key=token-value",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
+        backend.clone(),
+    );
+    let profile = seed_profile_with_token(&state);
+
+    playback::open_for_state(
+        &state,
+        Arc::new(FakePlaybackHost),
+        PlayerOpenRequest {
+            server_id: profile.id,
+            item_id: "movie-1".into(),
+            media_source_id: None,
+        },
+    )
+    .expect("open playback");
+
+    let opened = backend.opened.lock().unwrap();
+    assert_eq!(
+        opened[0].media_url,
+        "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value"
+    );
+}
+
+#[test]
+fn playback_open_rejects_local_path_sources_without_creating_window() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct Play Path",
+                        "Path": "D:\\Media\\Movies\\demo.mkv",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
+        backend.clone(),
+    );
+    let profile = seed_profile_with_token(&state);
+
+    let error = playback::open_for_state(
+        &state,
+        Arc::new(FakePlaybackHost),
+        PlayerOpenRequest {
+            server_id: profile.id,
+            item_id: "movie-1".into(),
+            media_source_id: None,
+        },
+    )
+    .expect_err("local filesystem path should not be treated as an Emby stream URL");
+
+    assert_eq!(error.code(), "playback.no_source");
+    assert!(backend.opened.lock().unwrap().is_empty());
+}
+
+#[test]
 fn playback_open_returns_no_source_for_empty_container_without_creating_window() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(

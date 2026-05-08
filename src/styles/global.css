@@ -1414,19 +1414,6 @@ select:focus-visible {
   width: 92px;
 }
 
-.player-window-view {
-  display: grid;
-  min-height: 100vh;
-  place-items: center;
-  color: rgb(235 238 236 / 72%);
-  background: #050607;
-}
-
-.player-window-brand {
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
 .dropdown-content,
 .tooltip-content {
   border: 1px solid var(--color-border);

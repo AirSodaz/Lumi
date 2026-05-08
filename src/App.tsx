@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { MotionConfig } from "motion/react";
-import { PlayerWindowView } from "./features/player/PlayerWindowView";
 import { LumiShell } from "./features/shell/LumiShell";
 import "./styles/global.css";
 
@@ -24,17 +23,10 @@ function App() {
   return (
     <MotionConfig reducedMotion="user">
       <QueryClientProvider client={queryClient}>
-        {isPlayerWindow() ? <PlayerWindowView /> : <LumiShell />}
+        <LumiShell />
       </QueryClientProvider>
     </MotionConfig>
   );
 }
 
 export default App;
-
-function isPlayerWindow() {
-  return (
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("playerWindow") === "1"
-  );
-}

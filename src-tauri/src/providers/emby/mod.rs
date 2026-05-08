@@ -608,9 +608,8 @@ impl EmbyClient {
         response
             .media_sources
             .into_iter()
-            .filter(|source| source.supports_direct_stream.unwrap_or(true))
-            .map(|source| self.map_media_source(source, token))
-            .collect()
+            .filter_map(|source| self.map_media_source(source, token).transpose())
+            .collect::<AppResult<Vec<_>>>()
     }
 
     fn get_playback_sources_for_detail(
@@ -751,17 +750,25 @@ impl EmbyClient {
         })
     }
 
-    fn map_media_source(&self, source: EmbyMediaSource, token: &str) -> AppResult<MediaSource> {
-        let raw_url = source
-            .direct_stream_url
-            .or(source.path)
-            .ok_or_else(|| AppError::new("emby.media.no_stream_url", "Media source has no URL"))?;
+    fn map_media_source(&self, source: EmbyMediaSource, token: &str) -> AppResult<Option<MediaSource>> {
+        let Some(raw_url) = self.playable_source_url(&source) else {
+            return Ok(None);
+        };
+        let url = self.playback_url(raw_url, token)?;
 
-        Ok(MediaSource {
+        Ok(Some(MediaSource {
             id: source.id,
             name: source.name.unwrap_or_else(|| "Direct Stream".into()),
-            url: self.playback_url(&raw_url, token)?,
-        })
+            url,
+        }))
+    }
+
+    fn playable_source_url<'a>(&self, source: &'a EmbyMediaSource) -> Option<&'a str> {
+        source
+            .direct_stream_url
+            .as_deref()
+            .or(source.transcoding_url.as_deref())
+            .or_else(|| source.path.as_deref().filter(is_absolute_http_url))
     }
 
     fn image_url(&self, item_id: &str, image_type: &str, tag: &str) -> AppResult<String> {
@@ -783,7 +790,9 @@ impl EmbyClient {
             self.join_url(raw_url.trim_start_matches('/'))?
         };
 
-        url.query_pairs_mut().append_pair("api_key", token);
+        if !url.query_pairs().any(|(key, _)| key == "api_key") {
+            url.query_pairs_mut().append_pair("api_key", token);
+        }
         Ok(url.to_string())
     }
 
@@ -875,8 +884,12 @@ struct EmbyMediaSource {
     id: String,
     name: Option<String>,
     direct_stream_url: Option<String>,
+    transcoding_url: Option<String>,
     path: Option<String>,
-    supports_direct_stream: Option<bool>,
+}
+
+fn is_absolute_http_url(value: &&str) -> bool {
+    value.starts_with("http://") || value.starts_with("https://")
 }
 
 fn emby_authorization_header() -> String {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WindowBuilder};
 
 use crate::{
     app::AppState,
@@ -183,14 +183,10 @@ impl TauriPlaybackHost {
 impl PlaybackHost for TauriPlaybackHost {
     fn create_player_window(&self, session_id: &str) -> AppResult<PlayerWindow> {
         let label = format!("player-{session_id}");
-        let window = if let Some(window) = self.app.get_webview_window(&label) {
+        let window = if let Some(window) = self.app.get_window(&label) {
             window
         } else {
-            WebviewWindowBuilder::new(
-                &self.app,
-                label.clone(),
-                WebviewUrl::App("index.html?playerWindow=1".into()),
-            )
+            WindowBuilder::new(&self.app, label.clone())
             .title("Lumi Player")
             .inner_size(1120.0, 700.0)
             .resizable(true)

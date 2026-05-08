@@ -112,7 +112,6 @@ export function LumiShell() {
       !serversQuery.isLoading &&
       (preferredServerId !== null || selectedServerId !== null)
     ) {
-      setPreferredServerId(selectedServerId);
       writeSelectedServerPreference(selectedServerId);
     }
   }, [preferredServerId, selectedServerId, serversQuery.isLoading]);
