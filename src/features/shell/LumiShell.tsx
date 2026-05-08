@@ -2,7 +2,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
-  Library,
   Minus,
   PanelLeftClose,
   PanelLeftOpen,
@@ -10,6 +9,7 @@ import {
   Search,
   Settings,
   Square,
+  Star,
   X,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -33,13 +33,14 @@ import {
   useServers,
   type LibraryItem,
 } from "../../lib/tauriClient";
+import { FavoritesView } from "../favorites/FavoritesView";
 import { HomeView } from "../home/HomeView";
 import { LibrariesView } from "../libraries/LibrariesView";
 import { MediaDetailView } from "../media-detail/MediaDetailView";
 import { SettingsView } from "../settings/SettingsView";
 
-type ViewId = "home" | "libraries" | "search" | "settings";
-type ReturnView = "home" | "libraries";
+type ViewId = "home" | "favorites" | "search" | "settings";
+type ReturnView = "home";
 type Icon = LucideIcon;
 type ShellPlatform = "macos" | "windows";
 
@@ -63,7 +64,7 @@ const sidebarCollapsedStorageKey = "lumi.sidebarCollapsed";
 
 const navItems: Array<{ id: ViewId; label: string; icon: Icon }> = [
   { id: "home", label: "Home", icon: Home },
-  { id: "libraries", label: "Libraries", icon: Library },
+  { id: "favorites", label: "收藏", icon: Star },
   { id: "search", label: "Search", icon: Search },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -88,7 +89,7 @@ export function LumiShell() {
     route.kind === "mediaDetail"
       ? route.returnView
       : route.kind === "library"
-        ? "libraries"
+        ? "home"
         : route.view;
   const routeKey = routeIdentity(route);
 
@@ -207,7 +208,7 @@ export function LumiShell() {
           setRouteWithTransition({ kind: "view", view: route.returnView })
         }
         onOpenMedia={(item) => openMediaDetail(item, route.returnView)}
-        returnLabel={route.returnView === "home" ? "Home" : "Libraries"}
+        returnLabel="Home"
         serverId={route.serverId}
       />
     );
@@ -216,31 +217,18 @@ export function LumiShell() {
       <LibrariesView
         libraries={libraries}
         loading={librariesQuery.isLoading}
-        onBackToLibraries={() =>
-          setRouteWithTransition({ kind: "view", view: "libraries" })
+        onBackToHome={() =>
+          setRouteWithTransition({ kind: "view", view: "home" })
         }
-        onOpenLibrary={openLibrary}
-        onOpenMedia={(item) => openMediaDetail(item, "libraries")}
+        onOpenMedia={(item) => openMediaDetail(item, "home")}
         selectedLibraryId={route.libraryId}
         servers={servers}
       />
     );
   } else {
     switch (route.view) {
-      case "libraries":
-        currentView = (
-          <LibrariesView
-            libraries={libraries}
-            loading={librariesQuery.isLoading}
-            onBackToLibraries={() =>
-              setRouteWithTransition({ kind: "view", view: "libraries" })
-            }
-            onOpenLibrary={openLibrary}
-            onOpenMedia={(item) => openMediaDetail(item, "libraries")}
-            selectedLibraryId={null}
-            servers={servers}
-          />
-        );
+      case "favorites":
+        currentView = <FavoritesView />;
         break;
       case "search":
         currentView = <SearchView />;

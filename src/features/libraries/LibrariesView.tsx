@@ -18,20 +18,18 @@ import {
 type LibrariesViewProps = {
   libraries: LibraryItem[];
   loading: boolean;
-  onBackToLibraries: () => void;
-  onOpenLibrary: (item: LibraryItem) => void;
+  onBackToHome: () => void;
   onOpenMedia: (item: LibraryItem) => void;
-  selectedLibraryId?: string | null;
+  selectedLibraryId: string;
   servers: ServerProfile[];
 };
 
 export function LibrariesView({
   libraries,
   loading,
-  onBackToLibraries,
-  onOpenLibrary,
+  onBackToHome,
   onOpenMedia,
-  selectedLibraryId = null,
+  selectedLibraryId,
   servers,
 }: LibrariesViewProps) {
   const selectedLibrary =
@@ -42,94 +40,89 @@ export function LibrariesView({
     selectedLibrary?.id ?? null,
   );
 
-  if (selectedLibrary) {
-    const childCount = children.data?.items.length ?? 0;
-    const childStatus = children.isLoading
-      ? "Loading"
-      : childCount > 0
-        ? `${childCount} items`
-        : "Library browser";
-
+  if (!selectedLibrary) {
     return (
       <section className="view-stack libraries-view app-workbench" aria-labelledby="library-title">
         <header className="workbench-header">
           <div className="workbench-title-block">
             <span className="workbench-kicker">{server?.name ?? "No server"}</span>
-            <h1 id="library-title">{selectedLibrary.title}</h1>
+            <h1 id="library-title">Media Library</h1>
             <div className="workbench-meta-row">
-              <span>{formatMetadata(selectedLibrary)}</span>
-              <span>{childStatus}</span>
+              <span>{loading ? "Syncing" : "Unavailable"}</span>
+              <span>{server?.name ?? "Server"}</span>
             </div>
           </div>
           <div className="toolbar-cluster">
             <MotionButton
               className="secondary-action"
-              onClick={onBackToLibraries}
+              onClick={onBackToHome}
               type="button"
             >
               <ChevronLeft aria-hidden="true" size={16} />
-              <span>Back to Libraries</span>
+              <span>Back to Home</span>
             </MotionButton>
           </div>
         </header>
 
-        <div className="browser-toolbar" aria-label="Library path">
-          <span className="breadcrumb-label">Libraries</span>
-          <span aria-hidden="true" className="toolbar-divider">/</span>
-          <strong>{selectedLibrary.title}</strong>
-          <span className="status-chip">{server?.name ?? "Server"}</span>
-        </div>
-
-        {children.isError ? (
-          <EmptyState icon={Film} title="Could not load media" value="Try again later" />
-        ) : children.isLoading ? (
-          <PosterGridLoading orientation="portrait" />
-        ) : children.data?.items.length ? (
-          <PosterGrid
-            ariaLabel={`Media in ${selectedLibrary.title}`}
-            focusScope="library-children"
-            items={children.data.items}
-            onOpenMedia={onOpenMedia}
-          />
-        ) : (
-          <EmptyState icon={Library} title="No media found" value={selectedLibrary.title} />
-        )}
+        <EmptyState
+          icon={loading ? Film : Library}
+          title={loading ? "Loading library" : "Library unavailable"}
+          value={loading ? server?.name ?? "Server" : "Return Home and choose a library"}
+        />
       </section>
     );
   }
 
+  const childCount = children.data?.items.length ?? 0;
+  const childStatus = children.isLoading
+    ? "Loading"
+    : childCount > 0
+      ? `${childCount} items`
+      : "Library browser";
+
   return (
-    <section className="view-stack libraries-view app-workbench" aria-labelledby="libraries-title">
+    <section className="view-stack libraries-view app-workbench" aria-labelledby="library-title">
       <header className="workbench-header">
         <div className="workbench-title-block">
           <span className="workbench-kicker">{server?.name ?? "No server"}</span>
-          <h1 id="libraries-title">Libraries</h1>
+          <h1 id="library-title">{selectedLibrary.title}</h1>
           <div className="workbench-meta-row">
-            <span>{libraries.length > 0 ? `${libraries.length} libraries` : "Library browser"}</span>
-            <span>{loading ? "Syncing" : "Ready"}</span>
+            <span>{formatMetadata(selectedLibrary)}</span>
+            <span>{childStatus}</span>
           </div>
+        </div>
+        <div className="toolbar-cluster">
+          <MotionButton
+            className="secondary-action"
+            onClick={onBackToHome}
+            type="button"
+          >
+            <ChevronLeft aria-hidden="true" size={16} />
+            <span>Back to Home</span>
+          </MotionButton>
         </div>
       </header>
 
-      <div className="browser-toolbar" aria-label="Library source">
-        <span className="server-dot" aria-hidden="true" />
-        <strong>{server?.name ?? "No server connected"}</strong>
-        <span className="status-chip">{libraries.length > 0 ? "Browse" : "Empty"}</span>
+      <div className="browser-toolbar" aria-label="Library path">
+        <span className="breadcrumb-label">Home</span>
+        <span aria-hidden="true" className="toolbar-divider">/</span>
+        <strong>{selectedLibrary.title}</strong>
+        <span className="status-chip">{server?.name ?? "Server"}</span>
       </div>
 
-      {servers.length === 0 ? (
-        <EmptyState icon={Library} title="No servers connected" value="Add a server in Settings" />
-      ) : loading ? (
-        <EmptyState icon={Film} title="Loading libraries" value={server?.name ?? "Server"} />
-      ) : libraries.length === 0 ? (
-        <EmptyState icon={Library} title="No libraries found" value={server?.name ?? "Server"} />
-      ) : (
+      {children.isError ? (
+        <EmptyState icon={Film} title="Could not load media" value="Try again later" />
+      ) : children.isLoading ? (
+        <PosterGridLoading orientation="portrait" />
+      ) : children.data?.items.length ? (
         <PosterGrid
-          ariaLabel="Media libraries"
-          focusScope="library-grid"
-          items={libraries}
-          onOpenMedia={onOpenLibrary}
+          ariaLabel={`Media in ${selectedLibrary.title}`}
+          focusScope="library-children"
+          items={children.data.items}
+          onOpenMedia={onOpenMedia}
         />
+      ) : (
+        <EmptyState icon={Library} title="No media found" value={selectedLibrary.title} />
       )}
     </section>
   );
