@@ -59,7 +59,7 @@ fn native_player_service_marks_playing_only_after_backend_ready_event() {
     let backend = Arc::new(BlockingMpvBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
-    let session = service
+    service
         .open(
             PlayerOpenRequest {
                 server_id: "server-1".into(),
@@ -87,10 +87,7 @@ fn native_player_service_marks_playing_only_after_backend_ready_event() {
         host.wait_for_state(PlayerState::Playing).state,
         PlayerState::Playing
     );
-    assert_eq!(
-        host.shown_surfaces.lock().unwrap().as_slice(),
-        &[session.id]
-    );
+    assert!(host.shown_surfaces.lock().unwrap().is_empty());
 }
 
 #[test]
@@ -132,7 +129,7 @@ fn native_player_service_ignores_duplicate_ready_events() {
     let backend = Arc::new(BlockingMpvBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
-    let session = service
+    service
         .open(
             PlayerOpenRequest {
                 server_id: "server-1".into(),
@@ -157,10 +154,7 @@ fn native_player_service_ignores_duplicate_ready_events() {
         PlayerState::Playing
     );
     thread::sleep(Duration::from_millis(25));
-    assert_eq!(
-        host.shown_surfaces.lock().unwrap().as_slice(),
-        &[session.id]
-    );
+    assert!(host.shown_surfaces.lock().unwrap().is_empty());
 }
 
 #[test]

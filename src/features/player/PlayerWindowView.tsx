@@ -23,12 +23,6 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
   const closeSent = useRef(false);
 
   useEffect(() => {
-    if (sessionQuery.data) {
-      setSession(sessionQuery.data);
-    }
-  }, [sessionQuery.data]);
-
-  useEffect(() => {
     const unlistenTasks = [
       playback.onStateChanged((nextSession) => {
         if (nextSession.id !== sessionId) {

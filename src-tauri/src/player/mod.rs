@@ -544,7 +544,6 @@ impl NativeMpvEventSink {
             return;
         }
 
-        let _ = self.host.show_video_surface(session_id);
         let _ = self.host.emit_state_changed(&session);
         start_position_poller(
             self.sessions.clone(),

@@ -572,6 +572,17 @@ fn playback_command_delegates_to_existing_player_session() {
     assert_eq!(backend.commands.lock().unwrap().len(), 1);
 }
 
+#[test]
+fn windows_video_host_is_visible_before_mpv_ready_events() {
+    let playback_source =
+        std::fs::read_to_string("src/commands/playback.rs").expect("read playback command source");
+
+    assert!(
+        playback_source.contains("WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS"),
+        "Windows mpv wid host must be visible as soon as it is created so startup does not wait on the Ready event"
+    );
+}
+
 fn test_state(responses: Vec<FakeResponse>, backend: Arc<dyn MpvBackend>) -> AppState {
     let database = Database::open_in_memory().expect("open database");
     database.initialize().expect("initialize database");

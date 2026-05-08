@@ -275,7 +275,7 @@ fn create_video_host_window(
 ) -> AppResult<Option<i64>> {
     use windows_sys::Win32::Foundation::{HINSTANCE, HWND};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, HMENU, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPSIBLINGS,
+        CreateWindowExW, HMENU, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
     const CONTROL_REGION_HEIGHT: u32 = 172;
@@ -289,7 +289,7 @@ fn create_video_host_window(
             WINDOW_EX_STYLE::default(),
             class_name.as_ptr(),
             std::ptr::null(),
-            WS_CHILD | WS_CLIPSIBLINGS,
+            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
             0,
             0,
             video_width as i32,
