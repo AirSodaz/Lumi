@@ -69,6 +69,13 @@ pub struct ListChildrenRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ListFavoritesRequest {
+    pub server_id: String,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HomeRowsRequest {
     pub server_id: String,
     pub library_ids: Vec<String>,
@@ -126,6 +133,8 @@ pub trait MediaProvider: Send + Sync {
     fn get_item(&self, server_id: &str, item_id: &str) -> AppResult<LibraryItemDetail>;
 
     fn get_home_rows(&self, request: HomeRowsRequest) -> AppResult<HomeRows>;
+
+    fn list_favorites(&self, request: ListFavoritesRequest) -> AppResult<PagedResult<LibraryItem>>;
 
     fn get_playback_sources(&self, server_id: &str, item_id: &str) -> AppResult<Vec<MediaSource>>;
 

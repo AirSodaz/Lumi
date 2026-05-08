@@ -5,14 +5,17 @@ use lumi_lib::{
     commands,
     errors::AppResult,
     events,
+    persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
     player::ResolvedPlaybackSource,
     player::{PlaybackCommand, PlayerOpenRequest, PlayerService, PlayerSession, PlayerState},
     providers::{
+        emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
         HomeRows, HomeRowsRequest, LibraryItem, LibraryItemDetail, ListChildrenRequest,
-        LoginRequest, MediaProvider, MediaSource, PagedResult, PlaybackProgressUpdate,
-        ProviderKind, ProviderRegistry, ServerProfile,
+        ListFavoritesRequest, LoginRequest, MediaProvider, MediaSource, PagedResult,
+        PlaybackProgressUpdate, ProviderKind, ProviderRegistry, ServerProfile,
     },
 };
+use serde_json::json;
 
 #[test]
 fn app_state_starts_with_empty_provider_registry_and_default_settings() {
@@ -81,6 +84,14 @@ fn media_provider_trait_exposes_v1_capabilities() {
         .latest_by_library
         .is_empty());
     assert!(provider
+        .list_favorites(ListFavoritesRequest {
+            server_id: "server-1".into(),
+            cursor: None,
+        })
+        .expect("favorites")
+        .items
+        .is_empty());
+    assert!(provider
         .get_playback_sources("server-1", "item-1")
         .expect("sources")
         .is_empty());
@@ -139,6 +150,71 @@ fn command_helpers_return_app_results_with_empty_defaults() {
     assert!(servers.expect("servers").is_empty());
     assert_eq!(settings.expect("settings"), AppSettings::default());
     assert_eq!(updated.expect("updated settings"), AppSettings::default());
+}
+
+#[test]
+fn media_command_helper_lists_favorites_from_state() {
+    let database = Database::open_in_memory().expect("open database");
+    database.initialize().expect("initialize database");
+    let state = AppState::with_services(
+        Arc::new(LocalStore::new(database)),
+        Arc::new(MemoryCredentialStore::default()),
+        Arc::new(FakeEmbyTransport),
+        Arc::new(FixedClock),
+    );
+    let profile = ServerProfile {
+        id: "server-1".into(),
+        provider_kind: ProviderKind::Emby,
+        name: "Demo Server".into(),
+        base_url: "http://localhost:8096".into(),
+        user_id: "user-1".into(),
+        created_at: "2026-05-07T00:00:00Z".into(),
+        updated_at: "2026-05-07T00:00:00Z".into(),
+    };
+
+    state
+        .local_store()
+        .upsert_server_profile(&profile)
+        .expect("persist profile");
+    state
+        .credential_store()
+        .set_token(&CredentialKey::server_token(&profile), "token-value")
+        .expect("persist token");
+
+    let favorites = commands::media::list_favorites_for_state(
+        &state,
+        ListFavoritesRequest {
+            server_id: "server-1".into(),
+            cursor: None,
+        },
+    )
+    .expect("favorites command returns result");
+
+    assert!(favorites.items.is_empty());
+    assert_eq!(favorites.next_cursor, None);
+}
+
+struct FakeEmbyTransport;
+
+impl EmbyHttpTransport for FakeEmbyTransport {
+    fn send(&self, _request: EmbyHttpRequest) -> AppResult<EmbyHttpResponse> {
+        Ok(EmbyHttpResponse {
+            status: 200,
+            body: json!({
+                "Items": [],
+                "TotalRecordCount": 0
+            }),
+            headers: Vec::new(),
+        })
+    }
+}
+
+struct FixedClock;
+
+impl Clock for FixedClock {
+    fn now_iso8601(&self) -> String {
+        "2026-05-07T00:00:00Z".into()
+    }
 }
 
 #[test]
@@ -203,6 +279,16 @@ impl MediaProvider for MockProvider {
         Ok(HomeRows {
             continue_watching: Vec::new(),
             latest_by_library: Vec::new(),
+        })
+    }
+
+    fn list_favorites(
+        &self,
+        _request: ListFavoritesRequest,
+    ) -> AppResult<PagedResult<LibraryItem>> {
+        Ok(PagedResult {
+            items: Vec::new(),
+            next_cursor: None,
         })
     }
 

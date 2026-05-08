@@ -109,6 +109,11 @@ export type ListChildrenRequest = {
   cursor?: string | null;
 };
 
+export type ListFavoritesRequest = {
+  serverId: string;
+  cursor?: string | null;
+};
+
 export type HomeRowsRequest = {
   serverId: string;
   libraryIds: string[];

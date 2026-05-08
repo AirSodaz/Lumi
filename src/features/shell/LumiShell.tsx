@@ -48,7 +48,7 @@ import { MediaDetailView } from "../media-detail/MediaDetailView";
 import { SettingsView } from "../settings/SettingsView";
 
 type ViewId = "home" | "favorites" | "search" | "settings";
-type ReturnView = "home";
+type ReturnView = "favorites" | "home";
 type Icon = LucideIcon;
 type ShellPlatform = "macos" | "windows";
 
@@ -237,7 +237,7 @@ export function LumiShell() {
           setRouteWithTransition({ kind: "view", view: route.returnView })
         }
         onOpenMedia={(item) => openMediaDetail(item, route.returnView)}
-        returnLabel="Home"
+        returnLabel={route.returnView === "favorites" ? "收藏" : "Home"}
         serverId={route.serverId}
       />
     );
@@ -258,7 +258,13 @@ export function LumiShell() {
   } else {
     switch (route.view) {
       case "favorites":
-        currentView = <FavoritesView />;
+        currentView = (
+          <FavoritesView
+            onOpenMedia={(item) => openMediaDetail(item, "favorites")}
+            selectedServer={selectedServer}
+            serversLoading={serversQuery.isLoading}
+          />
+        );
         break;
       case "search":
         currentView = <SearchView />;

@@ -12,8 +12,8 @@ use crate::{
     persistence::{CredentialKey, CredentialStore, LocalStore},
     providers::{
         HomeRows, HomeRowsRequest, LatestLibraryItems, LibraryItem, LibraryItemDetail,
-        ListChildrenRequest, LoginRequest, MediaProvider, MediaSource, PagedResult,
-        PlaybackProgressUpdate, ProviderKind, ServerProfile,
+        ListChildrenRequest, ListFavoritesRequest, LoginRequest, MediaProvider, MediaSource,
+        PagedResult, PlaybackProgressUpdate, ProviderKind, ServerProfile,
     },
 };
 
@@ -24,6 +24,7 @@ const EMBY_CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const EMBY_USER_AGENT: &str = concat!("Lumi/", env!("CARGO_PKG_VERSION"), " (Windows; Tauri)");
 const JSON_ACCEPT: &str = "application/json";
 const CHILDREN_PAGE_SIZE: usize = 50;
+const FAVORITES_PAGE_SIZE: usize = 50;
 const HOME_CONTINUE_WATCHING_LIMIT: usize = 10;
 const HOME_LATEST_LIMIT: usize = 10;
 const ITEM_FIELDS: &str = "Overview,SortName,PrimaryImageAspectRatio,MediaSources";
@@ -403,6 +404,32 @@ impl MediaProvider for EmbyProvider {
         })
     }
 
+    fn list_favorites(&self, request: ListFavoritesRequest) -> AppResult<PagedResult<LibraryItem>> {
+        let (profile, token) = self.profile_and_token(&request.server_id)?;
+        let client = self.client(&profile.base_url)?;
+        let page_start = request
+            .cursor
+            .as_deref()
+            .and_then(|cursor| cursor.parse::<usize>().ok())
+            .unwrap_or(0);
+        let response =
+            client.list_favorites(&profile.user_id, page_start, FAVORITES_PAGE_SIZE, &token)?;
+        let total = response.total_record_count.unwrap_or(response.items.len());
+        let items = response
+            .items
+            .into_iter()
+            .map(|item| client.map_item(item, &profile.id))
+            .collect::<AppResult<Vec<_>>>()?;
+        let next_start = page_start + items.len();
+        let next_cursor = (next_start < total).then(|| next_start.to_string());
+
+        for item in &items {
+            self.local_store.cache_media_item(item)?;
+        }
+
+        Ok(PagedResult { items, next_cursor })
+    }
+
     fn get_playback_sources(&self, server_id: &str, item_id: &str) -> AppResult<Vec<MediaSource>> {
         let (profile, token) = self.profile_and_token(server_id)?;
         let client = self.client(&profile.base_url)?;
@@ -572,6 +599,32 @@ impl EmbyClient {
         )?;
         self.ensure_success(response, ErrorContext::Media)
             .and_then(decode_json::<Vec<EmbyItem>>)
+    }
+
+    fn list_favorites(
+        &self,
+        user_id: &str,
+        start_index: usize,
+        limit: usize,
+        token: &str,
+    ) -> AppResult<EmbyItemsResponse> {
+        let path = format!("Users/{user_id}/Items");
+        let response = self.send(
+            EmbyHttpMethod::Get,
+            &path,
+            &[
+                ("StartIndex", start_index.to_string()),
+                ("Limit", limit.to_string()),
+                ("Recursive", "true".into()),
+                ("EnableUserData", "true".into()),
+                ("Fields", ITEM_FIELDS.into()),
+                ("Filters", "IsFavorite".into()),
+            ],
+            token_headers(token),
+            Value::Null,
+        )?;
+        self.ensure_success(response, ErrorContext::Media)
+            .and_then(decode_json::<EmbyItemsResponse>)
     }
 
     fn get_item(&self, user_id: &str, item_id: &str, token: &str) -> AppResult<EmbyItem> {

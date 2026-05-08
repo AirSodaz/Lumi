@@ -7,12 +7,17 @@ import type {
   LibraryItem,
   LibraryItemDetail,
   ListChildrenRequest,
+  ListFavoritesRequest,
   PagedResult,
 } from "./types";
 
 export const media = {
   listChildren(request: ListChildrenRequest) {
     return invoke<PagedResult<LibraryItem>>("media_list_children", { request });
+  },
+
+  listFavorites(request: ListFavoritesRequest) {
+    return invoke<PagedResult<LibraryItem>>("media_list_favorites", { request });
   },
 
   getItem(request: GetItemRequest) {

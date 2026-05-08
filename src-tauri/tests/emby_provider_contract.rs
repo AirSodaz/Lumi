@@ -8,8 +8,8 @@ use lumi_lib::{
             Clock, EmbyHttpMethod, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport,
             EmbyProvider,
         },
-        HomeRowsRequest, LibraryItem, ListChildrenRequest, LoginRequest, MediaProvider,
-        PlaybackProgressUpdate, ProviderKind, ServerProfile,
+        HomeRowsRequest, LibraryItem, ListChildrenRequest, ListFavoritesRequest, LoginRequest,
+        MediaProvider, PlaybackProgressUpdate, ProviderKind, ServerProfile,
     },
 };
 use serde_json::{json, Value};
@@ -386,6 +386,78 @@ mod providers {
 
             let second_latest_request = transport.request_at(2);
             assert!(second_latest_request.url.contains("ParentId=library-2"));
+        }
+
+        #[test]
+        fn lists_favorites_as_view_ready_items_with_cursor_paging() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                200,
+                json!({
+                    "Items": [{
+                        "Id": "movie-1",
+                        "Name": "Favorite Movie",
+                        "SortName": "Favorite Movie",
+                        "Type": "Movie",
+                        "ProductionYear": 2026,
+                        "RunTimeTicks": 72000000000u64,
+                        "Overview": "A favorite item",
+                        "ImageTags": { "Primary": "favorite-poster" },
+                        "BackdropImageTags": ["favorite-backdrop"],
+                        "UserData": {
+                            "PlayedPercentage": 12.5,
+                            "PlaybackPositionTicks": 9000000000u64
+                        }
+                    }],
+                    "TotalRecordCount": 52
+                }),
+            )]));
+            let provider = test_provider(local_store.clone(), credential_store, transport.clone());
+
+            let favorites = provider
+                .list_favorites(ListFavoritesRequest {
+                    server_id: profile.id,
+                    cursor: Some("50".into()),
+                })
+                .expect("list favorites");
+
+            assert_eq!(favorites.next_cursor, Some("51".into()));
+            assert_eq!(favorites.items.len(), 1);
+            assert_eq!(favorites.items[0].title, "Favorite Movie");
+            assert_eq!(favorites.items[0].item_type, "movie");
+            assert_eq!(favorites.items[0].runtime_seconds, Some(7200));
+            assert_eq!(favorites.items[0].played_percentage, Some(12.5));
+            assert_eq!(
+                favorites.items[0].playback_position_seconds,
+                Some(900)
+            );
+            assert_eq!(
+                favorites.items[0].poster_url,
+                Some(
+                    "http://localhost:8096/Items/movie-1/Images/Primary?tag=favorite-poster"
+                        .into()
+                )
+            );
+            assert_eq!(
+                local_store
+                    .get_cached_media_item(ProviderKind::Emby, "server-1", "movie-1")
+                    .expect("read cached favorite")
+                    .expect("favorite was cached")
+                    .title,
+                "Favorite Movie"
+            );
+
+            let request = transport.request_at(0);
+            assert_eq!(request.method, EmbyHttpMethod::Get);
+            assert!(request
+                .url
+                .starts_with("http://localhost:8096/Users/user-1/Items?"));
+            assert!(request.url.contains("StartIndex=50"));
+            assert!(request.url.contains("Limit=50"));
+            assert!(request.url.contains("Recursive=true"));
+            assert!(request.url.contains("EnableUserData=true"));
+            assert!(request.url.contains("Filters=IsFavorite"));
+            assert_eq!(request.header("X-Emby-Token"), Some("token-value"));
         }
 
         #[test]

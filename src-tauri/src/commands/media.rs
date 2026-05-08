@@ -7,7 +7,7 @@ use crate::{
     errors::AppResult,
     providers::{
         HomeRows, HomeRowsRequest, LibraryItem, LibraryItemDetail, ListChildrenRequest,
-        MediaProvider, PagedResult,
+        ListFavoritesRequest, MediaProvider, PagedResult,
     },
 };
 
@@ -34,6 +34,22 @@ pub fn list_children_for_state(
     request: ListChildrenRequest,
 ) -> AppResult<PagedResult<LibraryItem>> {
     emby_provider_for_state(state).list_children(request)
+}
+
+#[tauri::command]
+pub async fn media_list_favorites(
+    state: State<'_, AppState>,
+    request: ListFavoritesRequest,
+) -> AppResult<PagedResult<LibraryItem>> {
+    let state = super::state_for_blocking(state.inner());
+    super::run_blocking_command(move || list_favorites_for_state(&state, request)).await
+}
+
+pub fn list_favorites_for_state(
+    state: &AppState,
+    request: ListFavoritesRequest,
+) -> AppResult<PagedResult<LibraryItem>> {
+    emby_provider_for_state(state).list_favorites(request)
 }
 
 #[tauri::command]

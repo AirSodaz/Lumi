@@ -1,4 +1,5 @@
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -28,6 +29,7 @@ export const queryKeys = {
   libraries: (serverId: string) => ["libraries", serverId] as const,
   children: (serverId: string, parentId: string | null, cursor: string | null) =>
     ["children", serverId, parentId ?? "root", cursor ?? "first"] as const,
+  favorites: (serverId: string) => ["favorites", serverId] as const,
   homeRows: (serverId: string, libraryIds: readonly string[]) =>
     ["homeRows", serverId, libraryIds.join(":")] as const,
   itemDetail: (serverId: string, itemId: string) =>
@@ -68,6 +70,21 @@ export function useChildren(
         cursor: cursor ?? null,
       }),
     enabled: Boolean(serverId),
+    staleTime: QUERY_STALE_TIME_MS,
+  });
+}
+
+export function useFavorites(serverId: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.favorites(serverId ?? "none"),
+    queryFn: ({ pageParam }) =>
+      media.listFavorites({
+        serverId: serverId ?? "",
+        cursor: pageParam,
+      }),
+    enabled: Boolean(serverId),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: QUERY_STALE_TIME_MS,
   });
 }
@@ -126,6 +143,7 @@ export function useLogout() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.servers });
       void queryClient.invalidateQueries({ queryKey: ["libraries"] });
       void queryClient.invalidateQueries({ queryKey: ["homeRows"] });
+      void queryClient.invalidateQueries({ queryKey: ["favorites"] });
     },
   });
 }

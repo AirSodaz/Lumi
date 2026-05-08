@@ -194,6 +194,7 @@ type CommandArgs = {
     libraryIds?: string[];
     mediaSourceId?: string | null;
     parentId?: string | null;
+    cursor?: string | null;
     serverId?: string;
     sessionId?: string;
   };
@@ -288,6 +289,19 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
 
     return Promise.resolve({
       items: itemsByParent[parentId ?? ""] ?? [],
+      nextCursor: null,
+    });
+  }
+  if (command === "media_list_favorites") {
+    if (request?.serverId === "server-2") {
+      return Promise.resolve({
+        items: [secondServerMovie],
+        nextCursor: null,
+      });
+    }
+
+    return Promise.resolve({
+      items: [demoMovie],
       nextCursor: null,
     });
   }
@@ -516,15 +530,119 @@ describe("LumiShell", () => {
     expect(screen.queryByText("System material shell")).not.toBeInTheDocument();
   });
 
-  it("renders Favorites as an empty shell", async () => {
+  it("renders Favorites from the selected Emby server", async () => {
     const user = userEvent.setup();
+    mockBrowsingCommands();
+
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "收藏" }));
 
     expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
-    expect(screen.getByText("暂无收藏")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Demo Movie/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_list_favorites", {
+        request: { serverId: "server-1", cursor: null },
+      }),
+    );
     expect(screen.queryByRole("heading", { name: "Libraries" })).not.toBeInTheDocument();
+  });
+
+  it("opens media detail from Favorites and returns to Favorites", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "收藏" }));
+    const favoritesView = await screen.findByRole("region", { name: "收藏" });
+    await user.click(await within(favoritesView).findByRole("button", { name: /Demo Movie/ }));
+
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back to 收藏" }));
+    expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
+  });
+
+  it("keeps Favorites empty state when the selected server has no favorites", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "media_list_favorites") {
+        return Promise.resolve({ items: [], nextCursor: null });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "收藏" }));
+
+    expect(await screen.findByText("暂无收藏")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Demo Movie/ })).not.toBeInTheDocument();
+  });
+
+  it("shows a safe Favorites error state", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "media_list_favorites") {
+        return Promise.reject({
+          code: "emby.server",
+          message: "Emby request failed",
+          recoverable: true,
+          detail: { token: "secret-token" },
+        });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "收藏" }));
+
+    expect(await screen.findByText("Could not load favorites")).toBeInTheDocument();
+    expect(screen.queryByText("secret-token")).not.toBeInTheDocument();
+  });
+
+  it("loads the next Favorites page when the sentinel enters view", async () => {
+    const user = userEvent.setup();
+    const observer = installIntersectionObserverMock();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      const request = (args as CommandArgs | undefined)?.request;
+
+      if (command === "media_list_favorites" && request?.cursor === null) {
+        return Promise.resolve({ items: [demoMovie], nextCursor: "50" });
+      }
+
+      if (command === "media_list_favorites" && request?.cursor === "50") {
+        return Promise.resolve({ items: [secondMovie], nextCursor: null });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "收藏" }));
+    const favoritesView = await screen.findByRole("region", { name: "收藏" });
+    expect(
+      await within(favoritesView).findByRole("button", { name: /Demo Movie/ }),
+    ).toBeInTheDocument();
+    expect(await within(favoritesView).findByText("More favorites")).toBeInTheDocument();
+
+    observer.emit(true);
+
+    expect(
+      await within(favoritesView).findByRole("button", { name: /Second Movie/ }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_list_favorites", {
+        request: { serverId: "server-1", cursor: "50" },
+      }),
+    );
   });
 
   it("collapses and expands the sidebar while persisting the preference", async () => {
@@ -1431,4 +1549,56 @@ function emitTauriEvent(event: string, payload: unknown) {
   for (const listener of listeners) {
     listener({ payload });
   }
+}
+
+function installIntersectionObserverMock() {
+  let callback:
+    | ((
+        entries: Array<{
+          isIntersecting: boolean;
+          target: Element;
+        }>,
+      ) => void)
+    | null = null;
+  let target: Element | null = null;
+
+  class IntersectionObserverMock {
+    constructor(
+      observerCallback: (
+        entries: Array<{
+          isIntersecting: boolean;
+          target: Element;
+        }>,
+      ) => void,
+    ) {
+      callback = observerCallback;
+    }
+
+    disconnect() {}
+
+    observe(nextTarget: Element) {
+      target = nextTarget;
+    }
+
+    unobserve() {}
+  }
+
+  Object.defineProperty(window, "IntersectionObserver", {
+    configurable: true,
+    value: IntersectionObserverMock,
+    writable: true,
+  });
+  Object.defineProperty(globalThis, "IntersectionObserver", {
+    configurable: true,
+    value: IntersectionObserverMock,
+    writable: true,
+  });
+
+  return {
+    emit(isIntersecting: boolean) {
+      if (callback && target) {
+        callback([{ isIntersecting, target }]);
+      }
+    },
+  };
 }

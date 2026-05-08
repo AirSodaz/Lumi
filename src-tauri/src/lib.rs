@@ -30,6 +30,7 @@ pub fn run() {
             commands::providers::providers_update_server_profile,
             commands::providers::providers_list_libraries,
             commands::media::media_list_children,
+            commands::media::media_list_favorites,
             commands::media::media_get_item,
             commands::media::media_get_home_rows,
             commands::playback::playback_open,

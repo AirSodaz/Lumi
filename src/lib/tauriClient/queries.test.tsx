@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   useLogout,
   useChildren,
+  useFavorites,
   useHomeRows,
   useItemDetail,
   useLibraries,
@@ -165,6 +166,63 @@ describe("tauri query hooks", () => {
         libraryIds: ["library-1"],
         serverId: "server-1",
       },
+    });
+  });
+
+  it("loads favorites lazily and requests the next cursor", async () => {
+    invokeMock
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: "movie-1",
+            providerKind: "emby",
+            serverId: "server-1",
+            itemType: "movie",
+            title: "Favorite Movie",
+          },
+        ],
+        nextCursor: "50",
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: "movie-2",
+            providerKind: "emby",
+            serverId: "server-1",
+            itemType: "movie",
+            title: "Second Favorite",
+          },
+        ],
+        nextCursor: null,
+      });
+
+    const { result, rerender } = renderHook(
+      ({ serverId }) => useFavorites(serverId),
+      {
+        initialProps: { serverId: null as string | null },
+        wrapper,
+      },
+    );
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    rerender({ serverId: "server-1" });
+
+    await waitFor(() =>
+      expect(result.current.data?.pages[0]?.items[0]?.title).toBe("Favorite Movie"),
+    );
+    expect(invokeMock).toHaveBeenCalledWith("media_list_favorites", {
+      request: { serverId: "server-1", cursor: null },
+    });
+
+    await result.current.fetchNextPage();
+
+    await waitFor(() =>
+      expect(result.current.data?.pages[1]?.items[0]?.title).toBe("Second Favorite"),
+    );
+    expect(invokeMock).toHaveBeenCalledWith("media_list_favorites", {
+      request: { serverId: "server-1", cursor: "50" },
     });
   });
 

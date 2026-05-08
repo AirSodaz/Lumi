@@ -1075,6 +1075,14 @@ select:focus-visible {
   min-height: 108px;
 }
 
+.favorites-load-sentinel {
+  min-height: 44px;
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+  font-size: 0.82rem;
+}
+
 .back-action {
   justify-self: start;
 }
