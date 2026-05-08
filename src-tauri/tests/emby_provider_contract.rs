@@ -22,17 +22,10 @@ mod providers {
         fn login_persists_profile_and_token() {
             let local_store = initialized_local_store();
             let credential_store = Arc::new(MemoryCredentialStore::default());
-            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
-                200,
-                json!({
-                    "AccessToken": "token-value",
-                    "ServerId": "server-1",
-                    "User": {
-                        "Id": "user-1",
-                        "Name": "Demo User",
-                        "ServerName": "Demo Server"
-                    }
-                }),
+            let transport = Arc::new(FakeEmbyTransport::new(vec![auth_response(
+                "token-value",
+                "server-1",
+                "user-1",
             )]));
             let provider = test_provider(
                 local_store.clone(),
@@ -48,21 +41,17 @@ mod providers {
                 })
                 .expect("login succeeds");
 
-            assert_eq!(
-                profile,
-                ServerProfile {
-                    id: "server-1".into(),
-                    provider_kind: ProviderKind::Emby,
-                    name: "Demo Server".into(),
-                    base_url: "http://localhost:8096".into(),
-                    user_id: "user-1".into(),
-                    created_at: "2026-05-07T00:00:00Z".into(),
-                    updated_at: "2026-05-07T00:00:00Z".into(),
-                }
-            );
+            assert!(profile.id.starts_with("emby-profile-"));
+            assert_ne!(profile.id, "server-1");
+            assert_eq!(profile.provider_kind, ProviderKind::Emby);
+            assert_eq!(profile.name, "Demo Server");
+            assert_eq!(profile.base_url, "http://localhost:8096");
+            assert_eq!(profile.user_id, "user-1");
+            assert_eq!(profile.created_at, "2026-05-07T00:00:00Z");
+            assert_eq!(profile.updated_at, "2026-05-07T00:00:00Z");
             assert_eq!(
                 local_store
-                    .get_server_profile("server-1")
+                    .get_server_profile(&profile.id)
                     .expect("profile persisted"),
                 profile
             );
@@ -93,17 +82,10 @@ mod providers {
         fn login_allows_empty_password_and_preserves_base_url_path() {
             let local_store = initialized_local_store();
             let credential_store = Arc::new(MemoryCredentialStore::default());
-            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
-                200,
-                json!({
-                    "AccessToken": "token-value",
-                    "ServerId": "server-1",
-                    "User": {
-                        "Id": "user-1",
-                        "Name": "Demo User",
-                        "ServerName": "Demo Server"
-                    }
-                }),
+            let transport = Arc::new(FakeEmbyTransport::new(vec![auth_response(
+                "token-value",
+                "server-1",
+                "user-1",
             )]));
             let provider = test_provider(local_store, credential_store, transport.clone());
 
@@ -124,6 +106,55 @@ mod providers {
             );
             assert_eq!(request.body["Username"], "demo");
             assert_eq!(request.body["Pw"], "");
+        }
+
+        #[test]
+        fn repeated_logins_to_same_emby_server_create_distinct_profiles() {
+            let local_store = initialized_local_store();
+            let credential_store = Arc::new(MemoryCredentialStore::default());
+            let transport = Arc::new(FakeEmbyTransport::new(vec![
+                auth_response("token-one", "server-1", "user-1"),
+                auth_response("token-two", "server-1", "user-1"),
+            ]));
+            let provider = test_provider(local_store.clone(), credential_store.clone(), transport);
+
+            let first = provider
+                .login_manual(LoginRequest {
+                    base_url: "http://localhost:8096".into(),
+                    username: "demo".into(),
+                    password: "secret".into(),
+                })
+                .expect("first login succeeds");
+            let second = provider
+                .login_manual(LoginRequest {
+                    base_url: "http://localhost:8096".into(),
+                    username: "demo".into(),
+                    password: "secret".into(),
+                })
+                .expect("second login succeeds");
+
+            assert_ne!(first.id, second.id);
+            assert!(first.id.starts_with("emby-profile-"));
+            assert!(second.id.starts_with("emby-profile-"));
+
+            let saved = local_store
+                .list_server_profiles()
+                .expect("list saved profiles");
+            assert_eq!(saved.len(), 2);
+            assert!(saved.iter().any(|profile| profile.id == first.id));
+            assert!(saved.iter().any(|profile| profile.id == second.id));
+            assert_eq!(
+                credential_store
+                    .get_token(&CredentialKey::server_token(&first))
+                    .expect("first token is readable"),
+                Some("token-one".into())
+            );
+            assert_eq!(
+                credential_store
+                    .get_token(&CredentialKey::server_token(&second))
+                    .expect("second token is readable"),
+                Some("token-two".into())
+            );
         }
 
         #[test]
@@ -692,6 +723,21 @@ impl FakeResponse {
             headers: Vec::new(),
         }
     }
+}
+
+fn auth_response(access_token: &str, server_id: &str, user_id: &str) -> FakeResponse {
+    FakeResponse::json(
+        200,
+        json!({
+            "AccessToken": access_token,
+            "ServerId": server_id,
+            "User": {
+                "Id": user_id,
+                "Name": "Demo User",
+                "ServerName": "Demo Server"
+            }
+        }),
+    )
 }
 
 #[derive(Default)]

@@ -5,6 +5,7 @@ use reqwest::Url;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use uuid::Uuid;
 
 use crate::{
     errors::{AppError, AppResult},
@@ -269,7 +270,7 @@ impl MediaProvider for EmbyProvider {
         let authenticated = client.authenticate_by_name(&request.username, &request.password)?;
         let now = self.clock.now_iso8601();
         let profile = ServerProfile {
-            id: authenticated.server_id,
+            id: new_emby_profile_id(),
             provider_kind: ProviderKind::Emby,
             name: authenticated.server_name,
             base_url: client.base_url_string(),
@@ -465,7 +466,6 @@ impl EmbyClient {
             .and_then(decode_json::<AuthenticateByNameResponse>)
             .map(|response| AuthenticatedUser {
                 access_token: response.access_token,
-                server_id: response.server_id,
                 user_id: response.user.id,
                 server_name: response
                     .user
@@ -797,7 +797,6 @@ enum ErrorContext {
 #[derive(Debug)]
 struct AuthenticatedUser {
     access_token: String,
-    server_id: String,
     user_id: String,
     server_name: String,
 }
@@ -806,7 +805,6 @@ struct AuthenticatedUser {
 #[serde(rename_all = "PascalCase")]
 struct AuthenticateByNameResponse {
     access_token: String,
-    server_id: String,
     user: EmbyUser,
 }
 
@@ -882,6 +880,10 @@ fn emby_authorization_header() -> String {
 
 fn token_headers(token: &str) -> Vec<(String, String)> {
     vec![("X-Emby-Token".into(), token.into())]
+}
+
+fn new_emby_profile_id() -> String {
+    format!("emby-profile-{}", Uuid::new_v4())
 }
 
 fn default_headers(mut headers: Vec<(String, String)>) -> Vec<(String, String)> {

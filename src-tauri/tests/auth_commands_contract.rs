@@ -44,7 +44,8 @@ mod commands {
             )
             .expect("login via command helper");
 
-            assert_eq!(profile.id, "server-1");
+            assert!(profile.id.starts_with("emby-profile-"));
+            assert_ne!(profile.id, "server-1");
             assert_eq!(
                 provider_commands::list_servers_for_state(&state).expect("list servers"),
                 vec![profile]
