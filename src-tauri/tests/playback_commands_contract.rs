@@ -422,6 +422,7 @@ impl EmbyHttpTransport for FakeEmbyTransport {
         Ok(EmbyHttpResponse {
             status: response.status,
             body: response.body,
+            headers: Vec::new(),
         })
     }
 }

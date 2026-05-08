@@ -130,6 +130,7 @@ impl EmbyHttpTransport for FakeEmbyTransport {
         Ok(EmbyHttpResponse {
             status: 204,
             body: Value::Null,
+            headers: Vec::new(),
         })
     }
 }

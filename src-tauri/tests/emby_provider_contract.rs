@@ -79,6 +79,11 @@ mod providers {
                 request.url,
                 "http://localhost:8096/Users/AuthenticateByName"
             );
+            assert_eq!(
+                request.header("User-Agent"),
+                Some("Lumi/0.1.0 (Windows; Tauri)")
+            );
+            assert_eq!(request.header("Accept"), Some("application/json"));
             assert!(request.header("X-Emby-Authorization").is_some());
             assert_eq!(request.body["Username"], "demo");
             assert_eq!(request.body["Pw"], "secret");
@@ -591,6 +596,33 @@ mod providers {
             assert_eq!(error.message(), "Invalid username or password");
             assert!(error.recoverable());
         }
+
+        #[test]
+        fn maps_cloudflare_challenge_to_recoverable_network_error() {
+            let local_store = initialized_local_store();
+            let credential_store = Arc::new(MemoryCredentialStore::default());
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse {
+                status: 403,
+                body: Value::Null,
+                headers: vec![("Cf-Mitigated".into(), "challenge".into())],
+            }]));
+            let provider = test_provider(local_store, credential_store, transport);
+
+            let error = provider
+                .login_manual(LoginRequest {
+                    base_url: "http://localhost:8096".into(),
+                    username: "demo".into(),
+                    password: "secret".into(),
+                })
+                .expect_err("Cloudflare challenge should be mapped explicitly");
+
+            assert_eq!(error.code(), "emby.network.cloudflare_challenge");
+            assert_eq!(
+                error.message(),
+                "Cloudflare challenge blocked the Emby request"
+            );
+            assert!(error.recoverable());
+        }
     }
 }
 
@@ -649,11 +681,16 @@ impl Clock for FixedClock {
 struct FakeResponse {
     status: u16,
     body: Value,
+    headers: Vec<(String, String)>,
 }
 
 impl FakeResponse {
     fn json(status: u16, body: Value) -> Self {
-        Self { status, body }
+        Self {
+            status,
+            body,
+            headers: Vec::new(),
+        }
     }
 }
 
@@ -688,6 +725,7 @@ impl EmbyHttpTransport for FakeEmbyTransport {
         Ok(EmbyHttpResponse {
             status: response.status,
             body: response.body,
+            headers: response.headers,
         })
     }
 }

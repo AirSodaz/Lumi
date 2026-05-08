@@ -1,5 +1,6 @@
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
+use reqwest::header::{ACCEPT, USER_AGENT};
 use reqwest::Url;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -19,6 +20,8 @@ const EMBY_CLIENT_NAME: &str = "Lumi";
 const EMBY_DEVICE_NAME: &str = "Lumi Desktop";
 const EMBY_DEVICE_ID: &str = "lumi-desktop";
 const EMBY_CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const EMBY_USER_AGENT: &str = concat!("Lumi/", env!("CARGO_PKG_VERSION"), " (Windows; Tauri)");
+const JSON_ACCEPT: &str = "application/json";
 const CHILDREN_PAGE_SIZE: usize = 50;
 const HOME_CONTINUE_WATCHING_LIMIT: usize = 10;
 const HOME_LATEST_LIMIT: usize = 10;
@@ -52,6 +55,7 @@ impl EmbyHttpRequest {
 pub struct EmbyHttpResponse {
     pub status: u16,
     pub body: Value,
+    pub headers: Vec<(String, String)>,
 }
 
 pub trait EmbyHttpTransport: Send + Sync {
@@ -111,9 +115,23 @@ impl EmbyHttpTransport for ReqwestEmbyHttpTransport {
 
         let response = builder.send().map_err(map_network_error)?;
         let status = response.status().as_u16();
+        let headers = response
+            .headers()
+            .iter()
+            .filter_map(|(key, value)| {
+                value
+                    .to_str()
+                    .ok()
+                    .map(|value| (key.as_str().to_string(), value.to_string()))
+            })
+            .collect();
         let body = response.json::<Value>().unwrap_or(Value::Null);
 
-        Ok(EmbyHttpResponse { status, body })
+        Ok(EmbyHttpResponse {
+            status,
+            body,
+            headers,
+        })
     }
 }
 
@@ -636,6 +654,8 @@ impl EmbyClient {
             }
         }
 
+        let headers = default_headers(headers);
+
         self.transport.send(EmbyHttpRequest {
             method,
             url: url.to_string(),
@@ -651,6 +671,15 @@ impl EmbyClient {
     ) -> AppResult<Value> {
         if (200..300).contains(&response.status) {
             return Ok(response.body);
+        }
+
+        if is_cloudflare_challenge(&response) {
+            return Err(AppError::new(
+                "emby.network.cloudflare_challenge",
+                "Cloudflare challenge blocked the Emby request",
+            )
+            .with_recoverable(true)
+            .with_detail(json!({ "status": response.status })));
         }
 
         let code = match (context, response.status) {
@@ -853,6 +882,28 @@ fn emby_authorization_header() -> String {
 
 fn token_headers(token: &str) -> Vec<(String, String)> {
     vec![("X-Emby-Token".into(), token.into())]
+}
+
+fn default_headers(mut headers: Vec<(String, String)>) -> Vec<(String, String)> {
+    if !has_header(&headers, USER_AGENT.as_str()) {
+        headers.push((USER_AGENT.as_str().into(), EMBY_USER_AGENT.into()));
+    }
+    if !has_header(&headers, ACCEPT.as_str()) {
+        headers.push((ACCEPT.as_str().into(), JSON_ACCEPT.into()));
+    }
+    headers
+}
+
+fn has_header(headers: &[(String, String)], name: &str) -> bool {
+    headers
+        .iter()
+        .any(|(key, _)| key.eq_ignore_ascii_case(name))
+}
+
+fn is_cloudflare_challenge(response: &EmbyHttpResponse) -> bool {
+    response.headers.iter().any(|(key, value)| {
+        key.eq_ignore_ascii_case("cf-mitigated") && value.eq_ignore_ascii_case("challenge")
+    })
 }
 
 fn decode_json<T: for<'de> Deserialize<'de>>(value: Value) -> AppResult<T> {
