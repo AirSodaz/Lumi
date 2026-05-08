@@ -1,10 +1,15 @@
 import { ChevronLeft, Film, Library, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { FocusScope } from "../../components/focus";
-import { CinematicHero, GlassPanel } from "../../components/layout";
+import { GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
 import { MotionButton } from "../../components/motion";
 import { formatMetadata } from "../../lib/media/format";
+import {
+  getMediaCardPresentation,
+  getMediaGridColumns,
+  type MediaCardOrientation,
+} from "../../lib/media/presentation";
 import {
   useChildren,
   type LibraryItem,
@@ -32,10 +37,25 @@ export function LibrariesView({
   );
 
   if (selectedLibrary) {
+    const childCount = children.data?.items.length ?? 0;
+    const childStatus = children.isLoading
+      ? "Loading"
+      : childCount > 0
+        ? `${childCount} items`
+        : "Library browser";
+
     return (
-      <section className="view-stack libraries-view" aria-labelledby="library-title">
-        <CinematicHero
-          actions={
+      <section className="view-stack libraries-view app-workbench" aria-labelledby="library-title">
+        <header className="workbench-header">
+          <div className="workbench-title-block">
+            <span className="workbench-kicker">{server?.name ?? "No server"}</span>
+            <h1 id="library-title">{selectedLibrary.title}</h1>
+            <div className="workbench-meta-row">
+              <span>{formatMetadata(selectedLibrary)}</span>
+              <span>{childStatus}</span>
+            </div>
+          </div>
+          <div className="toolbar-cluster">
             <MotionButton
               className="secondary-action"
               onClick={() => setSelectedLibrary(null)}
@@ -44,23 +64,23 @@ export function LibrariesView({
               <ChevronLeft aria-hidden="true" size={16} />
               <span>Back to Libraries</span>
             </MotionButton>
-          }
-          backdropUrl={selectedLibrary.backdropUrl ?? selectedLibrary.posterUrl ?? null}
-          eyebrow={server?.name ?? "No server"}
-          metadata={<span>{formatMetadata(selectedLibrary)}</span>}
-          posterUrl={selectedLibrary.posterUrl}
-          title={selectedLibrary.title}
-          titleId="library-title"
-        >
-          <p>Browse this library with keyboard, controller, or pointer focus.</p>
-        </CinematicHero>
+          </div>
+        </header>
+
+        <div className="browser-toolbar" aria-label="Library path">
+          <span className="breadcrumb-label">Libraries</span>
+          <span aria-hidden="true" className="toolbar-divider">/</span>
+          <strong>{selectedLibrary.title}</strong>
+          <span className="status-chip">{server?.name ?? "Server"}</span>
+        </div>
 
         {children.isError ? (
           <EmptyState icon={Film} title="Could not load media" value="Try again later" />
         ) : children.isLoading ? (
-          <PosterGridLoading />
+          <PosterGridLoading orientation="portrait" />
         ) : children.data?.items.length ? (
           <PosterGrid
+            ariaLabel={`Media in ${selectedLibrary.title}`}
             focusScope="library-children"
             items={children.data.items}
             onOpenMedia={onOpenMedia}
@@ -73,15 +93,23 @@ export function LibrariesView({
   }
 
   return (
-    <section className="view-stack libraries-view" aria-labelledby="libraries-title">
-      <CinematicHero
-        eyebrow={server?.name ?? "No server"}
-        metadata={<span>{libraries.length > 0 ? `${libraries.length} libraries` : "Library browser"}</span>}
-        title="Libraries"
-        titleId="libraries-title"
-      >
-        <p>Choose a media library and continue into your movies, shows, seasons, and collections.</p>
-      </CinematicHero>
+    <section className="view-stack libraries-view app-workbench" aria-labelledby="libraries-title">
+      <header className="workbench-header">
+        <div className="workbench-title-block">
+          <span className="workbench-kicker">{server?.name ?? "No server"}</span>
+          <h1 id="libraries-title">Libraries</h1>
+          <div className="workbench-meta-row">
+            <span>{libraries.length > 0 ? `${libraries.length} libraries` : "Library browser"}</span>
+            <span>{loading ? "Syncing" : "Ready"}</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="browser-toolbar" aria-label="Library source">
+        <span className="server-dot" aria-hidden="true" />
+        <strong>{server?.name ?? "No server connected"}</strong>
+        <span className="status-chip">{libraries.length > 0 ? "Browse" : "Empty"}</span>
+      </div>
 
       {servers.length === 0 ? (
         <EmptyState icon={Library} title="No servers connected" value="Add a server in Settings" />
@@ -91,6 +119,7 @@ export function LibrariesView({
         <EmptyState icon={Library} title="No libraries found" value={server?.name ?? "Server"} />
       ) : (
         <PosterGrid
+          ariaLabel="Media libraries"
           focusScope="library-grid"
           items={libraries}
           onOpenMedia={setSelectedLibrary}
@@ -101,17 +130,24 @@ export function LibrariesView({
 }
 
 type PosterGridProps = {
+  ariaLabel: string;
   focusScope: string;
   items: LibraryItem[];
   onOpenMedia: (item: LibraryItem) => void;
 };
 
-function PosterGrid({ focusScope, items, onOpenMedia }: PosterGridProps) {
+function PosterGrid({ ariaLabel, focusScope, items, onOpenMedia }: PosterGridProps) {
+  const columns = getMediaGridColumns(items);
+  const gridOrientation = items[0]
+    ? getMediaCardPresentation(items[0]).orientation
+    : "landscape";
+
   return (
     <FocusScope
-      aria-label="Media libraries"
+      aria-label={ariaLabel}
       className="library-grid"
-      columns={3}
+      columns={columns}
+      data-grid-orientation={gridOrientation}
       entry
       focusKey={items.map((item) => item.id).join(":")}
       scope={focusScope}
@@ -128,11 +164,24 @@ function PosterGrid({ focusScope, items, onOpenMedia }: PosterGridProps) {
   );
 }
 
-function PosterGridLoading() {
+function PosterGridLoading({
+  orientation = "landscape",
+}: {
+  orientation?: MediaCardOrientation;
+}) {
   return (
-    <div className="library-grid" aria-label="Loading media">
+    <div
+      aria-label="Loading media"
+      className="library-grid"
+      data-grid-orientation={orientation}
+    >
       {[0, 1, 2].map((slot) => (
-        <PosterCard focusScope="loading-media" key={slot} loading />
+        <PosterCard
+          focusScope="loading-media"
+          key={slot}
+          loading
+          orientation={orientation}
+        />
       ))}
     </div>
   );

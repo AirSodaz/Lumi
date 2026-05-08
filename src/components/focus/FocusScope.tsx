@@ -13,6 +13,7 @@ import {
 
 type FocusScopeProps = {
   "aria-label"?: string;
+  "data-grid-orientation"?: string;
   children: ReactNode;
   className?: string;
   columns?: number;
@@ -23,6 +24,7 @@ type FocusScopeProps = {
 
 export function FocusScope({
   "aria-label": ariaLabel,
+  "data-grid-orientation": dataGridOrientation,
   children,
   className = "",
   columns = 1,
@@ -80,6 +82,7 @@ export function FocusScope({
       data-focus-columns={columns}
       data-focus-entry={entry ? "true" : undefined}
       data-focus-scope-root={scope}
+      data-grid-orientation={dataGridOrientation}
       onKeyDown={handleKeyDown}
       ref={scopeRef}
       tabIndex={-1}

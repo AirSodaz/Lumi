@@ -7,6 +7,10 @@ import { PosterCard } from "../../components/media";
 import { MotionButton } from "../../components/motion";
 import { formatMetadata } from "../../lib/media/format";
 import {
+  getMediaCardPresentation,
+  getMediaGridColumns,
+} from "../../lib/media/presentation";
+import {
   useChildren,
   useItemDetail,
   useOpenPlayback,
@@ -81,6 +85,11 @@ export function MediaDetailView({
         : canPlay
         ? "Source resolves on play"
         : "Not playable";
+  const relatedItems = children.data?.items ?? [];
+  const relatedColumns = getMediaGridColumns(relatedItems);
+  const relatedOrientation = relatedItems[0]
+    ? getMediaCardPresentation(relatedItems[0]).orientation
+    : "landscape";
 
   async function handlePlay() {
     if (!item || !canPlay) {
@@ -154,23 +163,29 @@ export function MediaDetailView({
               <span>Try again later</span>
             </GlassPanel>
           ) : children.isLoading ? (
-            <div className="rail-items">
+            <div className="rail-items" data-grid-orientation="portrait">
               {[0, 1, 2].map((slot) => (
-                <PosterCard focusScope="detail-children" key={slot} loading />
+                <PosterCard
+                  focusScope="detail-children"
+                  key={slot}
+                  loading
+                  orientation="portrait"
+                />
               ))}
             </div>
-          ) : children.data?.items.length ? (
+          ) : relatedItems.length ? (
             <FocusScope
               aria-label={`More from ${item.title}`}
               className="rail-items"
-              columns={3}
+              columns={relatedColumns}
+              data-grid-orientation={relatedOrientation}
               entry
-              focusKey={`${item.id}:${children.data.items
+              focusKey={`${item.id}:${relatedItems
                 .map((child) => child.id)
                 .join(":")}`}
               scope="detail-children"
             >
-              {children.data.items.map((child) => (
+              {relatedItems.map((child) => (
                 <PosterCard
                   focusScope="detail-children"
                   item={child}

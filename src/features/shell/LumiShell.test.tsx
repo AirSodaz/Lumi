@@ -92,6 +92,22 @@ const fourthMovie: LibraryItem = {
   title: "Fourth Movie",
 };
 
+const fifthMovie: LibraryItem = {
+  id: "movie-5",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "movie",
+  title: "Fifth Movie",
+};
+
+const sixthMovie: LibraryItem = {
+  id: "movie-6",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "movie",
+  title: "Sixth Movie",
+};
+
 const demoVideo: LibraryItem = {
   id: "video-1",
   providerKind: "emby",
@@ -179,7 +195,14 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
   if (command === "media_list_children") {
     const parentId = request?.parentId;
     const itemsByParent: Record<string, LibraryItem[]> = {
-      "library-1": [demoMovie, secondMovie, thirdMovie, fourthMovie],
+      "library-1": [
+        demoMovie,
+        secondMovie,
+        thirdMovie,
+        fourthMovie,
+        fifthMovie,
+        sixthMovie,
+      ],
       "library-2": [demoSeries],
       "series-1": [seasonOne],
       "season-1": [episodeOne],
@@ -517,7 +540,7 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Latest" })).toBeInTheDocument();
     await screen.findByRole("button", { name: /Demo Movie/ });
-    expect(screen.getAllByText("No artwork").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No poster").length).toBeGreaterThan(0);
 
     await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
 
@@ -552,6 +575,28 @@ describe("LumiShell", () => {
     await user.click(screen.getByRole("button", { name: /Demo Movie/ }));
     expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
     expect(screen.queryByText(/P6|P7|arrives/i)).not.toBeInTheDocument();
+  });
+
+  it("uses compact app workbench headers for primary views instead of cinematic heroes", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await screen.findByRole("button", { name: /Demo Movie/ });
+    expect(document.querySelector(".home-view .cinematic-hero")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Libraries" }));
+    expect(await screen.findByRole("heading", { name: "Libraries" })).toBeInTheDocument();
+    expect(document.querySelector(".libraries-view .cinematic-hero")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
+    expect(document.querySelector(".search-view .cinematic-hero")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(document.querySelector(".settings-view .cinematic-hero")).not.toBeInTheDocument();
   });
 
   it("keeps playable media action available when sources are not preloaded", async () => {
@@ -726,7 +771,7 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Second Movie" })).toBeInTheDocument();
   });
 
-  it("moves Home media-card focus as a 3-column grid and scrolls focused cards into view", async () => {
+  it("moves Home portrait media-card focus as a 5-column grid and scrolls focused cards into view", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
@@ -734,7 +779,7 @@ describe("LumiShell", () => {
 
     const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
     const second = await screen.findByRole("button", { name: /Second Movie/ });
-    const fourth = await screen.findByRole("button", { name: /Fourth Movie/ });
+    const sixth = await screen.findByRole("button", { name: /Sixth Movie/ });
     scrollIntoViewMock.mockClear();
 
     firstMovie.focus();
@@ -743,7 +788,7 @@ describe("LumiShell", () => {
 
     firstMovie.focus();
     await user.keyboard("{ArrowDown}");
-    expect(fourth).toHaveFocus();
+    expect(sixth).toHaveFocus();
     expect(scrollIntoViewMock).toHaveBeenCalled();
 
     second.focus();
@@ -762,7 +807,7 @@ describe("LumiShell", () => {
 
     const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
     const second = await screen.findByRole("button", { name: /Second Movie/ });
-    const fourth = await screen.findByRole("button", { name: /Fourth Movie/ });
+    const sixth = await screen.findByRole("button", { name: /Sixth Movie/ });
     const librariesNav = screen.getByRole("button", { name: "Libraries" });
     expect(firstMovie).not.toHaveFocus();
 
@@ -774,7 +819,7 @@ describe("LumiShell", () => {
 
     firstMovie.focus();
     await user.keyboard("{ArrowDown}");
-    expect(fourth).toHaveFocus();
+    expect(sixth).toHaveFocus();
 
     await user.keyboard("{ArrowUp}");
     expect(firstMovie).toHaveFocus();

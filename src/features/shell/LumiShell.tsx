@@ -557,13 +557,22 @@ function NavButton({
 
 function SearchView() {
   return (
-    <section className="view-stack search-view" aria-labelledby="search-title">
-      <header className="view-header cinematic-header">
-        <div>
-          <p className="eyebrow">Find Media</p>
+    <section className="view-stack search-view app-workbench" aria-labelledby="search-title">
+      <header className="workbench-header">
+        <div className="workbench-title-block">
+          <span className="workbench-kicker">Library</span>
           <h1 id="search-title">Search</h1>
+          <div className="workbench-meta-row">
+            <span>Titles, seasons, episodes</span>
+            <span>Local query</span>
+          </div>
         </div>
       </header>
+      <div className="browser-toolbar" aria-label="Search scope">
+        <span className="server-dot" aria-hidden="true" />
+        <strong>All connected media</strong>
+        <span className="status-chip">Ready</span>
+      </div>
       <GlassPanel className="search-panel" aria-label="Search media panel">
         <Search aria-hidden="true" size={20} />
         <input aria-label="Search media" placeholder="Search media" type="search" />

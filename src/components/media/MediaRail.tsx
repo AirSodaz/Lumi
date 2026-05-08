@@ -1,6 +1,10 @@
 import { FocusScope } from "../focus";
 import { PosterCard } from "./PosterCard";
 import type { LibraryItem } from "../../lib/tauriClient";
+import {
+  getMediaCardPresentation,
+  getMediaGridColumns,
+} from "../../lib/media/presentation";
 
 type MediaRailProps = {
   emptyText: string;
@@ -20,6 +24,10 @@ export function MediaRail({
   title,
 }: MediaRailProps) {
   const focusScope = `${title}-rail`;
+  const columns = getMediaGridColumns(items);
+  const gridOrientation = items[0]
+    ? getMediaCardPresentation(items[0]).orientation
+    : "landscape";
 
   return (
     <section className="media-rail" aria-labelledby={focusScope}>
@@ -30,7 +38,8 @@ export function MediaRail({
         <FocusScope
           aria-label={`${title} media`}
           className="rail-items"
-          columns={3}
+          columns={columns}
+          data-grid-orientation={gridOrientation}
           entry={entry}
           focusKey={items.map((item) => item.id).join(":")}
           scope={focusScope}

@@ -12,7 +12,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { CinematicHero, GlassPanel } from "../../components/layout";
+import { GlassPanel } from "../../components/layout";
 import { MotionButton } from "../../components/motion";
 import {
   createSurfaceMotion,
@@ -43,16 +43,17 @@ export function SettingsView() {
   const reducedMotion = useReducedMotion();
 
   return (
-    <section className="settings-view" aria-labelledby="settings-title">
-      <CinematicHero
-        className="settings-hero"
-        eyebrow="Lumi"
-        metadata={<span>Servers, player, appearance, and diagnostics</span>}
-        title="Settings"
-        titleId="settings-title"
-      >
-        <p>Keep server access, playback behavior, and material preferences in one quiet control surface.</p>
-      </CinematicHero>
+    <section className="settings-view app-workbench" aria-labelledby="settings-title">
+      <header className="workbench-header">
+        <div className="workbench-title-block">
+          <span className="workbench-kicker">Lumi</span>
+          <h1 id="settings-title">Settings</h1>
+          <div className="workbench-meta-row">
+            <span>{panels.find((item) => item.id === panel)?.label}</span>
+            <span>Local preferences</span>
+          </div>
+        </div>
+      </header>
 
       <div className="settings-layout">
         <nav className="settings-tabs" aria-label="Settings sections">
