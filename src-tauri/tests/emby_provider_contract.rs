@@ -317,6 +317,99 @@ mod providers {
         }
 
         #[test]
+        fn maps_video_and_music_video_as_playable_items() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                200,
+                json!({
+                    "Items": [
+                        {
+                            "Id": "video-1",
+                            "Name": "Home Video",
+                            "Type": "Video"
+                        },
+                        {
+                            "Id": "music-video-1",
+                            "Name": "Live Clip",
+                            "Type": "MusicVideo"
+                        }
+                    ],
+                    "TotalRecordCount": 2
+                }),
+            )]));
+            let provider = test_provider(local_store, credential_store, transport);
+
+            let children = provider
+                .list_children(ListChildrenRequest {
+                    server_id: profile.id,
+                    parent_id: Some("library-1".into()),
+                    cursor: None,
+                })
+                .expect("list children");
+
+            assert_eq!(children.items[0].item_type, "video");
+            assert_eq!(children.items[1].item_type, "musicVideo");
+        }
+
+        #[test]
+        fn finds_first_playable_descendant_inside_container() {
+            let (local_store, credential_store, profile) = initialized_profile_with_token();
+            let transport = Arc::new(FakeEmbyTransport::new(vec![
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Items": [
+                            {
+                                "Id": "series-1",
+                                "Name": "Nested Show",
+                                "Type": "Series"
+                            }
+                        ],
+                        "TotalRecordCount": 1
+                    }),
+                ),
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Items": [
+                            {
+                                "Id": "season-1",
+                                "Name": "Season 1",
+                                "Type": "Season"
+                            }
+                        ],
+                        "TotalRecordCount": 1
+                    }),
+                ),
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Items": [
+                            {
+                                "Id": "episode-1",
+                                "Name": "Episode 1",
+                                "Type": "Episode"
+                            }
+                        ],
+                        "TotalRecordCount": 1
+                    }),
+                ),
+            ]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            let item = provider
+                .first_playable_descendant(&profile.id, "library-1")
+                .expect("resolve descendants")
+                .expect("playable descendant");
+
+            assert_eq!(item.id, "episode-1");
+            assert_eq!(item.item_type, "episode");
+            assert!(transport.request_at(0).url.contains("ParentId=library-1"));
+            assert!(transport.request_at(1).url.contains("ParentId=series-1"));
+            assert!(transport.request_at(2).url.contains("ParentId=season-1"));
+        }
+
+        #[test]
         fn get_item_detail_404_stays_a_detail_failure() {
             let (local_store, credential_store, profile) = initialized_profile_with_token();
             let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(

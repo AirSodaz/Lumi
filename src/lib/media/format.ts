@@ -20,8 +20,10 @@ function formatItemType(itemType: string) {
     episode: "Episode",
     folder: "Folder",
     movie: "Movie",
+    musicVideo: "Music Video",
     season: "Season",
     series: "Series",
+    video: "Video",
   };
 
   return labels[itemType] ?? itemType;

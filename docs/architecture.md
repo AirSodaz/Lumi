@@ -40,7 +40,7 @@ type LibraryItem = {
   id: string;
   providerKind: ProviderKind;
   serverId: string;
-  itemType: "movie" | "series" | "season" | "episode" | "collection" | "folder";
+  itemType: "movie" | "series" | "season" | "episode" | "collection" | "folder" | "video" | "musicVideo";
   title: string;
   sortTitle?: string;
   posterUrl?: string;

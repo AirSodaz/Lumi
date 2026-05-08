@@ -13,7 +13,10 @@ use crate::{
         PlaybackHost, PlaybackPositionEvent, PlayerOpenRequest, PlayerService, PlayerSession,
         PlayerWindow, ResolvedPlaybackSource,
     },
-    providers::{emby::EmbyProvider, MediaProvider},
+    providers::{
+        emby::{is_container_item_type, is_playable_item_type, EmbyProvider},
+        MediaProvider, MediaSource,
+    },
 };
 
 use super::auth::emby_provider_for_state;
@@ -50,8 +53,13 @@ pub fn open_for_state(
     host: Arc<dyn PlaybackHost>,
     request: PlayerOpenRequest,
 ) -> AppResult<PlayerSession> {
-    let source = resolve_playback_source(&emby_provider_for_state(state), &request)?;
-    player_service_for_state(state, host).open(request, source)
+    let target = resolve_playback_target(&emby_provider_for_state(state), &request)?;
+    let request = PlayerOpenRequest {
+        server_id: request.server_id,
+        item_id: target.item_id,
+        media_source_id: None,
+    };
+    player_service_for_state(state, host).open(request, target.source)
 }
 
 pub fn command_for_state(
@@ -66,20 +74,51 @@ fn player_service_for_state(state: &AppState, host: Arc<dyn PlaybackHost>) -> Na
     NativePlayerService::with_store(state.player_sessions(), host, state.player_backend())
 }
 
-fn resolve_playback_source(
+struct ResolvedPlaybackTarget {
+    item_id: String,
+    source: ResolvedPlaybackSource,
+}
+
+fn resolve_playback_target(
     provider: &EmbyProvider,
     request: &PlayerOpenRequest,
-) -> AppResult<ResolvedPlaybackSource> {
-    let sources = provider.get_playback_sources(&request.server_id, &request.item_id)?;
+) -> AppResult<ResolvedPlaybackTarget> {
+    let detail = provider.get_item(&request.server_id, &request.item_id)?;
 
-    if sources.is_empty() {
-        return Err(
-            AppError::new("playback.no_source", "No playback source is available")
-                .with_recoverable(true),
-        );
+    if is_playable_item_type(&detail.item.item_type) {
+        return Ok(ResolvedPlaybackTarget {
+            item_id: detail.item.id,
+            source: select_playback_source(
+                detail.media_sources,
+                request.media_source_id.as_deref(),
+            )?,
+        });
     }
 
-    let source = match request.media_source_id.as_deref() {
+    if is_container_item_type(&detail.item.item_type) {
+        let item = provider
+            .first_playable_descendant(&request.server_id, &detail.item.id)?
+            .ok_or_else(no_playback_source)?;
+        let sources = provider.get_playback_sources(&request.server_id, &item.id)?;
+
+        return Ok(ResolvedPlaybackTarget {
+            item_id: item.id,
+            source: select_playback_source(sources, None)?,
+        });
+    }
+
+    Err(no_playback_source())
+}
+
+fn select_playback_source(
+    sources: Vec<MediaSource>,
+    media_source_id: Option<&str>,
+) -> AppResult<ResolvedPlaybackSource> {
+    if sources.is_empty() {
+        return Err(no_playback_source());
+    }
+
+    let source = match media_source_id {
         Some(source_id) => sources
             .into_iter()
             .find(|source| source.id == source_id)
@@ -97,6 +136,10 @@ fn resolve_playback_source(
         id: source.id,
         url: source.url,
     })
+}
+
+fn no_playback_source() -> AppError {
+    AppError::new("playback.no_source", "No playback source is available").with_recoverable(true)
 }
 
 struct TauriPlaybackHost {

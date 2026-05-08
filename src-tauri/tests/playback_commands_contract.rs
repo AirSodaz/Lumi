@@ -20,17 +20,27 @@ use serde_json::{json, Value};
 fn playback_open_resolves_first_provider_source_without_exposing_url_to_react() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(
-        vec![FakeResponse::json(
-            200,
-            json!({
-                "MediaSources": [{
-                    "Id": "source-1",
-                    "Name": "Direct",
-                    "DirectStreamUrl": "/Videos/movie-1/stream.mkv?MediaSourceId=source-1",
-                    "SupportsDirectStream": true
-                }]
-            }),
-        )],
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct",
+                        "DirectStreamUrl": "/Videos/movie-1/stream.mkv?MediaSourceId=source-1",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
         backend.clone(),
     );
     let profile = seed_profile_with_token(&state);
@@ -54,20 +64,180 @@ fn playback_open_resolves_first_provider_source_without_exposing_url_to_react() 
 }
 
 #[test]
+fn playback_open_resolves_container_to_first_playable_descendant() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "library-1",
+                    "Name": "Movies",
+                    "Type": "CollectionFolder",
+                    "CollectionType": "movies"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "Items": [{
+                        "Id": "movie-1",
+                        "Name": "Demo Movie",
+                        "Type": "Movie"
+                    }],
+                    "TotalRecordCount": 1
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct",
+                        "DirectStreamUrl": "/Videos/movie-1/stream.mkv",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
+        backend.clone(),
+    );
+    let profile = seed_profile_with_token(&state);
+
+    let session = playback::open_for_state(
+        &state,
+        Arc::new(FakePlaybackHost),
+        PlayerOpenRequest {
+            server_id: profile.id,
+            item_id: "library-1".into(),
+            media_source_id: None,
+        },
+    )
+    .expect("open container playback");
+
+    assert_eq!(session.item_id, "movie-1");
+    let opened = backend.opened.lock().unwrap();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(
+        opened[0].media_url,
+        "http://localhost:8096/Videos/movie-1/stream.mkv?api_key=token-value"
+    );
+}
+
+#[test]
+fn playback_open_returns_no_source_for_empty_container_without_creating_window() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "library-1",
+                    "Name": "Movies",
+                    "Type": "CollectionFolder",
+                    "CollectionType": "movies"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "Items": [],
+                    "TotalRecordCount": 0
+                }),
+            ),
+        ],
+        backend.clone(),
+    );
+    let profile = seed_profile_with_token(&state);
+
+    let error = playback::open_for_state(
+        &state,
+        Arc::new(FakePlaybackHost),
+        PlayerOpenRequest {
+            server_id: profile.id,
+            item_id: "library-1".into(),
+            media_source_id: None,
+        },
+    )
+    .expect_err("empty container should fail");
+
+    assert_eq!(error.code(), "playback.no_source");
+    assert!(error.recoverable());
+    assert!(backend.opened.lock().unwrap().is_empty());
+}
+
+#[test]
+fn playback_open_window_failure_does_not_expose_stream_url() {
+    let backend = Arc::new(FakeMpvBackend::default());
+    let state = test_state(
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct",
+                        "DirectStreamUrl": "/Videos/movie-1/stream.mkv?api_key=secret-token",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
+        backend.clone(),
+    );
+    let profile = seed_profile_with_token(&state);
+
+    let error = playback::open_for_state(
+        &state,
+        Arc::new(FailingPlaybackHost),
+        PlayerOpenRequest {
+            server_id: profile.id,
+            item_id: "movie-1".into(),
+            media_source_id: None,
+        },
+    )
+    .expect_err("window failure should fail");
+
+    let rendered = format!("{error}");
+    assert_eq!(error.code(), "playback.window_failed");
+    assert!(!rendered.contains("secret-token"));
+    assert!(!rendered.contains("stream.mkv"));
+    assert!(backend.opened.lock().unwrap().is_empty());
+}
+
+#[test]
 fn playback_open_returns_source_errors_before_creating_player_session() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(
-        vec![FakeResponse::json(
-            200,
-            json!({
-                "MediaSources": [{
-                    "Id": "source-1",
-                    "Name": "Direct",
-                    "DirectStreamUrl": "/Videos/movie-1/stream.mkv",
-                    "SupportsDirectStream": true
-                }]
-            }),
-        )],
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct",
+                        "DirectStreamUrl": "/Videos/movie-1/stream.mkv",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
         backend.clone(),
     );
     let profile = seed_profile_with_token(&state);
@@ -92,17 +262,27 @@ fn playback_open_returns_source_errors_before_creating_player_session() {
 fn playback_command_delegates_to_existing_player_session() {
     let backend = Arc::new(FakeMpvBackend::default());
     let state = test_state(
-        vec![FakeResponse::json(
-            200,
-            json!({
-                "MediaSources": [{
-                    "Id": "source-1",
-                    "Name": "Direct",
-                    "DirectStreamUrl": "/Videos/movie-1/stream.mkv",
-                    "SupportsDirectStream": true
-                }]
-            }),
-        )],
+        vec![
+            FakeResponse::json(
+                200,
+                json!({
+                    "Id": "movie-1",
+                    "Name": "Demo Movie",
+                    "Type": "Movie"
+                }),
+            ),
+            FakeResponse::json(
+                200,
+                json!({
+                    "MediaSources": [{
+                        "Id": "source-1",
+                        "Name": "Direct",
+                        "DirectStreamUrl": "/Videos/movie-1/stream.mkv",
+                        "SupportsDirectStream": true
+                    }]
+                }),
+            ),
+        ],
         backend.clone(),
     );
     let profile = seed_profile_with_token(&state);
@@ -219,6 +399,28 @@ impl PlaybackHost for FakePlaybackHost {
             label: format!("player-{session_id}"),
             window_id: 42,
         })
+    }
+
+    fn emit_state_changed(&self, _session: &PlayerSession) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn emit_position(&self, _event: &PlaybackPositionEvent) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn emit_error(&self, _event: &PlaybackErrorEvent) -> AppResult<()> {
+        Ok(())
+    }
+}
+
+struct FailingPlaybackHost;
+
+impl PlaybackHost for FailingPlaybackHost {
+    fn create_player_window(&self, _session_id: &str) -> AppResult<PlayerWindow> {
+        Err(lumi_lib::player::playback_window_failed(
+            "native window was unavailable",
+        ))
     }
 
     fn emit_state_changed(&self, _session: &PlayerSession) -> AppResult<()> {

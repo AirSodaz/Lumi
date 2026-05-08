@@ -25,7 +25,8 @@ type MediaDetailViewProps = {
 };
 
 const browsableTypes = new Set(["collection", "folder", "season", "series"]);
-const playableTypes = new Set(["episode", "movie"]);
+const playableTypes = new Set(["episode", "movie", "musicVideo", "video"]);
+const containerPlaybackTypes = browsableTypes;
 
 export function MediaDetailView({
   itemId,
@@ -40,7 +41,9 @@ export function MediaDetailView({
   const [playbackError, setPlaybackError] = useState<AppError | null>(null);
   const item = detail.data?.item ?? null;
   const shouldLoadChildren = item ? browsableTypes.has(item.itemType) : false;
-  const canPlay = item ? playableTypes.has(item.itemType) : false;
+  const canPlay = item
+    ? playableTypes.has(item.itemType) || containerPlaybackTypes.has(item.itemType)
+    : false;
   const children = useChildren(shouldLoadChildren ? serverId : null, item?.id ?? null);
 
   if (detail.isLoading) {
@@ -73,7 +76,9 @@ export function MediaDetailView({
   const playbackStatus =
     mediaSources.length > 0
       ? `${mediaSources.length} source ready`
-      : canPlay
+      : item && containerPlaybackTypes.has(item.itemType)
+        ? "Plays first available item"
+        : canPlay
         ? "Source resolves on play"
         : "Not playable";
 

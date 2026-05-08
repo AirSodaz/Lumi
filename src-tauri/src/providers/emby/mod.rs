@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use reqwest::Url;
 use serde::Deserialize;
@@ -161,6 +161,78 @@ impl EmbyProvider {
                     .with_recoverable(true)
             })?;
         Ok((profile, token))
+    }
+
+    pub fn first_playable_descendant(
+        &self,
+        server_id: &str,
+        parent_id: &str,
+    ) -> AppResult<Option<LibraryItem>> {
+        let (profile, token) = self.profile_and_token(server_id)?;
+        let client = self.client(&profile.base_url)?;
+        let mut visited = HashSet::new();
+
+        self.first_playable_descendant_with_client(
+            &client,
+            &profile.id,
+            &profile.user_id,
+            parent_id,
+            &token,
+            &mut visited,
+        )
+    }
+
+    fn first_playable_descendant_with_client(
+        &self,
+        client: &EmbyClient,
+        server_id: &str,
+        user_id: &str,
+        parent_id: &str,
+        token: &str,
+        visited: &mut HashSet<String>,
+    ) -> AppResult<Option<LibraryItem>> {
+        if !visited.insert(parent_id.into()) {
+            return Ok(None);
+        }
+
+        let mut start_index = 0;
+        loop {
+            let response = client.list_children(
+                user_id,
+                Some(parent_id),
+                start_index,
+                CHILDREN_PAGE_SIZE,
+                token,
+            )?;
+            let total = response.total_record_count.unwrap_or(response.items.len());
+            let page_count = response.items.len();
+
+            if page_count == 0 {
+                return Ok(None);
+            }
+
+            for item in response.items {
+                let item = client.map_item(item, server_id)?;
+                self.local_store.cache_media_item(&item)?;
+
+                if is_playable_item_type(&item.item_type) {
+                    return Ok(Some(item));
+                }
+
+                if is_container_item_type(&item.item_type) {
+                    if let Some(descendant) = self.first_playable_descendant_with_client(
+                        client, server_id, user_id, &item.id, token, visited,
+                    )? {
+                        return Ok(Some(descendant));
+                    }
+                }
+            }
+
+            start_index += page_count;
+            if start_index >= total {
+                return Ok(None);
+            }
+        }
     }
 }
 
@@ -679,13 +751,19 @@ fn map_item_type(item_type: Option<&str>, collection_type: Option<&str>) -> &'st
         (_, Some("tvshows")) | (Some("Series"), _) => "series",
         (Some("Season"), _) => "season",
         (Some("Episode"), _) => "episode",
+        (Some("MusicVideo"), _) => "musicVideo",
+        (Some("Video"), _) => "video",
         (Some("BoxSet"), _) => "collection",
         _ => "folder",
     }
 }
 
-fn is_playable_item_type(item_type: &str) -> bool {
-    matches!(item_type, "episode" | "movie")
+pub fn is_playable_item_type(item_type: &str) -> bool {
+    matches!(item_type, "episode" | "movie" | "musicVideo" | "video")
+}
+
+pub fn is_container_item_type(item_type: &str) -> bool {
+    matches!(item_type, "collection" | "folder" | "season" | "series")
 }
 
 fn runtime_ticks_to_seconds(ticks: u64) -> u32 {

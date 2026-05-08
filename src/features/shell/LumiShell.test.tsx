@@ -92,6 +92,24 @@ const fourthMovie: LibraryItem = {
   title: "Fourth Movie",
 };
 
+const demoVideo: LibraryItem = {
+  id: "video-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "video",
+  title: "Home Video",
+  overview: "A standalone video.",
+};
+
+const nestedFolder: LibraryItem = {
+  id: "folder-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "folder",
+  title: "Movie Folder",
+  overview: "A playable container.",
+};
+
 const demoSeries: LibraryItem = {
   id: "series-1",
   providerKind: "emby",
@@ -133,7 +151,7 @@ type CommandArgs = {
 function itemDetail(item: LibraryItem): LibraryItemDetail {
   return {
     item,
-    mediaSources: item.itemType === "movie" || item.itemType === "episode"
+    mediaSources: ["episode", "movie", "musicVideo", "video"].includes(item.itemType)
       ? [{ id: "source-1", name: "Direct", url: "http://localhost/stream.mkv" }]
       : [],
   };
@@ -177,6 +195,8 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
     const details: Record<string, LibraryItemDetail> = {
       "movie-1": itemDetail(demoMovie),
       "movie-2": itemDetail(secondMovie),
+      "video-1": itemDetail(demoVideo),
+      "folder-1": itemDetail(nestedFolder),
       "series-1": itemDetail(demoSeries),
       "season-1": itemDetail(seasonOne),
       "episode-1": itemDetail(episodeOne),
@@ -571,6 +591,67 @@ describe("LumiShell", () => {
       },
     });
     expect(screen.queryByText("Could not load media details")).not.toBeInTheDocument();
+  });
+
+  it("opens container playback by passing the container item to Rust", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      const request = (args as CommandArgs | undefined)?.request;
+
+      if (command === "media_list_children" && request?.parentId === "library-1") {
+        return Promise.resolve({
+          items: [nestedFolder],
+          nextCursor: null,
+        });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Movie Folder/ }));
+
+    expect(await screen.findByRole("heading", { name: "Movie Folder" })).toBeInTheDocument();
+    expect(await screen.findByText("Plays first available item")).toBeInTheDocument();
+
+    const play = screen.getByRole("button", { name: "Play" });
+    expect(play).toBeEnabled();
+    await user.click(play);
+
+    expect(invokeMock).toHaveBeenCalledWith("playback_open", {
+      request: {
+        serverId: "server-1",
+        itemId: "folder-1",
+        mediaSourceId: null,
+      },
+    });
+  });
+
+  it("enables playback for standalone video items", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      const request = (args as CommandArgs | undefined)?.request;
+
+      if (command === "media_list_children" && request?.parentId === "library-1") {
+        return Promise.resolve({
+          items: [demoVideo],
+          nextCursor: null,
+        });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Home Video/ }));
+
+    expect(await screen.findByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.getByRole("heading", { name: "Home Video" })).toBeInTheDocument();
+    expect(screen.getByText("1 source ready")).toBeInTheDocument();
   });
 
   it("shows playback errors without exposing raw stream URLs or tokens", async () => {
