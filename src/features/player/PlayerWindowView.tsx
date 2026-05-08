@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Film } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useI18n } from "../../lib/i18n";
 import {
   playback,
   playbackEventToAppError,
@@ -16,6 +17,7 @@ type PlayerWindowViewProps = {
 };
 
 export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
+  const { translate } = useI18n();
   const sessionQuery = usePlaybackSession(sessionId);
   const closeCommand = usePlaybackCommand();
   const [session, setSession] = useState<PlayerSession | null>(null);
@@ -96,15 +98,19 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
   }
 
   const activeSession = session ?? sessionQuery.data ?? null;
-  const status = activeSession ? titleCase(activeSession.state) : "Opening";
+  const status = activeSession
+    ? translate(`player.state.${activeSession.state}`)
+    : translate("player.state.opening");
 
   return (
     <main className="player-window" aria-labelledby="player-window-title">
-      <section className="player-video-region" aria-label="Video">
+      <section className="player-video-region" aria-label={translate("player.aria.video")}>
         <div className="player-video-placeholder">
           <Film aria-hidden="true" size={26} />
           <span>
-            {activeSession?.state === "playing" ? "Video active" : "Video starting"}
+            {activeSession?.state === "playing"
+              ? translate("player.video.active")
+              : translate("player.video.starting")}
           </span>
         </div>
       </section>
@@ -113,7 +119,7 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
         <div className="player-window-header">
           <div>
             <span>Lumi</span>
-            <h1 id="player-window-title">Lumi Player</h1>
+            <h1 id="player-window-title">{translate("player.title")}</h1>
           </div>
           <strong>{status}</strong>
         </div>
@@ -127,7 +133,7 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
 
         {sessionQuery.isError && !activeSession ? (
           <div className="form-error playback-error" role="alert">
-            <strong>Playback session could not be loaded</strong>
+            <strong>{translate("player.error.sessionLoad")}</strong>
             <span>playback.session_not_found</span>
           </div>
         ) : null}
@@ -138,9 +144,9 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
             session={activeSession}
           />
         ) : (
-          <div className="player-controls" aria-label="Playback controls">
+          <div className="player-controls" aria-label={translate("player.aria.controls")}>
             <div>
-              <strong>Opening</strong>
+              <strong>{translate("player.state.opening")}</strong>
               <span>0:00</span>
             </div>
           </div>
@@ -148,8 +154,4 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
       </section>
     </main>
   );
-}
-
-function titleCase(value: string) {
-  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }

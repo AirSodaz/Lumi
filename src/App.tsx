@@ -3,6 +3,7 @@ import { useState } from "react";
 import { MotionConfig } from "motion/react";
 import { PlayerWindowView } from "./features/player/PlayerWindowView";
 import { LumiShell } from "./features/shell/LumiShell";
+import { I18nProvider } from "./lib/i18n";
 import "./styles/global.css";
 
 function App() {
@@ -25,13 +26,15 @@ function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <QueryClientProvider client={queryClient}>
-        {route.view === "player" ? (
-          <PlayerWindowView sessionId={route.sessionId} />
-        ) : (
-          <LumiShell />
-        )}
-      </QueryClientProvider>
+      <I18nProvider>
+        <QueryClientProvider client={queryClient}>
+          {route.view === "player" ? (
+            <PlayerWindowView sessionId={route.sessionId} />
+          ) : (
+            <LumiShell />
+          )}
+        </QueryClientProvider>
+      </I18nProvider>
     </MotionConfig>
   );
 }

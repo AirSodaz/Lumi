@@ -3,8 +3,6 @@ import type { LibraryItem } from "../tauriClient";
 export type MediaCardOrientation = "landscape" | "portrait";
 
 export type MediaCardPresentation = {
-  artLabel: string;
-  fallbackCopy: string;
   gridColumns: number;
   orientation: MediaCardOrientation;
 };
@@ -30,8 +28,6 @@ export function getMediaCardPresentation(
   const orientation = getMediaCardOrientation(item.itemType);
 
   return {
-    artLabel: orientation === "portrait" ? "Poster artwork" : "Thumbnail artwork",
-    fallbackCopy: orientation === "portrait" ? "No poster" : "No thumbnail",
     gridColumns: gridColumnsByOrientation[orientation],
     orientation,
   };

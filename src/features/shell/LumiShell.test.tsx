@@ -478,8 +478,8 @@ describe("LumiShell", () => {
     expect(back).toBeDisabled();
     expect(forward).toBeDisabled();
 
-    await user.click(screen.getByRole("button", { name: "收藏" }));
-    expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Favorites" }));
+    expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
     expect(back).toBeEnabled();
     expect(forward).toBeDisabled();
 
@@ -488,7 +488,7 @@ describe("LumiShell", () => {
     expect(forward).toBeEnabled();
 
     await user.click(forward);
-    expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
   });
 
   it("opens Windows titlebar menus and calls window controls", async () => {
@@ -496,7 +496,7 @@ describe("LumiShell", () => {
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "View" }));
-    expect(await screen.findByRole("menuitem", { name: "收藏" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "Favorites" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Libraries" })).not.toBeInTheDocument();
     await user.click(await screen.findByRole("menuitem", { name: "Search" }));
     expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
@@ -520,7 +520,7 @@ describe("LumiShell", () => {
 
     expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "收藏" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Favorites" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Libraries" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
@@ -536,8 +536,35 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "收藏" }));
+    await user.click(await screen.findByRole("button", { name: "Favorites" }));
 
+    expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Demo Movie/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_list_favorites", {
+        request: { serverId: "server-1", cursor: null },
+      }),
+    );
+    expect(screen.queryByRole("heading", { name: "Libraries" })).not.toBeInTheDocument();
+  });
+
+  it("renders the shell in Chinese when the local language preference is Chinese", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem("lumi.languagePreference", "zh");
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Lumi 播放器" })).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute("lang", "zh-CN");
+    expect(screen.getByLabelText("播放控制")).toBeInTheDocument();
+
+    window.history.replaceState(null, "", originalLocation);
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "首页" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "收藏" }));
     expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Demo Movie/ })).toBeInTheDocument();
     await waitFor(() =>
@@ -554,13 +581,13 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "收藏" }));
-    const favoritesView = await screen.findByRole("region", { name: "收藏" });
+    await user.click(await screen.findByRole("button", { name: "Favorites" }));
+    const favoritesView = await screen.findByRole("region", { name: "Favorites" });
     await user.click(await within(favoritesView).findByRole("button", { name: /Demo Movie/ }));
 
     expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Back to 收藏" }));
-    expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back to Favorites" }));
+    expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
   });
 
   it("keeps Favorites empty state when the selected server has no favorites", async () => {
@@ -576,9 +603,9 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "收藏" }));
+    await user.click(await screen.findByRole("button", { name: "Favorites" }));
 
-    expect(await screen.findByText("暂无收藏")).toBeInTheDocument();
+    expect(await screen.findByText("No favorites yet")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Demo Movie/ })).not.toBeInTheDocument();
   });
 
@@ -600,7 +627,7 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "收藏" }));
+    await user.click(await screen.findByRole("button", { name: "Favorites" }));
 
     expect(await screen.findByText("Could not load favorites")).toBeInTheDocument();
     expect(screen.queryByText("secret-token")).not.toBeInTheDocument();
@@ -626,8 +653,8 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "收藏" }));
-    const favoritesView = await screen.findByRole("region", { name: "收藏" });
+    await user.click(await screen.findByRole("button", { name: "Favorites" }));
+    const favoritesView = await screen.findByRole("region", { name: "Favorites" });
     expect(
       await within(favoritesView).findByRole("button", { name: /Demo Movie/ }),
     ).toBeInTheDocument();
@@ -685,32 +712,32 @@ describe("LumiShell", () => {
     window.localStorage.setItem("lumi.sidebarCollapsed", "true");
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "收藏" }));
-    expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Favorites" }));
+    expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
 
     const home = screen.getByRole("button", { name: "Home" });
-    const favorites = screen.getByRole("button", { name: "收藏" });
+    const favorites = screen.getByRole("button", { name: "Favorites" });
     home.focus();
     await user.keyboard("{ArrowDown}");
 
     expect(favorites).toHaveFocus();
-    expect(screen.getByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Favorites" })).toBeInTheDocument();
   });
 
   it("switches navigation with pointer and vertical arrow-key focus", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const favorites = await screen.findByRole("button", { name: "收藏" });
+    const favorites = await screen.findByRole("button", { name: "Favorites" });
     await user.click(favorites);
-    expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
 
     const home = screen.getByRole("button", { name: "Home" });
     home.focus();
     await user.keyboard("{ArrowDown}");
 
     expect(favorites).toHaveFocus();
-    expect(screen.getByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Favorites" })).toBeInTheDocument();
 
     await user.keyboard("{ArrowUp}");
 
@@ -1031,8 +1058,8 @@ describe("LumiShell", () => {
     await screen.findByRole("button", { name: /Demo Movie/ });
     expect(document.querySelector(".home-view .cinematic-hero")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "收藏" }));
-    expect(await screen.findByRole("heading", { name: "收藏" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Favorites" }));
+    expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
     expect(document.querySelector(".favorites-view .cinematic-hero")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Search" }));

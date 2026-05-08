@@ -4,6 +4,7 @@ import { FocusScope } from "../../components/focus";
 import { CinematicHero, GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
 import { MotionButton } from "../../components/motion";
+import { useI18n } from "../../lib/i18n";
 import { formatMetadata } from "../../lib/media/format";
 import {
   getMediaCardPresentation,
@@ -39,6 +40,7 @@ export function MediaDetailView({
   returnLabel,
   serverId,
 }: MediaDetailViewProps) {
+  const { locale, translate } = useI18n();
   const detail = useItemDetail(serverId, itemId);
   const openPlayback = useOpenPlayback();
   const [activeSession, setActiveSession] = useState<PlayerSession | null>(null);
@@ -92,8 +94,10 @@ export function MediaDetailView({
         <DetailBackButton onBack={onBack} returnLabel={returnLabel} />
         <GlassPanel className="empty-state">
           <Film aria-hidden="true" size={22} />
-          <strong id="media-detail-loading">Loading media details</strong>
-          <span>Fetching item data</span>
+          <strong id="media-detail-loading">
+            {translate("viewDetail.empty.loadingTitle")}
+          </strong>
+          <span>{translate("viewDetail.empty.loadingSubtitle")}</span>
         </GlassPanel>
       </section>
     );
@@ -105,8 +109,10 @@ export function MediaDetailView({
         <DetailBackButton onBack={onBack} returnLabel={returnLabel} />
         <GlassPanel className="empty-state">
           <Film aria-hidden="true" size={22} />
-          <strong id="media-detail-error">Could not load media details</strong>
-          <span>Try again from the library view</span>
+          <strong id="media-detail-error">
+            {translate("viewDetail.empty.loadItemFailed")}
+          </strong>
+          <span>{translate("viewDetail.empty.tryFromLibrary")}</span>
         </GlassPanel>
       </section>
     );
@@ -115,12 +121,14 @@ export function MediaDetailView({
   const mediaSources = detail.data?.mediaSources ?? [];
   const playbackStatus =
     mediaSources.length > 0
-      ? `${mediaSources.length} source ready`
+      ? translate("viewDetail.playback.sourceReady", {
+          count: mediaSources.length,
+        })
       : item && containerPlaybackTypes.has(item.itemType)
-        ? "Plays first available item"
+        ? translate("viewDetail.playback.container")
         : canPlay
-        ? "Source resolves on play"
-        : "Not playable";
+          ? translate("viewDetail.playback.sourceOnPlay")
+          : translate("viewDetail.playback.notPlayable");
   const relatedItems = children.data?.items ?? [];
   const relatedColumns = getMediaGridColumns(relatedItems);
   const relatedOrientation = relatedItems[0]
@@ -141,7 +149,7 @@ export function MediaDetailView({
       });
       setActiveSession(session);
     } catch (caught) {
-      setPlaybackError(toAppError(caught));
+      setPlaybackError(toAppError(caught, translate("viewDetail.playback.startFailed")));
     }
   }
 
@@ -158,19 +166,23 @@ export function MediaDetailView({
               type="button"
             >
               <Play aria-hidden="true" size={15} />
-              <span>{openPlayback.isPending ? "Opening" : "Play"}</span>
+              <span>
+                {openPlayback.isPending
+                  ? translate("player.state.opening")
+                  : translate("viewDetail.action.play")}
+              </span>
             </MotionButton>
             <span className="status-chip">{playbackStatus}</span>
           </>
         }
         backdropUrl={item.backdropUrl ?? item.posterUrl ?? null}
         className="media-detail-hero"
-        eyebrow={formatMetadata(item)}
+        eyebrow={formatMetadata(item, locale)}
         posterUrl={item.posterUrl}
         title={item.title}
         titleId="media-title"
       >
-        <p>{item.overview ?? "No overview available."}</p>
+        <p>{item.overview ?? translate("viewDetail.empty.noOverview")}</p>
       </CinematicHero>
 
       {playbackError ? (
@@ -182,18 +194,20 @@ export function MediaDetailView({
 
       {activeSession && activeSession.state === "opening" ? (
         <GlassPanel className="playback-opening" aria-live="polite">
-          <strong>Opening</strong>
-          <span>Player window is starting</span>
+          <strong>{translate("player.state.opening")}</strong>
+          <span>{translate("viewDetail.playback.openingSubtitle")}</span>
         </GlassPanel>
       ) : null}
 
       {shouldLoadChildren ? (
         <section className="media-rail" aria-labelledby="detail-children">
-          <h2 id="detail-children">More from {item.title}</h2>
+          <h2 id="detail-children">
+            {translate("viewDetail.related.title", { title: item.title })}
+          </h2>
           {children.isError ? (
             <GlassPanel className="empty-state compact">
-              <strong>Could not load related media</strong>
-              <span>Try again later</span>
+              <strong>{translate("viewDetail.empty.loadRelatedFailed")}</strong>
+              <span>{translate("library.empty.tryAgain")}</span>
             </GlassPanel>
           ) : children.isLoading ? (
             <div className="rail-items" data-grid-orientation="portrait">
@@ -208,7 +222,7 @@ export function MediaDetailView({
             </div>
           ) : relatedItems.length ? (
             <FocusScope
-              aria-label={`More from ${item.title}`}
+              aria-label={translate("viewDetail.related.aria", { title: item.title })}
               className="rail-items"
               columns={relatedColumns}
               data-grid-orientation={relatedOrientation}
@@ -229,7 +243,7 @@ export function MediaDetailView({
             </FocusScope>
           ) : (
             <GlassPanel className="empty-state compact">
-              <strong>No media found</strong>
+              <strong>{translate("media.rail.empty.noMedia")}</strong>
               <span>{item.title}</span>
             </GlassPanel>
           )}
@@ -239,7 +253,7 @@ export function MediaDetailView({
   );
 }
 
-function toAppError(error: unknown): AppError {
+function toAppError(error: unknown, fallbackMessage: string): AppError {
   if (
     typeof error === "object" &&
     error !== null &&
@@ -251,7 +265,7 @@ function toAppError(error: unknown): AppError {
 
   return {
     code: "playback.unknown",
-    message: "Playback could not be started",
+    message: fallbackMessage,
     recoverable: true,
   };
 }
@@ -262,10 +276,12 @@ type DetailBackButtonProps = {
 };
 
 function DetailBackButton({ onBack, returnLabel }: DetailBackButtonProps) {
+  const { translate } = useI18n();
+
   return (
     <MotionButton className="secondary-action back-action" onClick={onBack} type="button">
       <ChevronLeft aria-hidden="true" size={16} />
-      <span>Back to {returnLabel}</span>
+      <span>{translate("viewDetail.action.backTo", { label: returnLabel })}</span>
     </MotionButton>
   );
 }

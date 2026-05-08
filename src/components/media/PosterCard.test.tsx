@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
+import { I18nProvider } from "../../lib/i18n";
 import type { LibraryItem } from "../../lib/tauriClient";
 import { PosterCard } from "./PosterCard";
 
@@ -13,11 +15,17 @@ function mediaItem(itemType: string): LibraryItem {
   };
 }
 
+function wrapper({ children }: { children: ReactNode }) {
+  return <I18nProvider>{children}</I18nProvider>;
+}
+
 describe("PosterCard", () => {
   it.each(["movie", "series", "season", "folder", "collection"])(
     "renders %s as a portrait card",
     (itemType) => {
-      render(<PosterCard focusScope="test-cards" item={mediaItem(itemType)} />);
+      render(<PosterCard focusScope="test-cards" item={mediaItem(itemType)} />, {
+        wrapper,
+      });
 
       expect(screen.getByRole("button", { name: itemType })).toHaveAttribute(
         "data-card-orientation",
@@ -29,7 +37,9 @@ describe("PosterCard", () => {
   it.each(["episode", "video", "musicVideo"])(
     "renders %s as a landscape card",
     (itemType) => {
-      render(<PosterCard focusScope="test-cards" item={mediaItem(itemType)} />);
+      render(<PosterCard focusScope="test-cards" item={mediaItem(itemType)} />, {
+        wrapper,
+      });
 
       expect(screen.getByRole("button", { name: itemType })).toHaveAttribute(
         "data-card-orientation",
@@ -45,6 +55,7 @@ describe("PosterCard", () => {
         item={mediaItem("movie")}
         orientation="landscape"
       />,
+      { wrapper },
     );
 
     expect(screen.getByRole("button", { name: "movie" })).toHaveAttribute(
@@ -61,6 +72,7 @@ describe("PosterCard", () => {
     };
     const { container } = render(
       <PosterCard focusScope="test-cards" item={item} orientation="landscape" />,
+      { wrapper },
     );
 
     expect(container.querySelector(".poster-art")).toHaveStyle({

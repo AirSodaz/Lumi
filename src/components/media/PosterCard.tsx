@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from "motion/react";
+import { useI18n } from "../../lib/i18n";
 import type { LibraryItem } from "../../lib/tauriClient";
 import { formatMetadata } from "../../lib/media/format";
 import {
@@ -28,6 +29,7 @@ export function PosterCard({
   subtitle,
 }: PosterCardProps) {
   const reducedMotion = useReducedMotion();
+  const { locale, translate } = useI18n();
   const loadingOrientation = orientation ?? "landscape";
 
   if (loading || !item) {
@@ -42,18 +44,21 @@ export function PosterCard({
       >
         <span className="poster-art" />
         <span className="poster-card-copy">
-          <strong>Loading</strong>
-          <span>Fetching media</span>
+          <strong>{translate("media.card.loading")}</strong>
+          <span>{translate("media.card.fetching")}</span>
         </span>
       </FocusableCard>
     );
   }
 
-  const metadata = subtitle ?? formatMetadata(item);
+  const metadata = subtitle ?? formatMetadata(item, locale);
   const presentation = getMediaCardPresentation(item);
   const cardOrientation = orientation ?? presentation.orientation;
   const artworkUrl = getArtworkUrl(item, cardOrientation);
-  const fallbackCopy = getFallbackCopy(cardOrientation);
+  const fallbackCopy =
+    cardOrientation === "portrait"
+      ? translate("media.card.noPoster")
+      : translate("media.card.noThumbnail");
 
   return (
     <FocusableCard
@@ -83,7 +88,9 @@ export function PosterCard({
       </span>
       {typeof progressPercent === "number" ? (
         <span
-          aria-label={`${Math.round(progressPercent)}% watched`}
+          aria-label={translate("media.progress.watched", {
+            percent: Math.round(progressPercent),
+          })}
           className="poster-progress"
         >
           <motion.span
@@ -108,8 +115,4 @@ function getArtworkUrl(item: LibraryItem, orientation: MediaCardOrientation) {
   }
 
   return item.posterUrl ?? null;
-}
-
-function getFallbackCopy(orientation: MediaCardOrientation) {
-  return orientation === "portrait" ? "No poster" : "No thumbnail";
 }

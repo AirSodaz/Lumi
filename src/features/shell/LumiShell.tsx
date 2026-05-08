@@ -27,6 +27,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { FocusableCard } from "../../components/focus";
 import { GlassPanel, MotionPage } from "../../components/layout";
 import { MotionButton } from "../../components/motion";
+import { useI18n } from "../../lib/i18n";
 import { dropdownMotion } from "../../lib/motion/presets";
 import {
   directionFromKey,
@@ -71,14 +72,15 @@ const initialRoute: ShellRoute = { kind: "view", view: "home" };
 const sidebarCollapsedStorageKey = "lumi.sidebarCollapsed";
 const selectedServerStorageKey = "lumi.selectedServerId";
 
-const navItems: Array<{ id: ViewId; label: string; icon: Icon }> = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "favorites", label: "收藏", icon: Star },
-  { id: "search", label: "Search", icon: Search },
-  { id: "settings", label: "Settings", icon: Settings },
+const navItems: Array<{ id: ViewId; labelKey: string; icon: Icon }> = [
+  { id: "home", labelKey: "nav.home", icon: Home },
+  { id: "favorites", labelKey: "nav.favorites", icon: Star },
+  { id: "search", labelKey: "nav.search", icon: Search },
+  { id: "settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 export function LumiShell() {
+  const { translate } = useI18n();
   const [history, setHistory] = useState<RouteHistory>(() => ({
     backStack: [],
     current: initialRoute,
@@ -237,7 +239,11 @@ export function LumiShell() {
           setRouteWithTransition({ kind: "view", view: route.returnView })
         }
         onOpenMedia={(item) => openMediaDetail(item, route.returnView)}
-        returnLabel={route.returnView === "favorites" ? "收藏" : "Home"}
+        returnLabel={
+          route.returnView === "favorites"
+            ? translate("nav.favorites")
+            : translate("nav.home")
+        }
         serverId={route.serverId}
       />
     );
@@ -310,7 +316,11 @@ export function LumiShell() {
           platform={platform}
         />
         <div className="shell-vignette" aria-hidden="true" />
-        <aside className="shell-sidebar" aria-label="Primary" id="lumi-primary-sidebar">
+        <aside
+          className="shell-sidebar"
+          aria-label={translate("shell.aria.primary")}
+          id="lumi-primary-sidebar"
+        >
           <div className="brand-lockup">
             <span className="brand-mark" aria-hidden="true">
               L
@@ -321,7 +331,11 @@ export function LumiShell() {
                 <MotionButton
                   aria-controls="lumi-primary-sidebar"
                   aria-expanded={!sidebarCollapsed}
-                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-label={
+                    sidebarCollapsed
+                      ? translate("shell.sidebar.expand")
+                      : translate("shell.sidebar.collapse")
+                  }
                   className="sidebar-toggle"
                   onClick={toggleSidebarCollapsed}
                   type="button"
@@ -335,20 +349,22 @@ export function LumiShell() {
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content className="tooltip-content" side="right">
-                  {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  {sidebarCollapsed
+                    ? translate("shell.sidebar.expand")
+                    : translate("shell.sidebar.collapse")}
                   <Tooltip.Arrow className="tooltip-arrow" />
                 </Tooltip.Content>
               </Tooltip.Portal>
             </Tooltip.Root>
           </div>
-          <nav className="primary-nav" aria-label="Main navigation">
+          <nav className="primary-nav" aria-label={translate("shell.aria.mainNavigation")}>
             {navItems.map((item) => (
               <NavButton
                 active={activeView === item.id}
                 collapsed={sidebarCollapsed}
                 icon={item.icon}
                 key={item.id}
-                label={item.label}
+                label={translate(item.labelKey)}
                 onMoveRight={focusFirstContentEntry}
                 onSelect={() =>
                   setRouteWithTransition({ kind: "view", view: item.id })
@@ -388,6 +404,8 @@ function AppChrome({
   onNavigate,
   platform,
 }: AppChromeProps) {
+  const { translate } = useI18n();
+
   if (platform === "macos") {
     return null;
   }
@@ -405,10 +423,10 @@ function AppChrome({
   }
 
   return (
-    <header className="windows-titlebar" aria-label="Windows title bar">
-      <nav className="titlebar-navigation" aria-label="Window navigation">
+    <header className="windows-titlebar" aria-label={translate("shell.aria.windowsTitlebar")}>
+      <nav className="titlebar-navigation" aria-label={translate("shell.aria.windowNavigation")}>
         <MotionButton
-          aria-label="Go back"
+          aria-label={translate("shell.titlebar.goBack")}
           className="titlebar-icon-button"
           disabled={!canGoBack}
           onClick={onBack}
@@ -417,7 +435,7 @@ function AppChrome({
           <ChevronLeft aria-hidden="true" size={16} />
         </MotionButton>
         <MotionButton
-          aria-label="Go forward"
+          aria-label={translate("shell.titlebar.goForward")}
           className="titlebar-icon-button"
           disabled={!canGoForward}
           onClick={onForward}
@@ -426,49 +444,68 @@ function AppChrome({
           <ChevronRight aria-hidden="true" size={16} />
         </MotionButton>
       </nav>
-      <div className="titlebar-menu-bar" role="menubar" aria-label="Application menu">
+      <div
+        className="titlebar-menu-bar"
+        role="menubar"
+        aria-label={translate("shell.aria.applicationMenu")}
+      >
         <TitlebarMenu
           items={[
-            { disabled: true, label: "Open File" },
-            { disabled: true, label: "Open Folder" },
-            { label: "Settings", onSelect: () => onNavigate("settings"), shortcut: "Ctrl+," },
+            { disabled: true, label: translate("shell.menu.openFile") },
+            { disabled: true, label: translate("shell.menu.openFolder") },
+            {
+              label: translate("shell.menu.settings"),
+              onSelect: () => onNavigate("settings"),
+              shortcut: "Ctrl+,",
+            },
           ]}
-          label="File"
+          label={translate("shell.menu.file")}
         />
         <TitlebarMenu
           items={[
-            { disabled: true, label: "Undo", shortcut: "Ctrl+Z" },
-            { disabled: true, label: "Redo", shortcut: "Ctrl+Y" },
-            { disabled: true, label: "Cut", separatorBefore: true, shortcut: "Ctrl+X" },
-            { disabled: true, label: "Copy", shortcut: "Ctrl+C" },
+            { disabled: true, label: translate("shell.menu.undo"), shortcut: "Ctrl+Z" },
+            { disabled: true, label: translate("shell.menu.redo"), shortcut: "Ctrl+Y" },
+            {
+              disabled: true,
+              label: translate("shell.menu.cut"),
+              separatorBefore: true,
+              shortcut: "Ctrl+X",
+            },
+            { disabled: true, label: translate("shell.menu.copy"), shortcut: "Ctrl+C" },
           ]}
-          label="Edit"
+          label={translate("shell.menu.edit")}
         />
         <TitlebarMenu
           items={navItems.map((item) => ({
-            label: item.label,
+            label: translate(item.labelKey),
             onSelect: () => onNavigate(item.id),
             selected: activeView === item.id,
           }))}
-          label="View"
+          label={translate("shell.menu.view")}
         />
         <TitlebarMenu
           items={[
-            { label: "Minimize Window", onSelect: () => void runWindowCommand("minimize") },
             {
-              label: "Maximize or Restore Window",
+              label: translate("shell.menu.minimizeWindow"),
+              onSelect: () => void runWindowCommand("minimize"),
+            },
+            {
+              label: translate("shell.menu.maximizeRestore"),
               onSelect: () => void runWindowCommand("toggleMaximize"),
             },
-            { label: "Close Window", onSelect: () => void runWindowCommand("close") },
+            {
+              label: translate("shell.menu.closeWindow"),
+              onSelect: () => void runWindowCommand("close"),
+            },
           ]}
-          label="Window"
+          label={translate("shell.menu.window")}
         />
         <TitlebarMenu
           items={[
-            { disabled: true, label: "Lumi Help" },
-            { disabled: true, label: "About Lumi" },
+            { disabled: true, label: translate("shell.menu.helpItem") },
+            { disabled: true, label: translate("shell.menu.about") },
           ]}
-          label="Help"
+          label={translate("shell.menu.help")}
         />
       </div>
       <div
@@ -476,9 +513,9 @@ function AppChrome({
         onDoubleClick={handleDragDoubleClick}
         onMouseDown={handleDragMouseDown}
       />
-      <div className="titlebar-window-controls" aria-label="Window controls">
+      <div className="titlebar-window-controls" aria-label={translate("shell.aria.windowControls")}>
         <MotionButton
-          aria-label="Minimize window"
+          aria-label={translate("shell.titlebar.minimize")}
           className="titlebar-window-button"
           onClick={() => void runWindowCommand("minimize")}
           type="button"
@@ -486,7 +523,7 @@ function AppChrome({
           <Minus aria-hidden="true" size={14} />
         </MotionButton>
         <MotionButton
-          aria-label="Maximize or restore window"
+          aria-label={translate("shell.titlebar.maximizeRestore")}
           className="titlebar-window-button"
           onClick={() => void runWindowCommand("toggleMaximize")}
           type="button"
@@ -494,7 +531,7 @@ function AppChrome({
           <Square aria-hidden="true" size={12} />
         </MotionButton>
         <MotionButton
-          aria-label="Close window"
+          aria-label={translate("shell.titlebar.close")}
           className="titlebar-window-button close"
           onClick={() => void runWindowCommand("close")}
           type="button"
@@ -615,30 +652,36 @@ function NavButton({
 }
 
 function SearchView() {
+  const { translate } = useI18n();
+
   return (
     <section className="view-stack search-view app-workbench" aria-labelledby="search-title">
       <header className="workbench-header">
         <div className="workbench-title-block">
-          <span className="workbench-kicker">Library</span>
-          <h1 id="search-title">Search</h1>
+          <span className="workbench-kicker">{translate("search.kicker")}</span>
+          <h1 id="search-title">{translate("nav.search")}</h1>
           <div className="workbench-meta-row">
-            <span>Titles, seasons, episodes</span>
-            <span>Local query</span>
+            <span>{translate("search.meta.targets")}</span>
+            <span>{translate("search.meta.localQuery")}</span>
           </div>
         </div>
       </header>
-      <div className="browser-toolbar" aria-label="Search scope">
+      <div className="browser-toolbar" aria-label={translate("search.scope.aria")}>
         <span className="server-dot" aria-hidden="true" />
-        <strong>All connected media</strong>
-        <span className="status-chip">Ready</span>
+        <strong>{translate("search.meta.scope")}</strong>
+        <span className="status-chip">{translate("common.ready")}</span>
       </div>
-      <GlassPanel className="search-panel" aria-label="Search media panel">
+      <GlassPanel className="search-panel" aria-label={translate("search.panel.aria")}>
         <Search aria-hidden="true" size={20} />
-        <input aria-label="Search media" placeholder="Search media" type="search" />
+        <input
+          aria-label={translate("search.placeholder")}
+          placeholder={translate("search.placeholder")}
+          type="search"
+        />
       </GlassPanel>
       <GlassPanel className="empty-state search-empty">
-        <strong>Search your connected server</strong>
-        <span>Type a title, collection, season, or episode name.</span>
+        <strong>{translate("search.empty.title")}</strong>
+        <span>{translate("search.empty.description")}</span>
       </GlassPanel>
     </section>
   );

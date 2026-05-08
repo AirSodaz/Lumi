@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { GlassPanel } from "../../components/layout";
 import { MotionButton } from "../../components/motion";
+import { useI18n, type LanguagePreference } from "../../lib/i18n";
 import {
   createSurfaceMotion,
   dialogContentMotion,
@@ -39,32 +40,49 @@ import {
 
 type SettingsPanel = "servers" | "player" | "appearance" | "logs";
 
-const panels: Array<{ id: SettingsPanel; label: string }> = [
-  { id: "servers", label: "Servers" },
-  { id: "player", label: "Player" },
-  { id: "appearance", label: "Appearance" },
-  { id: "logs", label: "Logs" },
+const panels: Array<{ id: SettingsPanel }> = [
+  { id: "servers" },
+  { id: "player" },
+  { id: "appearance" },
+  { id: "logs" },
 ];
+
+function panelLabelKey(panel: SettingsPanel) {
+  return `settings.panel.${panel}` as const;
+}
+
+function languagePreferenceLabelKey(languagePreference: LanguagePreference) {
+  if (languagePreference === "en") {
+    return "i18n.language.english";
+  }
+
+  if (languagePreference === "zh") {
+    return "i18n.language.zh";
+  }
+
+  return "i18n.language.system";
+}
 
 export function SettingsView() {
   const [panel, setPanel] = useState<SettingsPanel>("servers");
   const reducedMotion = useReducedMotion();
+  const { translate } = useI18n();
 
   return (
     <section className="settings-view app-workbench" aria-labelledby="settings-title">
       <header className="workbench-header">
         <div className="workbench-title-block">
           <span className="workbench-kicker">Lumi</span>
-          <h1 id="settings-title">Settings</h1>
+          <h1 id="settings-title">{translate("settings.title")}</h1>
           <div className="workbench-meta-row">
-            <span>{panels.find((item) => item.id === panel)?.label}</span>
-            <span>Local preferences</span>
+            <span>{translate(panelLabelKey(panel))}</span>
+            <span>{translate("settings.meta.localPreferences")}</span>
           </div>
         </div>
       </header>
 
       <div className="settings-layout">
-        <nav className="settings-tabs" aria-label="Settings sections">
+        <nav className="settings-tabs" aria-label={translate("settings.aria.sections")}>
           {panels.map((item) => (
             <MotionButton
               aria-current={panel === item.id ? "page" : undefined}
@@ -72,7 +90,7 @@ export function SettingsView() {
               onClick={() => setPanel(item.id)}
               type="button"
             >
-              {item.label}
+              {translate(panelLabelKey(item.id))}
             </MotionButton>
           ))}
         </nav>
@@ -96,6 +114,7 @@ export function SettingsView() {
 }
 
 function ServersPanel() {
+  const { translate } = useI18n();
   const serversQuery = useServers();
   const logout = useLogout();
   const servers = serversQuery.data ?? [];
@@ -106,8 +125,12 @@ function ServersPanel() {
     <section className="settings-section" aria-labelledby="servers-title">
       <div className="section-heading">
         <div>
-          <h2 id="servers-title">Servers</h2>
-          <p>{servers.length > 0 ? `${servers.length} saved` : "No saved servers"}</p>
+          <h2 id="servers-title">{translate("settings.panel.servers")}</h2>
+          <p>
+            {servers.length > 0
+              ? translate("settings.server.saved", { count: servers.length })
+              : translate("settings.server.zero")}
+          </p>
         </div>
         <AddServerDialog />
       </div>
@@ -126,14 +149,19 @@ function ServersPanel() {
               <Tooltip.Root>
                 <Tooltip.Trigger asChild>
                   <DropdownMenu.Trigger asChild>
-                    <MotionButton aria-label={`More actions for ${server.name}`} type="button">
+                    <MotionButton
+                      aria-label={translate("settings.action.moreActionsFor", {
+                        name: server.name,
+                      })}
+                      type="button"
+                    >
                       <MoreHorizontal aria-hidden="true" size={16} />
                     </MotionButton>
                   </DropdownMenu.Trigger>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content className="tooltip-content" side="left">
-                    More actions
+                    {translate("settings.action.moreActionsFor", { name: server.name })}
                     <Tooltip.Arrow className="tooltip-arrow" />
                   </Tooltip.Content>
                 </Tooltip.Portal>
@@ -149,26 +177,28 @@ function ServersPanel() {
                       className="dropdown-item"
                       onSelect={() => setViewingServer(server)}
                     >
-                      View Server
+                      {translate("settings.action.viewServer")}
                     </DropdownMenu.Item>
                     <DropdownMenu.Item
                       className="dropdown-item"
                       onSelect={() => setRenamingServer(server)}
                     >
-                      Rename
+                      {translate("settings.action.rename")}
                     </DropdownMenu.Item>
-                    <DropdownMenu.Item className="dropdown-item">Diagnostics</DropdownMenu.Item>
+                    <DropdownMenu.Item className="dropdown-item">
+                      {translate("settings.action.diagnostics")}
+                    </DropdownMenu.Item>
                     <DropdownMenu.Item
                       className="dropdown-item"
                       onSelect={() => logout.mutate({ serverId: server.id })}
                     >
-                      Sign out
+                      {translate("settings.action.signOut")}
                     </DropdownMenu.Item>
                     <DropdownMenu.Item
                       className="dropdown-item danger"
                       onSelect={() => logout.mutate({ serverId: server.id })}
                     >
-                      Delete Server
+                      {translate("settings.action.deleteServer")}
                     </DropdownMenu.Item>
                   </motion.div>
                 </DropdownMenu.Content>
@@ -179,8 +209,8 @@ function ServersPanel() {
         {servers.length === 0 ? (
           <GlassPanel className="empty-state compact">
             <Server aria-hidden="true" size={22} />
-            <strong>No servers connected</strong>
-            <span>Add Server</span>
+            <strong>{translate("settings.server.empty.title")}</strong>
+            <span>{translate("settings.server.empty.subtitle")}</span>
           </GlassPanel>
         ) : null}
       </div>
@@ -205,6 +235,7 @@ function ServersPanel() {
 }
 
 function AddServerDialog() {
+  const { translate } = useI18n();
   const [open, setOpen] = useState(false);
   const [baseUrl, setBaseUrl] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -238,7 +269,7 @@ function AddServerDialog() {
       setPassword("");
       setOpen(false);
     } catch (caught) {
-      setError(toAppError(caught));
+      setError(toAppError(caught, translate("app.error.unknown")));
     }
   }
 
@@ -247,7 +278,7 @@ function AddServerDialog() {
       <Dialog.Trigger asChild>
         <MotionButton className="primary-action" type="button">
           <Plus aria-hidden="true" size={15} />
-          <span>Add Server</span>
+          <span>{translate("settings.action.addServer")}</span>
         </MotionButton>
       </Dialog.Trigger>
       <AnimatePresence>
@@ -274,19 +305,23 @@ function AddServerDialog() {
                 {...dialogContentMotion}
               >
                 <div className="dialog-title-row">
-                  <Dialog.Title>Add Emby Server</Dialog.Title>
+                  <Dialog.Title>{translate("settings.dialog.add.title")}</Dialog.Title>
                   <Dialog.Close asChild>
-                    <MotionButton aria-label="Close" className="icon-button" type="button">
+                    <MotionButton
+                      aria-label={translate("common.close")}
+                      className="icon-button"
+                      type="button"
+                    >
                       <X aria-hidden="true" size={16} />
                     </MotionButton>
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="sr-only">
-                  Sign in to an Emby server with a manual URL.
+                  {translate("settings.dialog.add.description")}
                 </Dialog.Description>
                 <form className="dialog-form" onSubmit={handleSubmit}>
                   <label>
-                    <span>Server URL</span>
+                    <span>{translate("settings.field.serverUrl")}</span>
                     <input
                       autoComplete="url"
                       onChange={(event) => setBaseUrl(event.target.value)}
@@ -297,17 +332,17 @@ function AddServerDialog() {
                     />
                   </label>
                   <label>
-                    <span>Server name</span>
+                    <span>{translate("settings.field.serverName")}</span>
                     <input
                       autoComplete="off"
                       onChange={(event) => setDisplayName(event.target.value)}
-                      placeholder="Use server name"
+                      placeholder={translate("settings.field.serverNamePlaceholder")}
                       type="text"
                       value={displayName}
                     />
                   </label>
                   <label>
-                    <span>Username</span>
+                    <span>{translate("settings.field.username")}</span>
                     <input
                       autoComplete="username"
                       onChange={(event) => setUsername(event.target.value)}
@@ -317,7 +352,7 @@ function AddServerDialog() {
                     />
                   </label>
                   <label>
-                    <span>Password</span>
+                    <span>{translate("settings.field.password")}</span>
                     <input
                       autoComplete="current-password"
                       onChange={(event) => setPassword(event.target.value)}
@@ -334,11 +369,13 @@ function AddServerDialog() {
                   <div className="dialog-actions">
                     <Dialog.Close asChild>
                       <MotionButton className="secondary-action" type="button">
-                        Cancel
+                        {translate("common.cancel")}
                       </MotionButton>
                     </Dialog.Close>
                     <MotionButton className="primary-action" disabled={login.isPending} type="submit">
-                      {login.isPending ? "Connecting" : "Connect"}
+                      {login.isPending
+                        ? translate("common.connecting")
+                        : translate("common.connect")}
                     </MotionButton>
                   </div>
                 </form>
@@ -352,6 +389,7 @@ function AddServerDialog() {
 }
 
 function PlayerPanel() {
+  const { translate } = useI18n();
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const diagnostic = useMpvDiagnostic();
@@ -365,19 +403,19 @@ function PlayerPanel() {
     <section className="settings-section" aria-labelledby="player-title">
       <div className="section-heading">
         <div>
-          <h2 id="player-title">Player</h2>
-          <p>Native mpv</p>
+          <h2 id="player-title">{translate("settings.panel.player")}</h2>
+          <p>{translate("settings.player.nativeMpv")}</p>
         </div>
         <MonitorCog aria-hidden="true" size={18} />
       </div>
       <div className="settings-list">
         <label className="settings-row control-row">
           <span>
-            <strong>Default volume</strong>
+            <strong>{translate("settings.player.defaultVolume")}</strong>
             <span>{current.player.defaultVolume}%</span>
           </span>
           <input
-            aria-label="Default volume"
+            aria-label={translate("settings.player.defaultVolume")}
             key={current.player.defaultVolume}
             max={100}
             min={0}
@@ -393,11 +431,11 @@ function PlayerPanel() {
         </label>
         <label className="settings-row control-row">
           <span>
-            <strong>Subtitles</strong>
-            <span>{subtitleLabel(current.player.subtitlePreference)}</span>
+            <strong>{translate("settings.player.subtitles")}</strong>
+            <span>{subtitleLabel(current.player.subtitlePreference, translate)}</span>
           </span>
           <select
-            aria-label="Subtitle preference"
+            aria-label={translate("settings.player.subtitlePreference")}
             onChange={(event) =>
               updateSettings.mutate({
                 subtitlePreference: event.target.value as SubtitlePreference,
@@ -405,16 +443,20 @@ function PlayerPanel() {
             }
             value={current.player.subtitlePreference}
           >
-            <option value="serverDefault">Server default</option>
-            <option value="always">Always show</option>
-            <option value="off">Off</option>
+            <option value="serverDefault">
+              {translate("settings.subtitles.serverDefault")}
+            </option>
+            <option value="always">{translate("settings.subtitles.always")}</option>
+            <option value="off">{translate("settings.subtitles.off")}</option>
           </select>
         </label>
         <div className="settings-row">
-          <strong>mpv path diagnostic</strong>
+          <strong>{translate("settings.player.mpvPathDiagnostic")}</strong>
           <span>
             {diagnostic.data?.message ??
-              (diagnostic.isLoading ? "Checking native mpv" : "Diagnostic unavailable")}
+              (diagnostic.isLoading
+                ? translate("settings.player.mpvChecking")
+                : translate("settings.player.diagnosticUnavailable"))}
           </span>
         </div>
       </div>
@@ -423,6 +465,11 @@ function PlayerPanel() {
 }
 
 function AppearancePanel() {
+  const {
+    languagePreference,
+    setLanguagePreference,
+    translate,
+  } = useI18n();
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const material = useMaterialState();
@@ -432,19 +479,19 @@ function AppearancePanel() {
     <section className="settings-section" aria-labelledby="appearance-title">
       <div className="section-heading">
         <div>
-          <h2 id="appearance-title">Appearance</h2>
-          <p>Content glass</p>
+          <h2 id="appearance-title">{translate("settings.panel.appearance")}</h2>
+          <p>{translate("settings.appearance.subtitle")}</p>
         </div>
         <SlidersHorizontal aria-hidden="true" size={18} />
       </div>
       <div className="settings-list">
         <label className="settings-row control-row">
           <span>
-            <strong>Theme</strong>
-            <span>System color mode</span>
+            <strong>{translate("settings.appearance.theme")}</strong>
+            <span>{translate("settings.appearance.themeMode")}</span>
           </span>
           <select
-            aria-label="Theme"
+            aria-label={translate("settings.appearance.theme")}
             onChange={(event) =>
               updateSettings.mutate({
                 theme: event.target.value as ThemePreference,
@@ -452,18 +499,39 @@ function AppearancePanel() {
             }
             value={current.theme}
           >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="system">{translate("settings.theme.system")}</option>
+            <option value="light">{translate("settings.theme.light")}</option>
+            <option value="dark">{translate("settings.theme.dark")}</option>
           </select>
         </label>
         <label className="settings-row control-row">
           <span>
-            <strong>Material Effects</strong>
-            <span>{current.materialEffectsEnabled ? "Enabled" : "Disabled"}</span>
+            <strong>{translate("i18n.language.label")}</strong>
+            <span>{translate(languagePreferenceLabelKey(languagePreference))}</span>
+          </span>
+          <select
+            aria-label={translate("i18n.language.label")}
+            onChange={(event) =>
+              setLanguagePreference(event.target.value as LanguagePreference)
+            }
+            value={languagePreference}
+          >
+            <option value="system">{translate("i18n.language.followSystem")}</option>
+            <option value="en">{translate("i18n.language.english")}</option>
+            <option value="zh">{translate("i18n.language.zh")}</option>
+          </select>
+        </label>
+        <label className="settings-row control-row">
+          <span>
+            <strong>{translate("settings.appearance.materialEffects")}</strong>
+            <span>
+              {current.materialEffectsEnabled
+                ? translate("common.enabled")
+                : translate("common.disabled")}
+            </span>
           </span>
           <input
-            aria-label="Material Effects"
+            aria-label={translate("settings.appearance.materialEffects")}
             checked={current.materialEffectsEnabled}
             onChange={(event) =>
               updateSettings.mutate({
@@ -474,10 +542,12 @@ function AppearancePanel() {
           />
         </label>
         <div className="settings-row">
-          <strong>{materialTitle(material.data?.kind)}</strong>
+          <strong>{materialTitle(material.data?.kind, translate)}</strong>
           <span>
             {material.data?.reason ??
-              (material.isLoading ? "Checking material capability" : "Material state unavailable")}
+              (material.isLoading
+                ? translate("settings.appearance.materialCapabilityChecking")
+                : translate("settings.appearance.materialStateUnavailable"))}
           </span>
         </div>
       </div>
@@ -486,6 +556,7 @@ function AppearancePanel() {
 }
 
 function LogsPanel() {
+  const { translate } = useI18n();
   const exportLogs = useExportLogs();
   const [exported, setExported] = useState<LogExport | null>(null);
 
@@ -498,29 +569,36 @@ function LogsPanel() {
     <section className="settings-section" aria-labelledby="logs-title">
       <div className="section-heading">
         <div>
-          <h2 id="logs-title">Logs</h2>
-          <p>Recent diagnostics</p>
+          <h2 id="logs-title">{translate("settings.panel.logs")}</h2>
+          <p>{translate("settings.logs.subtitle")}</p>
         </div>
         <Check aria-hidden="true" size={18} />
       </div>
       <div className="settings-list">
         <div className="settings-row">
-          <strong>Status</strong>
-          <span>{exportLogs.isPending ? "Exporting" : "Ready to export"}</span>
+          <strong>{translate("settings.logs.status")}</strong>
+          <span>
+            {exportLogs.isPending
+              ? translate("settings.logs.statusExporting")
+              : translate("settings.logs.statusReady")}
+          </span>
         </div>
         <div className="settings-row">
-          <strong>Recent logs</strong>
+          <strong>{translate("settings.logs.recent")}</strong>
           <MotionButton
             className="secondary-action"
             disabled={exportLogs.isPending}
             onClick={() => void handleExportLogs()}
             type="button"
           >
-            Export logs
+            {translate("settings.action.exportLogs")}
           </MotionButton>
         </div>
         {exported ? (
-          <GlassPanel aria-label="Exported logs" className="log-export">
+          <GlassPanel
+            aria-label={translate("settings.logs.exportedAria")}
+            className="log-export"
+          >
             <strong>{exported.fileName}</strong>
             <pre>{exported.contents}</pre>
           </GlassPanel>
@@ -536,6 +614,8 @@ type ServerDetailDialogProps = {
 };
 
 function ServerDetailDialog({ onOpenChange, server }: ServerDetailDialogProps) {
+  const { translate } = useI18n();
+
   return (
     <Dialog.Root open={Boolean(server)} onOpenChange={onOpenChange}>
       <AnimatePresence>
@@ -557,25 +637,29 @@ function ServerDetailDialog({ onOpenChange, server }: ServerDetailDialogProps) {
                 <div className="dialog-title-row">
                   <Dialog.Title>{server.name}</Dialog.Title>
                   <Dialog.Close asChild>
-                    <MotionButton aria-label="Close" className="icon-button" type="button">
+                    <MotionButton
+                      aria-label={translate("common.close")}
+                      className="icon-button"
+                      type="button"
+                    >
                       <X aria-hidden="true" size={16} />
                     </MotionButton>
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="sr-only">
-                  Saved server connection details.
+                  {translate("settings.dialog.detail.description")}
                 </Dialog.Description>
                 <div className="settings-list">
                   <div className="settings-row">
-                    <strong>Server URL</strong>
+                    <strong>{translate("settings.field.serverUrl")}</strong>
                     <span>{server.baseUrl}</span>
                   </div>
                   <div className="settings-row">
-                    <strong>User</strong>
+                    <strong>{translate("settings.field.user")}</strong>
                     <span>{server.userId}</span>
                   </div>
                   <div className="settings-row">
-                    <strong>Provider</strong>
+                    <strong>{translate("settings.field.provider")}</strong>
                     <span>{server.providerKind}</span>
                   </div>
                 </div>
@@ -594,6 +678,7 @@ type RenameServerDialogProps = {
 };
 
 function RenameServerDialog({ onOpenChange, server }: RenameServerDialogProps) {
+  const { translate } = useI18n();
   const updateServerProfile = useUpdateServerProfile();
   const [name, setName] = useState("");
   const [error, setError] = useState<AppError | null>(null);
@@ -617,7 +702,7 @@ function RenameServerDialog({ onOpenChange, server }: RenameServerDialogProps) {
     if (!trimmedName) {
       setError({
         code: "providers.server_name_required",
-        message: "Server name is required",
+        message: translate("settings.error.serverNameRequired"),
         recoverable: true,
       });
       return;
@@ -631,7 +716,7 @@ function RenameServerDialog({ onOpenChange, server }: RenameServerDialogProps) {
       });
       onOpenChange(false);
     } catch (caught) {
-      setError(toAppError(caught));
+      setError(toAppError(caught, translate("app.error.unknown")));
     }
   }
 
@@ -654,19 +739,23 @@ function RenameServerDialog({ onOpenChange, server }: RenameServerDialogProps) {
                 {...dialogContentMotion}
               >
                 <div className="dialog-title-row">
-                  <Dialog.Title>Rename Server</Dialog.Title>
+                  <Dialog.Title>{translate("settings.dialog.rename.title")}</Dialog.Title>
                   <Dialog.Close asChild>
-                    <MotionButton aria-label="Close" className="icon-button" type="button">
+                    <MotionButton
+                      aria-label={translate("common.close")}
+                      className="icon-button"
+                      type="button"
+                    >
                       <X aria-hidden="true" size={16} />
                     </MotionButton>
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="sr-only">
-                  Edit the local display name for this saved server.
+                  {translate("settings.dialog.rename.description")}
                 </Dialog.Description>
                 <form className="dialog-form" onSubmit={handleSubmit}>
                   <label>
-                    <span>Server name</span>
+                    <span>{translate("settings.field.serverName")}</span>
                     <input
                       onChange={(event) => setName(event.target.value)}
                       ref={firstInputRef}
@@ -684,7 +773,7 @@ function RenameServerDialog({ onOpenChange, server }: RenameServerDialogProps) {
                   <div className="dialog-actions">
                     <Dialog.Close asChild>
                       <MotionButton className="secondary-action" type="button">
-                        Cancel
+                        {translate("common.cancel")}
                       </MotionButton>
                     </Dialog.Close>
                     <MotionButton
@@ -692,7 +781,9 @@ function RenameServerDialog({ onOpenChange, server }: RenameServerDialogProps) {
                       disabled={updateServerProfile.isPending}
                       type="submit"
                     >
-                      {updateServerProfile.isPending ? "Saving" : "Save"}
+                      {updateServerProfile.isPending
+                        ? translate("common.saving")
+                        : translate("common.save")}
                     </MotionButton>
                   </div>
                 </form>
@@ -716,31 +807,37 @@ function defaultSettings() {
   };
 }
 
-function subtitleLabel(preference: SubtitlePreference) {
+function subtitleLabel(
+  preference: SubtitlePreference,
+  translate: ReturnType<typeof useI18n>["translate"],
+) {
   switch (preference) {
     case "always":
-      return "Always show";
+      return translate("settings.subtitles.always");
     case "off":
-      return "Off";
+      return translate("settings.subtitles.off");
     case "serverDefault":
     default:
-      return "Server default";
+      return translate("settings.subtitles.serverDefault");
   }
 }
 
-function materialTitle(kind: string | undefined) {
+function materialTitle(
+  kind: string | undefined,
+  translate: ReturnType<typeof useI18n>["translate"],
+) {
   if (kind === "nativeMaterial") {
-    return "Native material";
+    return translate("settings.appearance.materials.nativeMaterial");
   }
 
   if (kind === "contentGlass") {
-    return "Content glass";
+    return translate("settings.appearance.materials.contentGlass");
   }
 
-  return "Fallback surface";
+  return translate("settings.appearance.materials.fallbackSurface");
 }
 
-function toAppError(error: unknown): AppError {
+function toAppError(error: unknown, fallbackMessage: string): AppError {
   if (
     typeof error === "object" &&
     error !== null &&
@@ -752,7 +849,7 @@ function toAppError(error: unknown): AppError {
 
   return {
     code: "app.unknown",
-    message: "Something went wrong",
+    message: fallbackMessage,
     recoverable: true,
   };
 }

@@ -3,6 +3,7 @@ import { FocusScope } from "../../components/focus";
 import { GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
 import { MotionButton } from "../../components/motion";
+import { useI18n } from "../../lib/i18n";
 import { formatMetadata } from "../../lib/media/format";
 import {
   getMediaCardPresentation,
@@ -34,6 +35,7 @@ export function LibrariesView({
   selectedServer,
   servers,
 }: LibrariesViewProps) {
+  const { locale, translate } = useI18n();
   const selectedLibrary =
     libraries.find((library) => library.id === selectedLibraryId) ?? null;
   const server = selectedServer ?? servers[0] ?? null;
@@ -47,11 +49,17 @@ export function LibrariesView({
       <section className="view-stack libraries-view app-workbench" aria-labelledby="library-title">
         <header className="workbench-header">
           <div className="workbench-title-block">
-            <span className="workbench-kicker">{server?.name ?? "No server"}</span>
-            <h1 id="library-title">Media Library</h1>
+            <span className="workbench-kicker">
+              {server?.name ?? translate("home.meta.noServer")}
+            </span>
+            <h1 id="library-title">{translate("library.title.fallback")}</h1>
             <div className="workbench-meta-row">
-              <span>{loading ? "Syncing" : "Unavailable"}</span>
-              <span>{server?.name ?? "Server"}</span>
+              <span>
+                {loading
+                  ? translate("library.meta.syncing")
+                  : translate("library.meta.unavailable")}
+              </span>
+              <span>{server?.name ?? translate("common.server")}</span>
             </div>
           </div>
           <div className="toolbar-cluster">
@@ -61,15 +69,23 @@ export function LibrariesView({
               type="button"
             >
               <ChevronLeft aria-hidden="true" size={16} />
-              <span>Back to Home</span>
+              <span>{translate("library.action.backHome")}</span>
             </MotionButton>
           </div>
         </header>
 
         <EmptyState
           icon={loading ? Film : Library}
-          title={loading ? "Loading library" : "Library unavailable"}
-          value={loading ? server?.name ?? "Server" : "Return Home and choose a library"}
+          title={
+            loading
+              ? translate("library.empty.loading")
+              : translate("library.empty.unavailable")
+          }
+          value={
+            loading
+              ? server?.name ?? translate("common.server")
+              : translate("library.empty.returnHome")
+          }
         />
       </section>
     );
@@ -77,19 +93,21 @@ export function LibrariesView({
 
   const childCount = children.data?.items.length ?? 0;
   const childStatus = children.isLoading
-    ? "Loading"
+    ? translate("common.loading")
     : childCount > 0
-      ? `${childCount} items`
-      : "Library browser";
+      ? translate("library.meta.items", { count: childCount })
+      : translate("library.meta.browser");
 
   return (
     <section className="view-stack libraries-view app-workbench" aria-labelledby="library-title">
       <header className="workbench-header">
         <div className="workbench-title-block">
-          <span className="workbench-kicker">{server?.name ?? "No server"}</span>
+          <span className="workbench-kicker">
+            {server?.name ?? translate("home.meta.noServer")}
+          </span>
           <h1 id="library-title">{selectedLibrary.title}</h1>
           <div className="workbench-meta-row">
-            <span>{formatMetadata(selectedLibrary)}</span>
+            <span>{formatMetadata(selectedLibrary, locale)}</span>
             <span>{childStatus}</span>
           </div>
         </div>
@@ -100,31 +118,39 @@ export function LibrariesView({
             type="button"
           >
             <ChevronLeft aria-hidden="true" size={16} />
-            <span>Back to Home</span>
+            <span>{translate("library.action.backHome")}</span>
           </MotionButton>
         </div>
       </header>
 
-      <div className="browser-toolbar" aria-label="Library path">
-        <span className="breadcrumb-label">Home</span>
+      <div className="browser-toolbar" aria-label={translate("library.aria.path")}>
+        <span className="breadcrumb-label">{translate("nav.home")}</span>
         <span aria-hidden="true" className="toolbar-divider">/</span>
         <strong>{selectedLibrary.title}</strong>
-        <span className="status-chip">{server?.name ?? "Server"}</span>
+        <span className="status-chip">{server?.name ?? translate("common.server")}</span>
       </div>
 
       {children.isError ? (
-        <EmptyState icon={Film} title="Could not load media" value="Try again later" />
+        <EmptyState
+          icon={Film}
+          title={translate("library.empty.loadFailed")}
+          value={translate("library.empty.tryAgain")}
+        />
       ) : children.isLoading ? (
-        <PosterGridLoading orientation="portrait" />
+        <PosterGridLoading ariaLabel={translate("library.aria.loadingMedia")} orientation="portrait" />
       ) : children.data?.items.length ? (
         <PosterGrid
-          ariaLabel={`Media in ${selectedLibrary.title}`}
+          ariaLabel={translate("library.aria.mediaIn", { title: selectedLibrary.title })}
           focusScope="library-children"
           items={children.data.items}
           onOpenMedia={onOpenMedia}
         />
       ) : (
-        <EmptyState icon={Library} title="No media found" value={selectedLibrary.title} />
+        <EmptyState
+          icon={Library}
+          title={translate("media.rail.empty.noMedia")}
+          value={selectedLibrary.title}
+        />
       )}
     </section>
   );
@@ -166,13 +192,15 @@ function PosterGrid({ ariaLabel, focusScope, items, onOpenMedia }: PosterGridPro
 }
 
 function PosterGridLoading({
+  ariaLabel,
   orientation = "landscape",
 }: {
+  ariaLabel: string;
   orientation?: MediaCardOrientation;
 }) {
   return (
     <div
-      aria-label="Loading media"
+      aria-label={ariaLabel}
       className="library-grid"
       data-grid-orientation={orientation}
     >

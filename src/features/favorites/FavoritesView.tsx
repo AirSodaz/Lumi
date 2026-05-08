@@ -3,6 +3,7 @@ import { Film, Server, Star } from "lucide-react";
 import { FocusScope } from "../../components/focus";
 import { GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
+import { useI18n } from "../../lib/i18n";
 import {
   getMediaCardPresentation,
   getMediaGridColumns,
@@ -24,6 +25,7 @@ export function FavoritesView({
   selectedServer,
   serversLoading,
 }: FavoritesViewProps) {
+  const { translate } = useI18n();
   const favorites = useFavorites(selectedServer?.id);
   const items = useMemo(
     () => favorites.data?.pages.flatMap((page) => page.items) ?? [],
@@ -31,20 +33,22 @@ export function FavoritesView({
   );
   const favoriteCount = items.length;
   const status = favorites.isLoading
-    ? "Syncing"
+    ? translate("library.meta.syncing")
     : favoriteCount > 0
-      ? `${favoriteCount} items`
-      : "Ready";
+      ? translate("library.meta.items", { count: favoriteCount })
+      : translate("common.ready");
 
   return (
     <section className="view-stack favorites-view app-workbench" aria-labelledby="favorites-title">
       <header className="workbench-header">
         <div className="workbench-title-block">
-          <span className="workbench-kicker">{selectedServer?.name ?? "No server"}</span>
-          <h1 id="favorites-title">收藏</h1>
+          <span className="workbench-kicker">
+            {selectedServer?.name ?? translate("home.meta.noServer")}
+          </span>
+          <h1 id="favorites-title">{translate("nav.favorites")}</h1>
           <div className="workbench-meta-row">
-            <span>Emby favorites</span>
-            <span>{serversLoading ? "Loading server" : status}</span>
+            <span>{translate("favorites.meta.embyFavorites")}</span>
+            <span>{serversLoading ? translate("favorites.loading.server") : status}</span>
           </div>
         </div>
       </header>
@@ -52,14 +56,22 @@ export function FavoritesView({
       {!selectedServer ? (
         <FavoritesEmpty
           icon={Server}
-          title={serversLoading ? "Loading server" : "No server connected"}
-          value={serversLoading ? "Checking saved servers" : "Add an Emby server from Settings"}
+          title={
+            serversLoading
+              ? translate("favorites.loading.server")
+              : translate("favorites.empty.noServerTitle")
+          }
+          value={
+            serversLoading
+              ? translate("favorites.status.checkingServers")
+              : translate("favorites.empty.noServerDescription")
+          }
         />
       ) : favorites.isError ? (
         <FavoritesEmpty
           icon={Film}
-          title="Could not load favorites"
-          value="Try again later"
+          title={translate("favorites.empty.loadFailed")}
+          value={translate("library.empty.tryAgain")}
         />
       ) : favorites.isLoading ? (
         <PosterGridLoading />
@@ -75,8 +87,8 @@ export function FavoritesView({
       ) : (
         <FavoritesEmpty
           icon={Star}
-          title="暂无收藏"
-          value="收藏的电影、剧集和集数会显示在这里。"
+          title={translate("favorites.empty.title")}
+          value={translate("favorites.empty.description")}
         />
       )}
     </section>
@@ -89,6 +101,7 @@ type FavoritesGridProps = {
 };
 
 function FavoritesGrid({ items, onOpenMedia }: FavoritesGridProps) {
+  const { translate } = useI18n();
   const columns = getMediaGridColumns(items);
   const gridOrientation = items[0]
     ? getMediaCardPresentation(items[0]).orientation
@@ -96,7 +109,7 @@ function FavoritesGrid({ items, onOpenMedia }: FavoritesGridProps) {
 
   return (
     <FocusScope
-      aria-label="Favorite media"
+      aria-label={translate("favorites.aria.media")}
       className="library-grid"
       columns={columns}
       data-grid-orientation={gridOrientation}
@@ -125,6 +138,7 @@ function FavoritesLoadSentinel({
   isFetchingNextPage: boolean;
   onLoadMore: () => void;
 }) {
+  const { translate } = useI18n();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -162,15 +176,19 @@ function FavoritesLoadSentinel({
       className="favorites-load-sentinel"
       ref={sentinelRef}
     >
-      {isFetchingNextPage ? "Loading more favorites" : "More favorites"}
+      {isFetchingNextPage
+        ? translate("favorites.loading.more")
+        : translate("favorites.more")}
     </div>
   );
 }
 
 function PosterGridLoading() {
+  const { translate } = useI18n();
+
   return (
     <div
-      aria-label="Loading favorites"
+      aria-label={translate("favorites.loading.aria")}
       className="library-grid"
       data-grid-orientation="portrait"
     >

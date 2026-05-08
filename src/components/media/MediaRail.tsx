@@ -1,5 +1,6 @@
 import { FocusScope } from "../focus";
 import { PosterCard } from "./PosterCard";
+import { useI18n } from "../../lib/i18n";
 import type { LibraryItem } from "../../lib/tauriClient";
 import {
   getMediaCardPresentation,
@@ -31,6 +32,7 @@ export function MediaRail({
   showProgress = false,
   title,
 }: MediaRailProps) {
+  const { translate } = useI18n();
   const focusScope = `${title}-rail`;
   const columns = Math.max(1, items.length);
   const inferredOrientation = items[0]
@@ -45,7 +47,7 @@ export function MediaRail({
       </div>
       {items.length > 0 ? (
         <FocusScope
-          aria-label={`${title} media`}
+          aria-label={translate("media.rail.aria", { title })}
           className="rail-items"
           columns={columns}
           data-card-size={cardSize}
@@ -67,8 +69,14 @@ export function MediaRail({
         </FocusScope>
       ) : (
         <div className="empty-state compact">
-          <strong>{loading ? "Loading media" : "No media found"}</strong>
-          <span>{loading ? "Fetching library items" : emptyText}</span>
+          <strong>
+            {loading
+              ? translate("media.rail.empty.loading")
+              : translate("media.rail.empty.noMedia")}
+          </strong>
+          <span>
+            {loading ? translate("media.rail.empty.fetching") : emptyText}
+          </span>
         </div>
       )}
     </section>

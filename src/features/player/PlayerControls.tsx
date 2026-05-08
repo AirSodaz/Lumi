@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { MotionButton } from "../../components/motion";
+import { useI18n } from "../../lib/i18n";
 import { createSurfaceMotion } from "../../lib/motion/presets";
 import {
   usePlaybackCommand,
@@ -28,6 +29,7 @@ export function PlayerControls({
   const command = usePlaybackCommand();
   const [volume, setVolume] = useState(100);
   const reducedMotion = useReducedMotion();
+  const { translate } = useI18n();
   const isPaused = session.state === "paused";
   const isLoading = session.state === "opening" || session.state === "buffering";
 
@@ -46,19 +48,19 @@ export function PlayerControls({
 
   return (
     <motion.section
-      aria-label="Playback controls"
+      aria-label={translate("player.aria.controls")}
       className="player-controls"
       data-motion-surface="player-controls"
       exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
       {...createSurfaceMotion(reducedMotion, 0)}
     >
       <div>
-        <strong>{session.state === "playing" ? "Playing" : titleCase(session.state)}</strong>
+        <strong>{translatePlayerState(session.state, translate)}</strong>
         <span>{formatPosition(session.positionSeconds)}</span>
       </div>
       <div className="player-control-buttons">
         <MotionButton
-          aria-label="Seek back"
+          aria-label={translate("player.aria.seekBack")}
           disabled={command.isPending || isLoading}
           onClick={() =>
             void send({
@@ -71,7 +73,7 @@ export function PlayerControls({
           <RotateCcw aria-hidden="true" size={15} />
         </MotionButton>
         <MotionButton
-          aria-label={isPaused ? "Play" : "Pause"}
+          aria-label={isPaused ? translate("player.aria.play") : translate("player.aria.pause")}
           disabled={command.isPending || isLoading}
           onClick={() => void send({ kind: isPaused ? "play" : "pause" })}
           type="button"
@@ -93,7 +95,7 @@ export function PlayerControls({
           </AnimatePresence>
         </MotionButton>
         <MotionButton
-          aria-label="Seek forward"
+          aria-label={translate("player.aria.seekForward")}
           disabled={command.isPending || isLoading}
           onClick={() =>
             void send({
@@ -108,7 +110,7 @@ export function PlayerControls({
         <label className="volume-control">
           <Volume2 aria-hidden="true" size={15} />
           <input
-            aria-label="Volume"
+            aria-label={translate("player.aria.volume")}
             disabled={command.isPending || isLoading}
             max={100}
             min={0}
@@ -118,7 +120,7 @@ export function PlayerControls({
           />
         </label>
         <MotionButton
-          aria-label="Close player"
+          aria-label={translate("player.aria.close")}
           disabled={command.isPending}
           onClick={() => void send({ kind: "close" })}
           type="button"
@@ -136,6 +138,9 @@ function formatPosition(seconds: number) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
-function titleCase(value: string) {
-  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+function translatePlayerState(
+  state: PlayerSession["state"],
+  translate: ReturnType<typeof useI18n>["translate"],
+) {
+  return translate(`player.state.${state}`);
 }

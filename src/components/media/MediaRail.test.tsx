@@ -1,7 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+import { I18nProvider } from "../../lib/i18n";
 import type { LibraryItem } from "../../lib/tauriClient";
 import { MediaRail } from "./MediaRail";
+
+function wrapper({ children }: { children: ReactNode }) {
+  return <I18nProvider>{children}</I18nProvider>;
+}
 
 function mediaItem(itemType: string, id = itemType): LibraryItem {
   return {
@@ -22,6 +28,7 @@ describe("MediaRail", () => {
         onOpenMedia={vi.fn()}
         title="Portrait Rail"
       />,
+      { wrapper },
     );
 
     expect(screen.getByLabelText("Portrait Rail media")).toHaveAttribute(
@@ -38,6 +45,7 @@ describe("MediaRail", () => {
         onOpenMedia={vi.fn()}
         title="Landscape Rail"
       />,
+      { wrapper },
     );
 
     expect(screen.getByLabelText("Landscape Rail media")).toHaveAttribute(
@@ -56,6 +64,7 @@ describe("MediaRail", () => {
         orientation="landscape"
         title="Library Rail"
       />,
+      { wrapper },
     );
 
     expect(screen.getByLabelText("Library Rail media")).toHaveAttribute(
@@ -91,6 +100,7 @@ describe("MediaRail", () => {
         showProgress
         title="Continue Watching"
       />,
+      { wrapper },
     );
 
     expect(screen.getByLabelText("45% watched")).toBeInTheDocument();

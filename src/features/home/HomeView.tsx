@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { Check, ChevronDown, Info, Server } from "lucide-react";
 import { MediaRail } from "../../components/media";
 import { MotionButton } from "../../components/motion";
+import { useI18n } from "../../lib/i18n";
 import { formatMetadata } from "../../lib/media/format";
 import { createSurfaceMotion } from "../../lib/motion/presets";
 import { dropdownMotion } from "../../lib/motion/presets";
@@ -37,6 +38,7 @@ export function HomeView({
   serversLoading,
 }: HomeViewProps) {
   const reducedMotion = useReducedMotion();
+  const { locale, translate } = useI18n();
   const server = selectedServer;
   const libraryIds = libraries.map((library) => library.id);
   const homeRows = useHomeRows(server?.id, libraryIds);
@@ -54,12 +56,14 @@ export function HomeView({
   const firstLatest = latestByLibrary.find((row) => row.items.length > 0)?.items[0] ?? null;
   const hasServers = servers.length > 0;
   const featured = continueWatching[0] ?? firstLatest;
-  const featuredTitle = featured?.title ?? (server ? server.name : "Connect your Emby library");
+  const featuredTitle =
+    featured?.title ??
+    (server ? server.name : translate("home.featured.connectTitle"));
   const featuredDescription =
     featured?.overview ??
     (server
-      ? "Browse your saved library from a compact media-first desktop surface."
-      : "Add a server from Settings to begin browsing your media.");
+      ? translate("home.featured.connectedDescription")
+      : translate("home.featured.connectDescription"));
   const featuredArtwork = featured?.backdropUrl ?? featured?.posterUrl ?? null;
   const featuredArtworkStyle = featuredArtwork
     ? ({ backgroundImage: `url("${featuredArtwork}")` } satisfies CSSProperties)
@@ -69,16 +73,20 @@ export function HomeView({
     <section className="view-stack home-view app-workbench" aria-labelledby="home-title">
       <header className="workbench-header">
         <div className="workbench-title-block">
-          <span className="workbench-kicker">{server?.name ?? "No server"}</span>
-          <h1 id="home-title">Home</h1>
+          <span className="workbench-kicker">
+            {server?.name ?? translate("home.meta.noServer")}
+          </span>
+          <h1 id="home-title">{translate("nav.home")}</h1>
           <div className="workbench-meta-row">
             <span>
               {hasServers
-                ? `${servers.length} server connected`
-                : "Add an Emby server to browse"}
+                ? translate("home.meta.serverConnected", { count: servers.length })
+                : translate("home.meta.addServer")}
             </span>
             <span>
-              {libraries.length > 0 ? `${libraries.length} libraries` : "Library waiting"}
+              {libraries.length > 0
+                ? translate("home.meta.libraries", { count: libraries.length })
+                : translate("home.meta.libraryWaiting")}
             </span>
           </div>
         </div>
@@ -92,7 +100,7 @@ export function HomeView({
           ) : (
             <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
               <Server aria-hidden="true" size={15} />
-              <span>Add Server</span>
+              <span>{translate("home.action.addServer")}</span>
             </MotionButton>
           )}
         </div>
@@ -106,7 +114,11 @@ export function HomeView({
       >
         <span aria-hidden="true" className="featured-art" style={featuredArtworkStyle} />
         <div className="featured-copy">
-          <span className="workbench-kicker">{featured ? "Featured" : "Start"}</span>
+          <span className="workbench-kicker">
+            {featured
+              ? translate("home.featured.featured")
+              : translate("home.featured.start")}
+          </span>
           <h2 id="home-featured-title">{featuredTitle}</h2>
           <p>{featuredDescription}</p>
           <div className="featured-actions">
@@ -118,14 +130,14 @@ export function HomeView({
                   type="button"
                 >
                   <Info aria-hidden="true" size={15} />
-                  <span>More Info</span>
+                  <span>{translate("home.action.moreInfo")}</span>
                 </MotionButton>
-                <span className="status-chip">{formatMetadata(featured)}</span>
+                <span className="status-chip">{formatMetadata(featured, locale)}</span>
               </>
             ) : (
               <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
                 <Server aria-hidden="true" size={15} />
-                <span>Add Server</span>
+                <span>{translate("home.action.addServer")}</span>
               </MotionButton>
             )}
           </div>
@@ -133,33 +145,41 @@ export function HomeView({
       </motion.section>
 
       <MediaRail
-        emptyText="Start watching and progress will appear here."
+        emptyText={translate("home.empty.continueWatching")}
         entry={continueWatching.length > 0}
         items={continueWatching}
         loading={loading}
         onOpenMedia={onOpenMedia}
         showProgress
-        title="Continue Watching"
+        title={translate("home.rail.continueWatching")}
       />
       <MediaRail
         cardSize="compact"
-        emptyText={server ? "No libraries found" : "Connect a server first"}
+        emptyText={
+          server
+            ? translate("home.empty.noLibraries")
+            : translate("home.empty.connectServerFirst")
+        }
         entry={continueWatching.length === 0 && libraries.length > 0}
         items={libraries}
         loading={loading}
         onOpenMedia={onOpenLibrary}
         orientation="landscape"
-        title="Media Libraries"
+        title={translate("home.rail.mediaLibraries")}
       />
       {latestByLibrary.map(({ items, library }) => (
         <MediaRail
-          emptyText={server ? "No latest media found" : "Connect a server first"}
+          emptyText={
+            server
+              ? translate("home.empty.noLatestMedia")
+              : translate("home.empty.connectServerFirst")
+          }
           entry={false}
           items={items}
           key={library.id}
           loading={loading}
           onOpenMedia={onOpenMedia}
-          title={`Latest in ${library.title}`}
+          title={translate("home.rail.latestIn", { title: library.title })}
         />
       ))}
     </section>
