@@ -488,7 +488,8 @@ describe("LumiShell", () => {
     });
   });
 
-  it("renders Windows chrome without the extra button before Back", async () => {
+  it("renders Windows chrome with navigation and the current server tag", async () => {
+    mockBrowsingCommands();
     render(<App />);
 
     await screen.findByRole("heading", { name: "Home" });
@@ -498,6 +499,12 @@ describe("LumiShell", () => {
     expect(within(navigation).getByRole("button", { name: "Go back" })).toBeDisabled();
     expect(within(navigation).getByRole("button", { name: "Go forward" })).toBeDisabled();
     expect(within(navigation).queryByRole("button", { name: /sidebar|pane|app menu/i })).not.toBeInTheDocument();
+    expect(document.querySelector(".titlebar-menu-bar")).not.toBeInTheDocument();
+    const identity = screen.getByLabelText("Application identity");
+    expect(within(identity).getByText("Lumi")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(identity).getByLabelText("Current site")).toHaveTextContent("Demo Server"),
+    );
   });
 
   it("keeps macOS on native window chrome", async () => {
@@ -511,7 +518,7 @@ describe("LumiShell", () => {
     await screen.findByRole("heading", { name: "Home" });
 
     expect(screen.queryByLabelText("Window navigation")).not.toBeInTheDocument();
-    expect(screen.queryByRole("menubar", { name: "Application menu" })).not.toBeInTheDocument();
+    expect(document.querySelector(".titlebar-menu-bar")).not.toBeInTheDocument();
   });
 
   it("navigates route history from the Windows titlebar", async () => {
@@ -538,21 +545,14 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
   });
 
-  it("opens Windows titlebar menus and calls window controls", async () => {
+  it("keeps Windows titlebar window controls", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "View" }));
-    expect(await screen.findByRole("menuitem", { name: "Favorites" })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Libraries" })).not.toBeInTheDocument();
-    await user.click(await screen.findByRole("menuitem", { name: "Search" }));
-    expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "File" }));
-    expect(await screen.findByRole("menuitem", { name: "Open File" })).toHaveAttribute(
-      "data-disabled",
-    );
-    await user.keyboard("{Escape}");
+    await screen.findByRole("heading", { name: "Home" });
+    expect(screen.queryByRole("button", { name: "File" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Minimize window" }));
     expect(windowApiMocks.minimize).toHaveBeenCalledTimes(1);

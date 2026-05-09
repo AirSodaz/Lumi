@@ -21,14 +21,12 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { AnimatePresence } from "motion/react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { FocusableCard } from "../../components/focus";
 import { GlassPanel, MotionPage } from "../../components/layout";
 import { MotionButton } from "../../components/motion";
 import { useI18n } from "../../lib/i18n";
-import { dropdownMotion } from "../../lib/motion/presets";
 import {
   directionFromKey,
   focusElement,
@@ -307,13 +305,12 @@ export function LumiShell() {
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
       >
         <AppChrome
-          activeView={activeView}
           canGoBack={history.backStack.length > 0}
           canGoForward={history.forwardStack.length > 0}
           onBack={goBack}
           onForward={goForward}
-          onNavigate={(view) => setRouteWithTransition({ kind: "view", view })}
           platform={platform}
+          selectedServer={selectedServer}
         />
         <div className="shell-vignette" aria-hidden="true" />
         <aside
@@ -386,25 +383,24 @@ export function LumiShell() {
 }
 
 type AppChromeProps = {
-  activeView: ViewId;
   canGoBack: boolean;
   canGoForward: boolean;
   onBack: () => void;
   onForward: () => void;
-  onNavigate: (view: ViewId) => void;
   platform: ShellPlatform;
+  selectedServer: ServerProfile | null | undefined;
 };
 
 function AppChrome({
-  activeView,
   canGoBack,
   canGoForward,
   onBack,
   onForward,
-  onNavigate,
   platform,
+  selectedServer,
 }: AppChromeProps) {
   const { translate } = useI18n();
+  const siteName = selectedServer?.name ?? translate("home.meta.noServer");
 
   if (platform === "macos") {
     return null;
@@ -444,69 +440,11 @@ function AppChrome({
           <ChevronRight aria-hidden="true" size={16} />
         </MotionButton>
       </nav>
-      <div
-        className="titlebar-menu-bar"
-        role="menubar"
-        aria-label={translate("shell.aria.applicationMenu")}
-      >
-        <TitlebarMenu
-          items={[
-            { disabled: true, label: translate("shell.menu.openFile") },
-            { disabled: true, label: translate("shell.menu.openFolder") },
-            {
-              label: translate("shell.menu.settings"),
-              onSelect: () => onNavigate("settings"),
-              shortcut: "Ctrl+,",
-            },
-          ]}
-          label={translate("shell.menu.file")}
-        />
-        <TitlebarMenu
-          items={[
-            { disabled: true, label: translate("shell.menu.undo"), shortcut: "Ctrl+Z" },
-            { disabled: true, label: translate("shell.menu.redo"), shortcut: "Ctrl+Y" },
-            {
-              disabled: true,
-              label: translate("shell.menu.cut"),
-              separatorBefore: true,
-              shortcut: "Ctrl+X",
-            },
-            { disabled: true, label: translate("shell.menu.copy"), shortcut: "Ctrl+C" },
-          ]}
-          label={translate("shell.menu.edit")}
-        />
-        <TitlebarMenu
-          items={navItems.map((item) => ({
-            label: translate(item.labelKey),
-            onSelect: () => onNavigate(item.id),
-            selected: activeView === item.id,
-          }))}
-          label={translate("shell.menu.view")}
-        />
-        <TitlebarMenu
-          items={[
-            {
-              label: translate("shell.menu.minimizeWindow"),
-              onSelect: () => void runWindowCommand("minimize"),
-            },
-            {
-              label: translate("shell.menu.maximizeRestore"),
-              onSelect: () => void runWindowCommand("toggleMaximize"),
-            },
-            {
-              label: translate("shell.menu.closeWindow"),
-              onSelect: () => void runWindowCommand("close"),
-            },
-          ]}
-          label={translate("shell.menu.window")}
-        />
-        <TitlebarMenu
-          items={[
-            { disabled: true, label: translate("shell.menu.helpItem") },
-            { disabled: true, label: translate("shell.menu.about") },
-          ]}
-          label={translate("shell.menu.help")}
-        />
+      <div className="titlebar-identity" aria-label={translate("shell.aria.appIdentity")}>
+        <strong>Lumi</strong>
+        <span aria-label={translate("shell.aria.currentSite")} className="titlebar-site-tag">
+          {siteName}
+        </span>
       </div>
       <div
         className="windows-titlebar-drag-region"
@@ -516,7 +454,7 @@ function AppChrome({
       <div className="titlebar-window-controls" aria-label={translate("shell.aria.windowControls")}>
         <MotionButton
           aria-label={translate("shell.titlebar.minimize")}
-          className="titlebar-window-button"
+          className="titlebar-window-button minimize"
           onClick={() => void runWindowCommand("minimize")}
           type="button"
         >
@@ -524,7 +462,7 @@ function AppChrome({
         </MotionButton>
         <MotionButton
           aria-label={translate("shell.titlebar.maximizeRestore")}
-          className="titlebar-window-button"
+          className="titlebar-window-button maximize-restore"
           onClick={() => void runWindowCommand("toggleMaximize")}
           type="button"
         >
@@ -540,56 +478,6 @@ function AppChrome({
         </MotionButton>
       </div>
     </header>
-  );
-}
-
-type TitlebarMenuItem = {
-  disabled?: boolean;
-  label: string;
-  onSelect?: () => void;
-  selected?: boolean;
-  separatorBefore?: boolean;
-  shortcut?: string;
-};
-
-type TitlebarMenuProps = {
-  items: TitlebarMenuItem[];
-  label: string;
-};
-
-function TitlebarMenu({ items, label }: TitlebarMenuProps) {
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <MotionButton className="titlebar-menu-trigger" type="button">
-          {label}
-        </MotionButton>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" asChild>
-          <motion.div
-            className="dropdown-content titlebar-menu-content"
-            data-motion-surface="dropdown"
-            {...dropdownMotion}
-          >
-            {items.map((item) => (
-              <DropdownMenu.Group key={item.label}>
-                {item.separatorBefore ? <DropdownMenu.Separator className="titlebar-menu-separator" /> : null}
-                <DropdownMenu.Item
-                  aria-current={item.selected ? "page" : undefined}
-                  className="dropdown-item titlebar-menu-item"
-                  disabled={item.disabled}
-                  onSelect={item.onSelect}
-                >
-                  <span>{item.label}</span>
-                  {item.shortcut ? <span className="titlebar-menu-shortcut">{item.shortcut}</span> : null}
-                </DropdownMenu.Item>
-              </DropdownMenu.Group>
-            ))}
-          </motion.div>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
   );
 }
 

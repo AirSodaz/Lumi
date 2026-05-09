@@ -22,6 +22,10 @@
   --color-accent-strong: #f0c96a;
   --color-danger-text: #fff;
   --color-danger-background: rgb(211 47 47 / 88%);
+  --color-caption-button-hover: rgb(255 255 255 / 12%);
+  --color-caption-button-active: rgb(255 255 255 / 18%);
+  --color-caption-close-hover: #c42b1c;
+  --color-caption-close-active: #a4261d;
   --color-body-background:
     linear-gradient(115deg, rgb(4 5 5 / 98%), rgb(10 13 14 / 96%) 42%, rgb(19 12 9 / 94%)),
     linear-gradient(90deg, rgb(143 216 202 / 12%), rgb(240 201 106 / 9%));
@@ -122,6 +126,10 @@
   --color-selected-border: rgb(20 32 34 / 78%);
   --color-accent: #187a78;
   --color-accent-strong: #9a6a09;
+  --color-caption-button-hover: rgb(0 0 0 / 6%);
+  --color-caption-button-active: rgb(0 0 0 / 10%);
+  --color-caption-close-hover: #c42b1c;
+  --color-caption-close-active: #a4261d;
   --color-body-background:
     linear-gradient(115deg, rgb(247 245 239 / 98%), rgb(236 243 240 / 96%) 45%, rgb(255 247 231 / 94%)),
     linear-gradient(90deg, rgb(24 122 120 / 12%), rgb(154 106 9 / 10%));
@@ -318,17 +326,18 @@ strong {
 }
 
 .titlebar-navigation,
-.titlebar-menu-bar,
+.titlebar-identity,
 .titlebar-window-controls {
   display: flex;
   align-items: center;
 }
 
-.titlebar-navigation {
-  gap: 2px;
+.titlebar-window-controls {
+  align-self: stretch;
+  margin-right: -4px;
 }
 
-.titlebar-menu-bar {
+.titlebar-navigation {
   gap: 2px;
 }
 
@@ -338,12 +347,10 @@ strong {
 }
 
 .titlebar-icon-button,
-.titlebar-menu-trigger,
 .titlebar-window-button {
   display: inline-grid;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
   color: var(--color-text-secondary);
   background: transparent;
   transition:
@@ -357,26 +364,30 @@ strong {
   height: 30px;
 }
 
-.titlebar-menu-trigger {
-  min-width: 48px;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .titlebar-window-button {
   width: 46px;
-  height: 32px;
+  height: 100%;
+  border-radius: 0;
+  color: var(--color-text-secondary);
+}
+
+.titlebar-icon-button {
   border-radius: 6px;
 }
 
-.titlebar-icon-button:not(:disabled):hover,
-.titlebar-menu-trigger:hover,
-.titlebar-menu-trigger[data-state="open"],
-.titlebar-window-button:hover {
+.titlebar-icon-button:not(:disabled):hover {
   color: var(--color-text-primary);
   background: var(--color-surface-control);
+}
+
+.titlebar-window-button:not(.close):hover {
+  color: var(--color-text-primary);
+  background: var(--color-caption-button-hover);
+}
+
+.titlebar-window-button:not(.close):active {
+  color: var(--color-text-primary);
+  background: var(--color-caption-button-active);
 }
 
 .titlebar-icon-button:disabled {
@@ -386,40 +397,38 @@ strong {
 
 .titlebar-window-button.close:hover {
   color: var(--color-danger-text);
-  background: var(--color-danger-background);
+  background: var(--color-caption-close-hover);
 }
 
-.titlebar-menu-content {
-  min-width: 184px;
+.titlebar-window-button.close:active {
+  color: var(--color-danger-text);
+  background: var(--color-caption-close-active);
 }
 
-.titlebar-menu-item {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+.titlebar-identity {
+  min-width: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.titlebar-identity strong {
+  color: var(--color-text-primary);
   font-size: 13px;
+  font-weight: 700;
 }
 
-.titlebar-menu-item[aria-current="page"] {
-  color: var(--color-selected-text);
-  background: var(--color-selected-background);
-}
-
-.titlebar-menu-item[data-disabled] {
-  color: var(--color-text-tertiary);
-}
-
-.titlebar-menu-shortcut {
-  color: var(--color-text-tertiary);
-  font-size: 11px;
-}
-
-.titlebar-menu-separator {
-  height: 1px;
-  margin: 4px;
-  background: var(--color-border);
+.titlebar-site-tag {
+  overflow: hidden;
+  max-width: min(28vw, 220px);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-control);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shell-sidebar {
@@ -505,7 +514,6 @@ strong {
 .nav-button,
 .sidebar-toggle,
 .titlebar-icon-button,
-.titlebar-menu-trigger,
 .titlebar-window-button,
   .settings-tabs button,
   .primary-action,
@@ -536,9 +544,7 @@ strong {
 .server-selector-trigger:focus-visible,
 .sidebar-toggle:focus-visible,
 .titlebar-icon-button:focus-visible,
-.titlebar-menu-trigger:focus-visible,
 .titlebar-window-button:focus-visible,
-.titlebar-menu-item:focus-visible,
 .settings-tabs button:focus-visible,
 .server-row button:focus-visible,
 input:focus-visible,

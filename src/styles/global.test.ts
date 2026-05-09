@@ -41,10 +41,42 @@ describe("global rail styles", () => {
     expect(featuredDotRule).toContain("width: 7px;");
     expect(featuredActiveDotRule).toContain("width: 22px;");
   });
+
+  it("keeps custom Windows caption buttons aligned with Win11 interaction affordances", () => {
+    const controlsRule = getLastRule(".titlebar-window-controls");
+    const buttonRule = getLastRule(".titlebar-window-button");
+    const buttonHoverRule = getRule(".titlebar-window-button:not(.close):hover");
+    const buttonActiveRule = getRule(".titlebar-window-button:not(.close):active");
+    const closeHoverRule = getRule(".titlebar-window-button.close:hover");
+    const closeActiveRule = getRule(".titlebar-window-button.close:active");
+
+    expect(controlsRule).toContain("align-self: stretch;");
+    expect(controlsRule).toContain("margin-right: -4px;");
+    expect(buttonRule).toContain("width: 46px;");
+    expect(buttonRule).toContain("height: 100%;");
+    expect(buttonRule).toContain("border-radius: 0;");
+    expect(buttonHoverRule).toContain("background: var(--color-caption-button-hover);");
+    expect(buttonActiveRule).toContain("background: var(--color-caption-button-active);");
+    expect(closeHoverRule).toContain("background: var(--color-caption-close-hover);");
+    expect(closeActiveRule).toContain("background: var(--color-caption-close-active);");
+  });
 });
 
 function getRule(selector: string) {
   const ruleStart = globalCss.indexOf(`${selector} {`);
+
+  if (ruleStart === -1) {
+    throw new Error(`Missing CSS rule for ${selector}`);
+  }
+
+  const bodyStart = globalCss.indexOf("{", ruleStart);
+  const bodyEnd = globalCss.indexOf("}", bodyStart);
+
+  return globalCss.slice(bodyStart + 1, bodyEnd);
+}
+
+function getLastRule(selector: string) {
+  const ruleStart = globalCss.lastIndexOf(`${selector} {`);
 
   if (ruleStart === -1) {
     throw new Error(`Missing CSS rule for ${selector}`);
