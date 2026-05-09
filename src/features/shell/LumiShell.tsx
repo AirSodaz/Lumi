@@ -588,7 +588,7 @@ function NavButton({
       className="nav-button"
       data-shell-nav-active={active ? "true" : undefined}
       focusScope="main-navigation"
-      motionKind="control"
+      motionKind="nav"
       onKeyDown={handleKeyDown}
       onClick={onSelect}
     >

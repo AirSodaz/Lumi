@@ -26,6 +26,13 @@ export const controlMotion = {
   whileTap: { scale: 0.985 },
 } satisfies InteractiveMotionPreset;
 
+export const navMotion = {
+  transition: materialSpring,
+  whileHover: { opacity: 1 },
+  whileFocus: { opacity: 1 },
+  whileTap: { opacity: 0.92 },
+} satisfies InteractiveMotionPreset;
+
 export const cardMotion = {
   transition: materialSpring,
   whileHover: { scale: 1.018, y: -3 },

@@ -97,6 +97,7 @@ export function SettingsView({
             <MotionButton
               aria-current={panel === item.id ? "page" : undefined}
               key={item.id}
+              motionKind="nav"
               onClick={() => setSelectedPanel(item.id)}
               type="button"
             >

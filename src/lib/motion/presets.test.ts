@@ -4,6 +4,7 @@ import {
   controlMotion,
   createRouteMotion,
   createSurfaceMotion,
+  navMotion,
 } from "./presets";
 
 describe("motion presets", () => {
@@ -57,5 +58,17 @@ describe("motion presets", () => {
       whileHover: { scale: 1.018, y: -3 },
       whileTap: { scale: 0.992 },
     });
+  });
+
+  it("keeps source-list navigation hover feedback flat", () => {
+    expect(navMotion).toMatchObject({
+      whileHover: { opacity: 1 },
+      whileFocus: { opacity: 1 },
+      whileTap: { opacity: 0.92 },
+    });
+    expect(navMotion.whileHover).not.toHaveProperty("y");
+    expect(navMotion.whileHover).not.toHaveProperty("scale");
+    expect(navMotion.whileFocus).not.toHaveProperty("y");
+    expect(navMotion.whileFocus).not.toHaveProperty("scale");
   });
 });

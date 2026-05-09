@@ -3,12 +3,13 @@ import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
 import {
   cardMotion,
   controlMotion,
+  navMotion,
   reduceInteractiveMotion,
 } from "../../lib/motion/presets";
 
 type MotionButtonProps = HTMLMotionProps<"button"> & {
   children: ReactNode;
-  motionKind?: "card" | "control";
+  motionKind?: "card" | "control" | "nav";
 };
 
 export const MotionButton = forwardRef<HTMLButtonElement, MotionButtonProps>(
@@ -23,7 +24,12 @@ export const MotionButton = forwardRef<HTMLButtonElement, MotionButtonProps>(
     ref,
   ) {
     const reducedMotion = useReducedMotion();
-    const preset = motionKind === "card" ? cardMotion : controlMotion;
+    const preset =
+      motionKind === "card"
+        ? cardMotion
+        : motionKind === "nav"
+          ? navMotion
+          : controlMotion;
     const motionProps = reduceInteractiveMotion(
       preset,
       reducedMotion,

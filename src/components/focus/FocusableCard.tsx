@@ -14,7 +14,7 @@ type FocusableCardProps = Omit<HTMLMotionProps<"button">, "children"> & {
   activateOnArrow?: boolean;
   children: ReactNode;
   focusScope?: string;
-  motionKind?: "card" | "control";
+  motionKind?: "card" | "control" | "nav";
 };
 
 export const FocusableCard = forwardRef<HTMLButtonElement, FocusableCardProps>(

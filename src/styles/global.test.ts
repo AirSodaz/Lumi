@@ -160,6 +160,9 @@ describe("global rail styles", () => {
     const nativeNavSelectedRule = getRule(
       ".lumi-shell[data-platform=\"macos\"] .nav-button[aria-current=\"page\"],\n.lumi-shell[data-platform=\"windows\"] .nav-button[aria-current=\"page\"]",
     );
+    const windowsNavIndicatorRule = getRule(
+      ".lumi-shell[data-platform=\"windows\"] .nav-button[aria-current=\"page\"]::before",
+    );
 
     expect(macShellRule).toContain("--sidebar-item-radius: 10px;");
     expect(macShellRule).toContain("--sidebar-item-hover-background:");
@@ -183,6 +186,60 @@ describe("global rail styles", () => {
     expect(nativeNavSelectedRule).toContain("background: var(--sidebar-item-selected-background);");
     expect(nativeNavSelectedRule).toContain("box-shadow: none;");
     expect(nativeNavSelectedRule).not.toContain("transform");
+    expect(windowsNavIndicatorRule).toContain("left: 2px;");
+    expect(windowsNavIndicatorRule).toContain("width: 3px;");
+    expect(windowsNavIndicatorRule).toContain("height: 16px;");
+    expect(windowsNavIndicatorRule).toContain("border-radius: 999px;");
+    expect(windowsNavIndicatorRule).toContain("background: var(--color-accent);");
+    expect(globalCss).not.toContain(
+      ".lumi-shell[data-platform=\"macos\"] .nav-button[aria-current=\"page\"]::before",
+    );
+  });
+
+  it("styles Settings navigation as a platform-native source list on desktop", () => {
+    const nativeSettingsTabsRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .settings-tabs,\n.lumi-shell[data-platform=\"windows\"] .settings-tabs",
+    );
+    const nativeSettingsButtonRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .settings-tabs button,\n.lumi-shell[data-platform=\"windows\"] .settings-tabs button",
+    );
+    const nativeSettingsHoverRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .settings-tabs button:hover,\n.lumi-shell[data-platform=\"windows\"] .settings-tabs button:hover",
+    );
+    const nativeSettingsActiveRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .settings-tabs button:active,\n.lumi-shell[data-platform=\"windows\"] .settings-tabs button:active",
+    );
+    const nativeSettingsSelectedRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .settings-tabs button[aria-current=\"page\"],\n.lumi-shell[data-platform=\"windows\"] .settings-tabs button[aria-current=\"page\"]",
+    );
+    const windowsSettingsIndicatorRule = getRule(
+      ".lumi-shell[data-platform=\"windows\"] .settings-tabs button[aria-current=\"page\"]::before",
+    );
+    const compactSettingsTabsRule = getRule("@media (max-width: 1120px)", ".settings-tabs");
+
+    expect(nativeSettingsTabsRule).toContain("border: 0;");
+    expect(nativeSettingsTabsRule).toContain("background: transparent;");
+    expect(nativeSettingsTabsRule).toContain("box-shadow: none;");
+    expect(nativeSettingsTabsRule).toContain("backdrop-filter: none;");
+    expect(nativeSettingsButtonRule).toContain("min-height: 30px;");
+    expect(nativeSettingsButtonRule).toContain("border-radius: var(--sidebar-item-radius);");
+    expect(nativeSettingsButtonRule).toContain("transition:");
+    expect(nativeSettingsButtonRule).toContain("background-color var(--motion-focus-enter)");
+    expect(nativeSettingsButtonRule).not.toContain("border-radius: 999px;");
+    expect(nativeSettingsHoverRule).toContain("background: var(--sidebar-item-hover-background);");
+    expect(nativeSettingsActiveRule).toContain("background: var(--sidebar-item-pressed-background);");
+    expect(nativeSettingsSelectedRule).toContain("border-color: transparent;");
+    expect(nativeSettingsSelectedRule).toContain("background: var(--sidebar-item-selected-background);");
+    expect(nativeSettingsSelectedRule).toContain("box-shadow: none;");
+    expect(windowsSettingsIndicatorRule).toContain("left: 2px;");
+    expect(windowsSettingsIndicatorRule).toContain("width: 3px;");
+    expect(windowsSettingsIndicatorRule).toContain("height: 16px;");
+    expect(windowsSettingsIndicatorRule).toContain("border-radius: 999px;");
+    expect(windowsSettingsIndicatorRule).toContain("background: var(--color-accent);");
+    expect(globalCss).not.toContain(
+      ".lumi-shell[data-platform=\"macos\"] .settings-tabs button[aria-current=\"page\"]::before",
+    );
+    expect(compactSettingsTabsRule).toContain("grid-template-columns: repeat(4, minmax(0, 1fr));");
   });
 });
 

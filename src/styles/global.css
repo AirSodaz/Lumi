@@ -674,6 +674,7 @@ select:focus-visible {
 
 .lumi-shell[data-platform="macos"] .nav-button,
 .lumi-shell[data-platform="windows"] .nav-button {
+  position: relative;
   min-height: 30px;
   grid-template-columns: 26px minmax(0, 1fr);
   border-radius: var(--sidebar-item-radius);
@@ -703,6 +704,18 @@ select:focus-visible {
   color: var(--color-text-primary);
   background: var(--sidebar-item-selected-background);
   box-shadow: none;
+}
+
+.lumi-shell[data-platform="windows"] .nav-button[aria-current="page"]::before {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 3px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  content: "";
+  transform: translateY(-50%);
 }
 
 .lumi-shell[data-platform="macos"][data-sidebar-collapsed="true"] .sidebar-section-label,
@@ -1482,6 +1495,62 @@ select:focus-visible {
   border-color: var(--color-selected-border);
   color: var(--color-selected-text);
   background: var(--color-selected-background);
+}
+
+.lumi-shell[data-platform="macos"] .settings-tabs,
+.lumi-shell[data-platform="windows"] .settings-tabs {
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.lumi-shell[data-platform="macos"] .settings-tabs button,
+.lumi-shell[data-platform="windows"] .settings-tabs button {
+  position: relative;
+  min-height: 30px;
+  border-radius: var(--sidebar-item-radius);
+  padding: 0 10px;
+  color: var(--color-text-secondary);
+  transition:
+    background-color var(--motion-focus-enter),
+    color var(--motion-focus-enter),
+    border-color var(--motion-focus-enter);
+}
+
+.lumi-shell[data-platform="macos"] .settings-tabs button:hover,
+.lumi-shell[data-platform="windows"] .settings-tabs button:hover {
+  color: var(--color-text-primary);
+  background: var(--sidebar-item-hover-background);
+}
+
+.lumi-shell[data-platform="macos"] .settings-tabs button:active,
+.lumi-shell[data-platform="windows"] .settings-tabs button:active {
+  color: var(--color-text-primary);
+  background: var(--sidebar-item-pressed-background);
+}
+
+.lumi-shell[data-platform="macos"] .settings-tabs button[aria-current="page"],
+.lumi-shell[data-platform="windows"] .settings-tabs button[aria-current="page"] {
+  border-color: transparent;
+  color: var(--color-text-primary);
+  background: var(--sidebar-item-selected-background);
+  box-shadow: none;
+}
+
+.lumi-shell[data-platform="windows"] .settings-tabs button[aria-current="page"]::before {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 3px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  content: "";
+  transform: translateY(-50%);
 }
 
 .settings-panel,
