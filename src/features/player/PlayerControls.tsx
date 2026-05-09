@@ -19,12 +19,14 @@ import {
 } from "../../lib/tauriClient";
 
 type PlayerControlsProps = {
+  className?: string;
   onCloseError?: (error: AppError) => void;
   onSessionChange: (session: PlayerSession) => void;
   session: PlayerSession;
 };
 
 export function PlayerControls({
+  className,
   onCloseError,
   onSessionChange,
   session,
@@ -60,14 +62,17 @@ export function PlayerControls({
   return (
     <motion.section
       aria-label={translate("player.aria.controls")}
-      className="player-controls"
+      className={["player-controls", className].filter(Boolean).join(" ")}
       data-motion-surface="player-controls"
       exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
       {...createSurfaceMotion(reducedMotion, 0)}
     >
-      <div>
+      <div className="player-control-status">
         <strong>{translatePlayerState(session.state, translate)}</strong>
         <span>{formatPosition(session.positionSeconds)}</span>
+      </div>
+      <div className="player-progress-track" aria-hidden="true">
+        <span />
       </div>
       <div className="player-control-buttons">
         <MotionButton

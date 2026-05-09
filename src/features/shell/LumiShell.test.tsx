@@ -1029,11 +1029,16 @@ describe("LumiShell", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Player window controls")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Minimize window" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Maximize or restore window" })).toBeInTheDocument();
     expect(await screen.findAllByText("Opening")).not.toHaveLength(0);
     expect(invokeMock).toHaveBeenCalledWith("playback_get_session", {
       sessionId: "session-1",
     });
-    expect(screen.getByLabelText("Playback controls")).toBeInTheDocument();
+    const controls = screen.getByLabelText("Playback controls");
+    expect(controls).toBeInTheDocument();
+    expect(controls).toHaveClass("player-controls-hud");
 
     emitTauriEvent("playback:state-changed", {
       id: "session-1",
@@ -1057,6 +1062,71 @@ describe("LumiShell", () => {
         command: { kind: "close" },
       },
     });
+  });
+
+  it("auto-hides the floating player HUD after idle and restores it on interaction", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    window.history.replaceState(
+      null,
+      "",
+      "/?view=player&sessionId=session-1&surface=controls",
+    );
+
+    render(<App />);
+
+    const playerWindow = await screen.findByLabelText("Lumi Player");
+    const controlsRegion = screen.getByTestId("player-hud-region");
+    expect(controlsRegion).toHaveAttribute("data-visible", "true");
+
+    vi.useFakeTimers();
+    act(() => {
+      emitTauriEvent("playback:state-changed", {
+        id: "session-1",
+        serverId: "server-1",
+        itemId: "movie-1",
+        state: "playing",
+        positionSeconds: 0,
+      });
+    });
+    act(() => {
+      vi.advanceTimersByTime(2_500);
+    });
+
+    expect(controlsRegion).toHaveAttribute("data-visible", "false");
+
+    vi.useRealTimers();
+    await user.pointer({ target: playerWindow, keys: "[MouseLeft]" });
+
+    expect(controlsRegion).toHaveAttribute("data-visible", "true");
+  });
+
+  it("keeps the floating player HUD visible while opening or showing an error", async () => {
+    mockBrowsingCommands();
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
+    const controlsRegion = screen.getByTestId("player-hud-region");
+
+    vi.useFakeTimers();
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+
+    expect(controlsRegion).toHaveAttribute("data-visible", "true");
+
+    emitTauriEvent("playback:error", {
+      sessionId: "session-1",
+      code: "playback.mpv_library_missing",
+      message: "Native mpv library could not be loaded",
+    });
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+
+    expect(controlsRegion).toHaveAttribute("data-visible", "true");
   });
 
   it("keeps the player window responsive while buffering before the first frame", async () => {

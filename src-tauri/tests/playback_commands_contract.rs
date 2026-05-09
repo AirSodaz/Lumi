@@ -622,7 +622,32 @@ fn windows_player_uses_native_window_with_child_controls_webview() {
 }
 
 #[test]
-fn windows_video_host_uses_reported_video_region_bounds() {
+fn player_window_uses_frameless_native_material_surface() {
+    let playback_source =
+        std::fs::read_to_string("src/commands/playback.rs").expect("read playback command source");
+
+    assert!(
+        playback_source.contains(".transparent(true)"),
+        "The native player window must be transparent so Tauri can apply system material effects"
+    );
+    assert!(
+        playback_source.contains(".decorations(false)"),
+        "The native player window should be frameless so React can render the Apple-style player chrome"
+    );
+    assert!(
+        playback_source.contains(".shadow(true)"),
+        "The frameless native player window should keep a system window shadow"
+    );
+    assert!(
+        playback_source.contains("EffectsBuilder::new()")
+            && playback_source.contains("Effect::Mica")
+            && playback_source.contains("Effect::Acrylic"),
+        "The player window must request native system material effects instead of relying on CSS-only glass"
+    );
+}
+
+#[test]
+fn windows_video_host_fills_window_behind_transparent_controls_hud() {
     let playback_source =
         std::fs::read_to_string("src/commands/playback.rs").expect("read playback command source");
 
@@ -635,8 +660,12 @@ fn windows_video_host_uses_reported_video_region_bounds() {
         "The player window must have a command boundary for resizing the native mpv host to the measured video region"
     );
     assert!(
-        playback_source.contains("PLAYER_CONTROLS_HEIGHT"),
-        "The native window owns a stable child controls webview height so the mpv surface uses only the remaining native video area"
+        !playback_source.contains("PLAYER_CONTROLS_HEIGHT"),
+        "The mpv video surface should fill the native player window instead of reserving a fixed native strip for controls"
+    );
+    assert!(
+        playback_source.contains(".transparent(true)"),
+        "The controls child WebView must be transparent so the floating HUD does not become an opaque bar"
     );
     assert!(
         playback_source.contains(

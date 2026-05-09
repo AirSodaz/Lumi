@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
 use tauri::WindowEvent;
 use tauri::{
+    window::{Effect, EffectState, EffectsBuilder},
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewBuilder, WebviewUrl,
     Window, WindowBuilder,
 };
@@ -272,13 +273,18 @@ fn create_player_window(app: &AppHandle, session_id: &str) -> AppResult<Option<i
             .title("Lumi Player")
             .inner_size(1120.0, 700.0)
             .min_inner_size(760.0, 460.0)
+            .transparent(true)
+            .decorations(false)
+            .shadow(true)
+            .effects(player_window_effects())
             .resizable(true)
             .build()
             .map_err(playback_window_failed)?
     };
+    let window_id = embedded_window_id_for(app, &window)?;
     ensure_controls_webview(&window, &controls_label, url)?;
 
-    embedded_window_id_for(app, &window)
+    Ok(window_id)
 }
 
 fn ensure_controls_webview(
@@ -299,7 +305,7 @@ fn ensure_controls_webview(
         return Ok(());
     }
 
-    let webview = WebviewBuilder::new(controls_label, url);
+    let webview = WebviewBuilder::new(controls_label, url).transparent(true);
     window
         .add_child(
             webview,
@@ -322,27 +328,35 @@ struct ControlsBounds {
     height: u32,
 }
 
-const PLAYER_CONTROLS_HEIGHT: u32 = 172;
-
 fn controls_bounds_for_window_size(width: u32, height: u32) -> ControlsBounds {
-    let controls_height = PLAYER_CONTROLS_HEIGHT.min(height.saturating_sub(1)).max(1);
     ControlsBounds {
         x: 0,
-        y: height.saturating_sub(controls_height) as i32,
+        y: 0,
         width: width.max(1),
-        height: controls_height,
+        height: height.max(1),
     }
 }
 
 fn video_bounds_for_window_size(width: u32, height: u32) -> PlaybackSurfaceBounds {
-    let controls = controls_bounds_for_window_size(width, height);
     PlaybackSurfaceBounds {
         session_id: String::new(),
         x: 0,
         y: 0,
         width: width.max(1),
-        height: controls.y.max(1) as u32,
+        height: height.max(1),
     }
+}
+
+fn player_window_effects() -> tauri::utils::config::WindowEffectsConfig {
+    EffectsBuilder::new()
+        .effects([
+            Effect::Mica,
+            Effect::Acrylic,
+            Effect::HudWindow,
+            Effect::WindowBackground,
+        ])
+        .state(EffectState::Active)
+        .build()
 }
 
 #[cfg(target_os = "windows")]
@@ -456,14 +470,11 @@ fn create_video_host_window(window: &Window, parent_hwnd: isize) -> AppResult<Op
             let mut fallback = video_bounds_for_window_size(size.width, size.height);
             fallback.session_id = session_id.clone();
             let bounds = {
-                let reported = video_surfaces()
-                    .lock()
-                    .ok()
-                    .and_then(|surfaces| {
-                        surfaces
-                            .get(&session_id)
-                            .and_then(|surface| surface.bounds.clone())
-                    });
+                let reported = video_surfaces().lock().ok().and_then(|surfaces| {
+                    surfaces
+                        .get(&session_id)
+                        .and_then(|surface| surface.bounds.clone())
+                });
                 reported.unwrap_or(fallback)
             };
             let bounds = PlaybackSurfaceBounds {
