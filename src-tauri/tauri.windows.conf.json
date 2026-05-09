@@ -11,7 +11,7 @@
         "transparent": true,
         "decorations": false,
         "windowEffects": {
-          "effects": ["mica", "acrylic"],
+          "effects": ["mica"],
           "state": "active"
         }
       }

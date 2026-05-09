@@ -31,7 +31,7 @@ Status: P8 validation document. This file separates automated evidence from manu
 
 | Scenario | Status | Notes |
 | --- | --- | --- |
-| Mica/Acrylic window behavior | Pending manual | Current Settings material state reports fallback probing; visually verify Tauri window effects separately. |
+| Mica window behavior | Pending manual | Current Settings material state reports fallback probing; visually verify Tauri window effects separately. |
 | Player window opens and renders video | Pending manual | Requires staged or installed libmpv. |
 | Player full-screen behavior | Pending manual | Validate keyboard escape/close behavior and focus return. |
 | Debug installer or bundle starts | Pending manual | Requires `pnpm tauri build --debug` output and local install/run. |
@@ -41,7 +41,7 @@ Status: P8 validation document. This file separates automated evidence from manu
 
 | Scenario | Status | Notes |
 | --- | --- | --- |
-| Liquid Glass/vibrancy available range | Not covered | No macOS machine participated in this P8 pass. |
+| Sidebar material available range | Not covered | No macOS machine participated in this P8 pass. |
 | Material fallback messaging | Not covered | Verify Settings -> Appearance on target macOS. |
 | Player window opens and renders video | Not covered | Requires macOS libmpv source decision plus manual playback. |
 | Bundle constraints and signing impact | Not covered | macOS libmpv source is not yet audited in `scripts/libmpv-sources.json`. |

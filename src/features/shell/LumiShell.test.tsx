@@ -612,6 +612,45 @@ describe("LumiShell", () => {
     expect(document.querySelector(".titlebar-menu-bar")).not.toBeInTheDocument();
   });
 
+  it("renders macOS sidebar as a native source list with grouped sections", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15",
+    });
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+
+    const sidebar = screen.getByLabelText("Primary");
+    const shell = sidebar.closest(".lumi-shell");
+    expect(shell).toHaveAttribute("data-platform", "macos");
+    expect(sidebar).toHaveAttribute("data-native-material", "sidebar");
+    expect(within(sidebar).getByText("Library")).toBeInTheDocument();
+    expect(within(sidebar).getByText("System")).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Home" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("renders Windows sidebar as a Mica source list with grouped sections", async () => {
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+
+    const sidebar = screen.getByLabelText("Primary");
+    const shell = sidebar.closest(".lumi-shell");
+    expect(shell).toHaveAttribute("data-platform", "windows");
+    expect(sidebar).toHaveAttribute("data-native-material", "mica");
+    expect(within(sidebar).getByText("Library")).toBeInTheDocument();
+    expect(within(sidebar).getByText("System")).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Home" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("navigates route history from the Windows titlebar", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
@@ -894,17 +933,42 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
   });
 
-  it("uses view transitions for primary route changes when available", async () => {
+  it("restores sidebar navigation focus after the sidebar blank area has focus", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+    const sidebar = screen.getByLabelText("Primary");
+    const sidebarNavigation = within(sidebar).getByRole("navigation", {
+      name: "Main navigation",
+    });
+    const home = screen.getByRole("button", { name: "Home" });
+    const favorites = screen.getByRole("button", { name: "Favorites" });
+
+    await user.click(sidebarNavigation);
+    await user.keyboard("{ArrowDown}");
+
+    expect(home).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(favorites).toHaveFocus();
+  });
+
+  it("switches sidebar tabs without triggering a root view transition", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(startViewTransitionMock).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(startViewTransitionMock).not.toHaveBeenCalled();
   });
 
-  it("skips view transitions for primary route changes when reduced motion is preferred", async () => {
+  it("keeps sidebar tab changes stable when reduced motion is preferred", async () => {
     const user = userEvent.setup();
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -1158,6 +1222,28 @@ describe("LumiShell", () => {
 
     await user.keyboard("{ArrowUp}");
     expect(featuredButton).toHaveFocus();
+  });
+
+  it("restores directional focus after the Home content blank area has focus", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const featuredButton = await screen.findByRole("button", { name: "Random Feature" });
+    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
+    const content = document.querySelector<HTMLElement>(".shell-content");
+    expect(content).toBeInTheDocument();
+
+    content?.focus();
+    scrollIntoViewMock.mockClear();
+
+    await user.keyboard("{ArrowDown}");
+    expect(featuredButton).toHaveFocus();
+    expect(scrollIntoViewMock).toHaveBeenCalled();
+
+    await user.keyboard("{ArrowDown}");
+    expect(firstMovie).toHaveFocus();
   });
 
   it("keeps Home rail arrow navigation separate from focused carousel controls", async () => {

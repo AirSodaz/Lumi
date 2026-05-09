@@ -93,6 +93,39 @@ describe("global rail styles", () => {
     expect(closeHoverRule).toContain("background: var(--color-caption-close-hover);");
     expect(closeActiveRule).toContain("background: var(--color-caption-close-active);");
   });
+
+  it("styles macOS and Windows sidebars as native source lists instead of floating glass cards", () => {
+    const macShellRule = getRule(".lumi-shell[data-platform=\"macos\"]");
+    const windowsShellRule = getRule(".lumi-shell[data-platform=\"windows\"]");
+    const macSidebarRule = getRule(".lumi-shell[data-platform=\"macos\"] .shell-sidebar");
+    const windowsSidebarRule = getRule(".lumi-shell[data-platform=\"windows\"] .shell-sidebar");
+    const macSectionLabelRule = getRule(".sidebar-section-label");
+
+    expect(macShellRule).toContain("--macos-source-list-width:");
+    expect(windowsShellRule).toContain("--windows-source-list-width:");
+    expect(macSidebarRule).toContain("height: calc(100vh - var(--shell-top-offset));");
+    expect(macSidebarRule).toContain("margin: 0;");
+    expect(macSidebarRule).toContain("border-radius: 0;");
+    expect(macSidebarRule).toContain("border-right: 1px solid var(--color-border-soft);");
+    expect(macSidebarRule).toContain("background: transparent;");
+    expect(macSidebarRule).toContain("box-shadow: none;");
+    expect(macSidebarRule).toContain("backdrop-filter: none;");
+    expect(windowsSidebarRule).toContain("height: calc(100vh - var(--shell-top-offset));");
+    expect(windowsSidebarRule).toContain("margin: 0;");
+    expect(windowsSidebarRule).toContain("border-radius: 0;");
+    expect(windowsSidebarRule).toContain("border-right: 1px solid var(--color-border-soft);");
+    expect(windowsSidebarRule).toContain("background: transparent;");
+    expect(windowsSidebarRule).toContain("box-shadow: none;");
+    expect(windowsSidebarRule).toContain("backdrop-filter: none;");
+    expect(macSectionLabelRule).toContain("text-transform: uppercase;");
+  });
+
+  it("keeps the Windows titlebar transparent so native Mica shows through", () => {
+    const titlebarRule = getRule(".windows-titlebar");
+
+    expect(titlebarRule).toContain("background: transparent;");
+    expect(titlebarRule).toContain("backdrop-filter: none;");
+  });
 });
 
 function getRule(selector: string, nestedSelector?: string) {

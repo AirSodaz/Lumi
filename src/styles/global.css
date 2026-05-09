@@ -228,7 +228,7 @@ body,
 
 body {
   overflow: hidden;
-  background: var(--color-body-background);
+  background: transparent;
 }
 
 button,
@@ -293,7 +293,20 @@ strong {
 }
 
 .lumi-shell[data-platform="macos"] {
+  --macos-source-list-width: 238px;
   --shell-top-offset: var(--macos-titlebar-safe-area);
+  --sidebar-current-width: var(--macos-source-list-width);
+}
+
+.lumi-shell[data-platform="windows"] {
+  --windows-source-list-width: 238px;
+  --sidebar-current-width: var(--windows-source-list-width);
+}
+
+.lumi-shell[data-platform="macos"] .shell-vignette,
+.lumi-shell[data-platform="windows"] .shell-vignette {
+  top: var(--shell-top-offset);
+  left: var(--sidebar-current-width);
 }
 
 .lumi-shell[data-sidebar-collapsed="true"] {
@@ -305,7 +318,9 @@ strong {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: var(--color-shell-vignette);
+  background:
+    var(--color-shell-vignette),
+    var(--color-body-background);
 }
 
 .windows-titlebar {
@@ -320,8 +335,8 @@ strong {
   border-bottom: 1px solid var(--color-border-soft);
   padding: 0 4px 0 8px;
   color: var(--color-text-primary);
-  background: var(--color-titlebar-background);
-  backdrop-filter: blur(26px) saturate(1.12);
+  background: transparent;
+  backdrop-filter: none;
   user-select: none;
 }
 
@@ -497,6 +512,25 @@ strong {
   gap: 8px;
 }
 
+.sidebar-section {
+  display: grid;
+  gap: 6px;
+}
+
+.sidebar-section-items {
+  display: grid;
+  gap: 4px;
+}
+
+.sidebar-section-label {
+  padding: 0 12px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .focusable-card,
 .nav-button,
 .sidebar-toggle,
@@ -571,6 +605,71 @@ select:focus-visible {
   color: var(--color-selected-text);
   background: var(--color-selected-background);
   box-shadow: var(--color-primary-action-shadow);
+}
+
+.lumi-shell[data-platform="macos"] .shell-sidebar {
+  top: 0;
+  height: calc(100vh - var(--shell-top-offset));
+  margin: 0;
+  border-width: 0 1px 0 0;
+  border-right: 1px solid var(--color-border-soft);
+  border-radius: 0;
+  padding: calc(var(--shell-top-offset) + 14px) 12px 14px;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.lumi-shell[data-platform="windows"] .shell-sidebar {
+  top: var(--shell-top-offset);
+  height: calc(100vh - var(--shell-top-offset));
+  margin: 0;
+  border-width: 0 1px 0 0;
+  border-right: 1px solid var(--color-border-soft);
+  border-radius: 0;
+  padding: 14px 12px;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.lumi-shell[data-platform="macos"] .brand-lockup,
+.lumi-shell[data-platform="windows"] .brand-lockup {
+  justify-content: start;
+  padding: 0 4px;
+}
+
+.lumi-shell[data-platform="macos"] .sidebar-toggle,
+.lumi-shell[data-platform="windows"] .sidebar-toggle {
+  border-radius: 8px;
+  background: transparent;
+}
+
+.lumi-shell[data-platform="macos"] .primary-nav,
+.lumi-shell[data-platform="windows"] .primary-nav {
+  gap: 16px;
+}
+
+.lumi-shell[data-platform="macos"] .nav-button,
+.lumi-shell[data-platform="windows"] .nav-button {
+  min-height: 30px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  border-radius: 7px;
+  padding: 0 10px 0 4px;
+  font-size: 13px;
+}
+
+.lumi-shell[data-platform="macos"] .nav-button[aria-current="page"],
+.lumi-shell[data-platform="windows"] .nav-button[aria-current="page"] {
+  border-color: transparent;
+  color: var(--color-text-primary);
+  background: var(--color-surface-control-hover);
+  box-shadow: none;
+}
+
+.lumi-shell[data-platform="macos"][data-sidebar-collapsed="true"] .sidebar-section-label,
+.lumi-shell[data-platform="windows"][data-sidebar-collapsed="true"] .sidebar-section-label {
+  display: none;
 }
 
 .lumi-shell[data-sidebar-collapsed="true"] .shell-sidebar {

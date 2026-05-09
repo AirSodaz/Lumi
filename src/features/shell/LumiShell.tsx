@@ -19,6 +19,7 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type ReactNode,
 } from "react";
 import { AnimatePresence } from "motion/react";
@@ -63,10 +64,6 @@ type RouteHistory = {
   forwardStack: ShellRoute[];
 };
 
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => unknown;
-};
-
 const initialRoute: ShellRoute = { kind: "view", view: "home" };
 const sidebarCollapsedStorageKey = "lumi.sidebarCollapsed";
 const selectedServerStorageKey = "lumi.selectedServerId";
@@ -77,6 +74,9 @@ const navItems: Array<{ id: ViewId; labelKey: string; icon: Icon }> = [
   { id: "search", labelKey: "nav.search", icon: Search },
   { id: "settings", labelKey: "nav.settings", icon: Settings },
 ];
+
+const primaryNavItems = navItems.filter((item) => item.id !== "settings");
+const utilityNavItems = navItems.filter((item) => item.id === "settings");
 
 export function LumiShell() {
   const { translate } = useI18n();
@@ -119,21 +119,6 @@ export function LumiShell() {
   }, [preferredServerId, selectedServerId, serversQuery.isLoading]);
 
   function runRouteTransition(updateRoute: () => void) {
-    const reduceMotion =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    const transitionDocument =
-      typeof document !== "undefined"
-        ? (document as ViewTransitionDocument)
-        : null;
-
-    if (transitionDocument?.startViewTransition && !reduceMotion) {
-      transitionDocument.startViewTransition(updateRoute);
-      return;
-    }
-
     updateRoute();
   }
 
@@ -223,6 +208,13 @@ export function LumiShell() {
     const focusable = target?.closest<HTMLButtonElement>("[data-focus-scope]");
     const scope = focusable?.dataset.focusScope;
 
+    if (!focusable) {
+      if (focusFirstContentEntry()) {
+        event.preventDefault();
+      }
+      return;
+    }
+
     if (
       direction === "left" &&
       focusable &&
@@ -243,6 +235,42 @@ export function LumiShell() {
     ) {
       event.preventDefault();
     }
+  }
+
+  function handleSidebarKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (
+      event.defaultPrevented ||
+      shouldIgnoreDirectionalKeyTarget(event.target)
+    ) {
+      return;
+    }
+
+    const direction = directionFromKey(event.key);
+    if (!direction) {
+      return;
+    }
+
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("[data-focus-scope]")) {
+      return;
+    }
+
+    if (focusActiveNavigation()) {
+      event.preventDefault();
+    }
+  }
+
+  function handleSidebarPointerDown(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0 || shouldIgnoreDirectionalKeyTarget(event.target)) {
+      return;
+    }
+
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("a, button, [data-focus-scope]")) {
+      return;
+    }
+
+    event.currentTarget.focus({ preventScroll: true });
   }
 
   let currentView: ReactNode;
@@ -338,7 +366,11 @@ export function LumiShell() {
         <aside
           className="shell-sidebar"
           aria-label={translate("shell.aria.primary")}
+          data-native-material={platform === "macos" ? "sidebar" : "mica"}
           id="lumi-primary-sidebar"
+          onKeyDown={handleSidebarKeyDown}
+          onPointerDown={handleSidebarPointerDown}
+          tabIndex={-1}
         >
           <div className="brand-lockup">
             <Tooltip.Root>
@@ -373,22 +405,49 @@ export function LumiShell() {
             </Tooltip.Root>
           </div>
           <nav className="primary-nav" aria-label={translate("shell.aria.mainNavigation")}>
-            {navItems.map((item) => (
-              <NavButton
-                active={activeView === item.id}
-                collapsed={sidebarCollapsed}
-                icon={item.icon}
-                key={item.id}
-                label={translate(item.labelKey)}
-                onMoveRight={focusFirstContentEntry}
-                onSelect={() =>
-                  setRouteWithTransition({ kind: "view", view: item.id })
-                }
-              />
-            ))}
+            <div className="sidebar-section">
+              <span className="sidebar-section-label">
+                {translate("shell.sidebar.section.library")}
+              </span>
+              <div className="sidebar-section-items">
+                {primaryNavItems.map((item) => (
+                  <NavButton
+                    active={activeView === item.id}
+                    collapsed={sidebarCollapsed}
+                    icon={item.icon}
+                    key={item.id}
+                    label={translate(item.labelKey)}
+                    onMoveRight={focusFirstContentEntry}
+                    onSelect={() =>
+                      setRouteWithTransition({ kind: "view", view: item.id })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="sidebar-section">
+              <span className="sidebar-section-label">
+                {translate("shell.sidebar.section.system")}
+              </span>
+              <div className="sidebar-section-items">
+                {utilityNavItems.map((item) => (
+                  <NavButton
+                    active={activeView === item.id}
+                    collapsed={sidebarCollapsed}
+                    icon={item.icon}
+                    key={item.id}
+                    label={translate(item.labelKey)}
+                    onMoveRight={focusFirstContentEntry}
+                    onSelect={() =>
+                      setRouteWithTransition({ kind: "view", view: item.id })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
           </nav>
         </aside>
-        <main className="shell-content" onKeyDown={handleContentKeyDown}>
+        <main className="shell-content" onKeyDown={handleContentKeyDown} tabIndex={-1}>
           <AnimatePresence mode="wait" initial={false}>
             <MotionPage key={routeKey} routeKey={routeKey}>
               {currentView}

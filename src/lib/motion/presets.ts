@@ -78,9 +78,9 @@ export function createRouteMotion(reducedMotion: boolean | null) {
   }
 
   return {
-    initial: { opacity: 0, scale: 0.992, y: 12 },
-    animate: { opacity: 1, scale: 1, y: 0 },
-    exit: { opacity: 0, scale: 0.996, y: -8 },
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
     transition: routeTransition,
   } satisfies MotionState;
 }

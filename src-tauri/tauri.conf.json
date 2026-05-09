@@ -19,9 +19,11 @@
         "minHeight": 640,
         "transparent": true,
         "decorations": true,
+        "titleBarStyle": "overlay",
+        "trafficLightPosition": { "x": 16, "y": 16 },
         "windowEffects": {
-          "effects": ["mica", "acrylic"],
-          "state": "active"
+          "effects": ["sidebar"],
+          "state": "followsWindowActiveState"
         }
       }
     ],
