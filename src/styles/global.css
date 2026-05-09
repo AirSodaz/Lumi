@@ -749,9 +749,6 @@ select:focus-visible {
   border: 1px solid var(--color-border-soft);
   border-radius: 20px;
   background-color: var(--color-surface-fallback);
-  background-image: var(--featured-artwork);
-  background-position: center;
-  background-size: cover;
   box-shadow: var(--shadow-panel);
   isolation: isolate;
 }
@@ -765,10 +762,16 @@ select:focus-visible {
   pointer-events: none;
 }
 
-.featured-hero.has-art::after {
+.featured-backdrop-layer {
   position: absolute;
   inset: -18px;
   z-index: 0;
+  pointer-events: none;
+}
+
+.featured-backdrop-layer::before {
+  position: absolute;
+  inset: 0;
   background-image: var(--featured-artwork);
   background-position: center;
   background-size: cover;
@@ -777,7 +780,6 @@ select:focus-visible {
   opacity: 0.86;
   transform: scale(1.025);
   animation: featured-drift 12s cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
-  pointer-events: none;
 }
 
 .featured-hero-button,
@@ -804,6 +806,8 @@ select:focus-visible {
 }
 
 .featured-copy {
+  position: relative;
+  z-index: 2;
   display: grid;
   align-content: end;
   gap: 10px;
@@ -1943,7 +1947,7 @@ select:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .featured-hero.has-art::after {
+  .featured-backdrop-layer::before {
     animation: none;
   }
 

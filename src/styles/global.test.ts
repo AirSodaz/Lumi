@@ -28,18 +28,34 @@ describe("global rail styles", () => {
 
   it("styles the Home featured carousel as one full-stage hero surface", () => {
     const featuredHeroRule = getRule(".featured-hero");
+    const featuredBackdropLayerRule = getRule(".featured-backdrop-layer");
+    const featuredBackdropImageRule = getRule(".featured-backdrop-layer::before");
     const featuredHeroBeforeRule = getRule(".featured-hero::before");
+    const featuredCopyRule = getRule(".featured-copy");
     const featuredDotsRule = getRule(".featured-carousel-dots");
     const featuredDotRule = getRule(".featured-carousel-dot");
     const featuredActiveDotRule = getRule(".featured-carousel-dot[aria-pressed=\"true\"]");
+    const reducedMotionRule = getRule(
+      "@media (prefers-reduced-motion: reduce)",
+      ".featured-backdrop-layer::before",
+    );
 
     expect(featuredHeroRule).toContain("min-height: clamp(300px, 42vw, 520px);");
-    expect(featuredHeroRule).toContain("background-image: var(--featured-artwork);");
+    expect(featuredHeroRule).not.toContain("background-image: var(--featured-artwork);");
     expect(featuredHeroRule).not.toContain("grid-template-columns: minmax(178px, 28%) minmax(0, 1fr);");
+    expect(featuredBackdropLayerRule).toContain("position: absolute;");
+    expect(featuredBackdropLayerRule).toContain("inset: -18px;");
+    expect(featuredBackdropLayerRule).toContain("pointer-events: none;");
+    expect(featuredBackdropImageRule).toContain("background-image: var(--featured-artwork);");
+    expect(featuredBackdropImageRule).toContain("animation: featured-drift 12s");
     expect(featuredHeroBeforeRule).toContain("background: var(--featured-shade);");
+    expect(featuredCopyRule).toContain("position: relative;");
+    expect(featuredCopyRule).toContain("z-index: 2;");
     expect(featuredDotsRule).toContain("position: absolute;");
     expect(featuredDotRule).toContain("width: 7px;");
+    expect(featuredDotRule).toContain("opacity var(--motion-focus-enter);");
     expect(featuredActiveDotRule).toContain("width: 22px;");
+    expect(reducedMotionRule).toContain("animation: none;");
   });
 
   it("keeps custom Windows caption buttons aligned with Win11 interaction affordances", () => {
@@ -62,14 +78,22 @@ describe("global rail styles", () => {
   });
 });
 
-function getRule(selector: string) {
+function getRule(selector: string, nestedSelector?: string) {
   const ruleStart = globalCss.indexOf(`${selector} {`);
 
   if (ruleStart === -1) {
     throw new Error(`Missing CSS rule for ${selector}`);
   }
 
-  const bodyStart = globalCss.indexOf("{", ruleStart);
+  const nestedRuleStart = nestedSelector
+    ? globalCss.indexOf(`${nestedSelector} {`, ruleStart)
+    : ruleStart;
+
+  if (nestedRuleStart === -1) {
+    throw new Error(`Missing CSS rule for ${nestedSelector} inside ${selector}`);
+  }
+
+  const bodyStart = globalCss.indexOf("{", nestedRuleStart);
   const bodyEnd = globalCss.indexOf("}", bodyStart);
 
   return globalCss.slice(bodyStart + 1, bodyEnd);

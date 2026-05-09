@@ -887,9 +887,12 @@ describe("LumiShell", () => {
     expect(screen.queryByRole("heading", { name: "Demo Movie" })).not.toBeInTheDocument();
 
     const featuredHero = document.querySelector(".featured-hero");
+    const backdropLayer = featuredHero?.querySelector(
+      '.featured-backdrop-layer[data-featured-id="featured-1"]',
+    );
     expect(featuredHero).toBeInTheDocument();
-    expect(featuredHero).toHaveStyle({
-      backgroundImage:
+    expect(backdropLayer).toHaveStyle({
+      "--featured-artwork":
         'url("http://localhost:8096/Items/featured-1/Images/Backdrop?tag=random-backdrop")',
     });
     expect(featuredHero?.querySelector(".featured-art")).not.toBeInTheDocument();
@@ -927,11 +930,46 @@ describe("LumiShell", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    const featuredHero = document.querySelector(".featured-hero");
+    const firstCopyLayer = featuredHero?.querySelector(".featured-copy");
+    const firstBackdropLayer = featuredHero?.querySelector(
+      '.featured-backdrop-layer[data-featured-id="featured-1"]',
+    );
+    expect(featuredHero).toBeInTheDocument();
+    expect(firstBackdropLayer).toHaveStyle({
+      "--featured-artwork":
+        'url("http://localhost:8096/Items/featured-1/Images/Backdrop?tag=random-backdrop")',
+    });
+    expect(screen.getByRole("button", { name: "Show Random Feature" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await user.click(screen.getByRole("button", { name: "Show Second Random Feature" }));
 
     expect(
       await screen.findByRole("heading", { name: "Second Random Feature" }),
     ).toBeInTheDocument();
+    const secondBackdropLayer = featuredHero?.querySelector(
+      '.featured-backdrop-layer[data-featured-id="featured-2"]',
+    );
+    const secondCopyLayer = featuredHero?.querySelector(
+      '.featured-copy[data-featured-id="featured-2"]',
+    );
+    expect(document.querySelector(".featured-hero")).toBe(featuredHero);
+    expect(secondBackdropLayer).toHaveStyle({
+      "--featured-artwork":
+        'url("http://localhost:8096/Items/featured-2/Images/Backdrop?tag=random-backdrop-2")',
+    });
+    expect(secondCopyLayer).toBeInTheDocument();
+    expect(secondCopyLayer).not.toBe(firstCopyLayer);
+    expect(screen.getByRole("button", { name: "Show Random Feature" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Show Second Random Feature" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await user.click(screen.getByRole("button", { name: "Second Random Feature" }));
 
     expect(await screen.findByRole("heading", { name: "Second Random Feature" })).toBeInTheDocument();

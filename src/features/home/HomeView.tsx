@@ -1,6 +1,13 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { motion, useReducedMotion } from "motion/react";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  type MotionStyle,
+  type TargetAndTransition,
+  type Transition,
+} from "motion/react";
 import { Check, ChevronDown, Server } from "lucide-react";
 import { MediaRail } from "../../components/media";
 import { MotionButton } from "../../components/motion";
@@ -17,8 +24,15 @@ import {
 const FEATURED_CAROUSEL_INTERVAL_MS = 8_000;
 const EMPTY_FEATURED_ITEMS: LibraryItem[] = [];
 
-type FeaturedArtworkStyle = CSSProperties & {
+type FeaturedArtworkStyle = MotionStyle & {
   "--featured-artwork": string;
+};
+
+type FeaturedMotionState = {
+  animate: TargetAndTransition;
+  exit: TargetAndTransition;
+  initial: TargetAndTransition;
+  transition: Transition;
 };
 
 type HomeViewProps = {
@@ -92,9 +106,40 @@ export function HomeView({
   const featuredArtworkStyle = featuredArtwork
     ? ({
         "--featured-artwork": `url("${featuredArtwork}")`,
-        backgroundImage: `url("${featuredArtwork}")`,
       } satisfies FeaturedArtworkStyle)
     : undefined;
+  const featuredMotionKey = featured?.id ?? "empty-featured";
+  const featuredBackdropKey = featuredArtwork
+    ? `${featuredMotionKey}:${featuredArtwork}`
+    : `${featuredMotionKey}:empty-artwork`;
+  const instantTransition = { duration: 0.01 } satisfies Transition;
+  const carouselEase = [0.22, 1, 0.36, 1] satisfies Transition["ease"];
+  const featuredBackdropMotion = reducedMotion
+    ? {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        transition: instantTransition,
+      }
+    : {
+        initial: { opacity: 0, scale: 1.018, x: 8 },
+        animate: { opacity: 1, scale: 1.035, x: 0 },
+        exit: { opacity: 0, scale: 1.05, x: -6 },
+        transition: { duration: 0.38, ease: carouselEase },
+      } satisfies FeaturedMotionState;
+  const featuredCopyMotion = reducedMotion
+    ? {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        transition: instantTransition,
+      }
+    : {
+        initial: { opacity: 0, y: 12 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -8 },
+        transition: { duration: 0.26, ease: carouselEase },
+      } satisfies FeaturedMotionState;
 
   useEffect(() => {
     if (prefersReducedMotion || !canCycleFeatured) {
@@ -149,10 +194,19 @@ export function HomeView({
         aria-labelledby="home-featured-title"
         className={`featured-hero ${featuredArtwork ? "has-art" : ""}`.trim()}
         data-motion-surface="featured-hero"
-        key={featured?.id ?? "empty-featured"}
-        style={featuredArtworkStyle}
         {...createSurfaceMotion(reducedMotion, 0)}
       >
+        <AnimatePresence initial={false} mode="sync">
+          <motion.span
+            aria-hidden="true"
+            className="featured-backdrop-layer"
+            data-featured-id={featured?.id ?? "empty-featured"}
+            data-motion-surface="featured-backdrop-layer"
+            key={featuredBackdropKey}
+            style={featuredArtworkStyle as MotionStyle | undefined}
+            {...featuredBackdropMotion}
+          />
+        </AnimatePresence>
         {featured ? (
           <button
             aria-label={featuredTitle}
@@ -160,7 +214,13 @@ export function HomeView({
             onClick={() => onOpenMedia(featured)}
             type="button"
           >
-            <span className="featured-copy">
+            <AnimatePresence initial={false} mode="wait">
+              <motion.span
+                className="featured-copy"
+                data-featured-id={featured.id}
+                key={featuredMotionKey}
+                {...featuredCopyMotion}
+              >
               <span className="workbench-kicker">{translate("home.featured.featured")}</span>
               <span className="featured-title-wrap">
                 {featured.logoUrl ? (
@@ -179,11 +239,18 @@ export function HomeView({
               </span>
               <span className="featured-meta">{formatMetadata(featured, locale)}</span>
               <span className="featured-description">{featuredDescription}</span>
-            </span>
+              </motion.span>
+            </AnimatePresence>
           </button>
         ) : (
           <div className="featured-hero-empty">
-            <div className="featured-copy">
+            <AnimatePresence initial={false} mode="wait">
+              <motion.div
+                className="featured-copy"
+                data-featured-id="empty-featured"
+                key={featuredMotionKey}
+                {...featuredCopyMotion}
+              >
               <span className="workbench-kicker">{translate("home.featured.start")}</span>
               <h2 className="featured-title-text" id="home-featured-title">
                 {featuredTitle}
@@ -193,7 +260,8 @@ export function HomeView({
                 <Server aria-hidden="true" size={15} />
                 <span>{translate("home.action.addServer")}</span>
               </MotionButton>
-            </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         )}
         {canCycleFeatured ? (
@@ -202,14 +270,23 @@ export function HomeView({
             className="featured-carousel-dots"
           >
             {featuredItems.map((item, index) => (
-              <button
+              <motion.button
                 aria-label={translate("home.featured.showItem", {
                   title: item.title,
                 })}
+                animate={{
+                  opacity: index === featuredIndex ? 1 : 0.62,
+                  width: index === featuredIndex ? 22 : 7,
+                }}
                 aria-pressed={index === featuredIndex}
                 className="featured-carousel-dot"
                 key={item.id}
                 onClick={() => setSelectedFeaturedId(item.id)}
+                transition={
+                  reducedMotion
+                    ? instantTransition
+                    : { duration: 0.22, ease: carouselEase }
+                }
                 type="button"
               />
             ))}
