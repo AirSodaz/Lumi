@@ -9,7 +9,7 @@ The current product surface is intentionally small:
 - Home shows the active Emby server, Continue Watching, Media Libraries, and latest media rails.
 - Favorites is a read-only Emby favorites page with lazy loading.
 - Search is a V1 shell entry for connected-server search work.
-- Settings manages servers, player preferences, appearance/material fallback state, language, and log export.
+- Settings groups Media Services, player preferences, appearance/material fallback state, language, and log export.
 - Media library browsing lives under the Home `Media Libraries` rail rather than a top-level Libraries tab.
 - Playback opens through the Rust `PlayerService`; React never builds Emby stream URLs, sees tokens, or talks to mpv directly.
 

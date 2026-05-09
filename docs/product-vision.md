@@ -25,7 +25,7 @@ V1 的成功标准是完成一条真实可用的 Emby 观影路径：
 7. 使用原生 mpv 播放器打开媒体。
 8. 支持播放、暂停、seek、音量、字幕/音轨选择和退出播放。
 9. 同步播放进度到 Emby。
-10. 提供基础设置：服务器管理、播放器偏好、外观/材质降级说明、日志导出。
+10. 提供基础设置：影视服务管理、播放器偏好、外观/材质降级说明、日志导出。
 
 V1 默认只支持手动 URL 连接。局域网发现、Emby Connect、远程穿透引导可以在后续版本进入规划。
 
@@ -41,7 +41,7 @@ V1 默认只支持手动 URL 连接。局域网发现、Emby Connect、远程穿
 - 播放通过 Rust `PlayerService` 打开独立播放器窗口，并由 runtime-loaded libmpv 承载。
 - 播放命令支持 play、pause、seek、volume、close。
 - 播放进度由 Rust 上报 Emby，播放中走 progress，退出走 stopped。
-- Settings 包含 Servers、Player、Appearance、Logs；日志导出不包含 token 或密码。
+- Settings 包含 Media Services、Player、Appearance、Logs；Media Services 承载影视服务连接、当前服务和线路管理，日志导出不包含 token 或密码。
 - 轻量本地化已支持系统语言、英文和中文偏好。
 
 仍需人工验收：

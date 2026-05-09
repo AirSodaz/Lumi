@@ -44,10 +44,10 @@ import {
   type ThemePreference,
 } from "../../lib/tauriClient";
 
-type SettingsPanel = "servers" | "player" | "appearance" | "logs";
+type SettingsPanel = "mediaServices" | "player" | "appearance" | "logs";
 
 const panels: Array<{ id: SettingsPanel }> = [
-  { id: "servers" },
+  { id: "mediaServices" },
   { id: "player" },
   { id: "appearance" },
   { id: "logs" },
@@ -82,10 +82,10 @@ export function SettingsView({
   onSelectServer,
   selectedServerId,
 }: SettingsViewProps) {
-  const [selectedPanel, setSelectedPanel] = useState<SettingsPanel>("servers");
+  const [selectedPanel, setSelectedPanel] = useState<SettingsPanel>("mediaServices");
   const reducedMotion = useReducedMotion();
   const { translate } = useI18n();
-  const panel = openAddServerDialog ? "servers" : selectedPanel;
+  const panel = openAddServerDialog ? "mediaServices" : selectedPanel;
 
   return (
     <section className="settings-view app-workbench" aria-labelledby="settings-title">
@@ -112,7 +112,7 @@ export function SettingsView({
             {...createSurfaceMotion(reducedMotion, 0)}
             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
           >
-            {panel === "servers" ? (
+            {panel === "mediaServices" ? (
               <ServersPanel
                 addServerDialogOpen={openAddServerDialog}
                 onAddServerDialogOpenChange={onAddServerDialogOpenChange}
@@ -151,15 +151,11 @@ function ServersPanel({
   const [renamingServer, setRenamingServer] = useState<ServerProfile | null>(null);
 
   return (
-    <section className="settings-section" aria-labelledby="servers-title">
+    <section className="settings-section" aria-labelledby="media-services-title">
       <div className="section-heading">
         <div>
-          <h2 id="servers-title">{translate("settings.panel.servers")}</h2>
-          <p>
-            {servers.length > 0
-              ? translate("settings.server.saved", { count: servers.length })
-              : translate("settings.server.zero")}
-          </p>
+          <h2 id="media-services-title">{translate("settings.panel.mediaServices")}</h2>
+          <p>{mediaServicesSavedLabel(servers.length, translate)}</p>
         </div>
         <AddServerDialog
           externalOpen={addServerDialogOpen}
@@ -1142,6 +1138,22 @@ function lineCountLabel(
   translate: ReturnType<typeof useI18n>["translate"],
 ) {
   return translate("settings.server.lineCount", { count });
+}
+
+function mediaServicesSavedLabel(
+  count: number,
+  translate: ReturnType<typeof useI18n>["translate"],
+) {
+  if (count === 0) {
+    return translate("settings.mediaServices.zero");
+  }
+
+  return translate(
+    count === 1
+      ? "settings.mediaServices.savedOne"
+      : "settings.mediaServices.savedMany",
+    { count },
+  );
 }
 
 function lineErrorMessage(

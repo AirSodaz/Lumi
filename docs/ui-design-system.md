@@ -88,7 +88,7 @@ V1 主导航保持克制：
 - Home：继续观看、最新添加、推荐 rails。
 - Favorites：当前 Emby server 的只读收藏列表。
 - Search：本地/服务器搜索入口，V1 可以先做服务器搜索。
-- Settings：服务器、播放器、外观、日志。
+- Settings：影视服务、播放器、外观、日志。
 
 媒体库浏览属于 Home 信息架构：
 

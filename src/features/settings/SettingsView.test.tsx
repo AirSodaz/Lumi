@@ -235,6 +235,33 @@ describe("SettingsView", () => {
     });
   });
 
+  it("uses Media Services as the settings path for provider connections", async () => {
+    renderSettingsView();
+
+    expect(
+      await screen.findByRole("button", { name: "Media Services" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      await screen.findByRole("heading", { name: "Media Services", level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1 saved service")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Servers" })).not.toBeInTheDocument();
+  });
+
+  it("localizes the provider connection path as 影视服务 in Chinese", async () => {
+    window.localStorage.setItem(languagePreferenceStorageKey, "zh");
+
+    renderSettingsView();
+
+    expect(
+      await screen.findByRole("button", { name: "影视服务" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      await screen.findByRole("heading", { name: "影视服务", level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("已保存 1 个影视服务")).toBeInTheDocument();
+  });
+
   it("logs out and removes a saved server from the settings list", async () => {
     const user = userEvent.setup();
     renderSettingsView();
