@@ -583,6 +583,46 @@ fn windows_video_host_is_visible_before_mpv_ready_events() {
     );
 }
 
+#[test]
+fn windows_video_host_is_created_on_tauri_main_thread() {
+    let playback_source =
+        std::fs::read_to_string("src/commands/playback.rs").expect("read playback command source");
+
+    assert!(
+        playback_source.contains("create_player_window_on_main_thread(&self.app, session_id)"),
+        "Windows mpv child windows must be created on Tauri's main thread so their message handling stays attached to the UI event loop"
+    );
+    assert!(
+        playback_source.contains("app.run_on_main_thread(move ||"),
+        "The player window creation boundary must dispatch the native window work to Tauri's main thread"
+    );
+}
+
+#[test]
+fn windows_video_host_uses_reported_video_region_bounds() {
+    let playback_source =
+        std::fs::read_to_string("src/commands/playback.rs").expect("read playback command source");
+
+    assert!(
+        playback_source.contains("PlaybackSurfaceBounds"),
+        "React must report the measured video region bounds instead of Rust guessing from a fixed controls height"
+    );
+    assert!(
+        playback_source.contains("playback_update_surface_bounds"),
+        "The player window must have a command boundary for resizing the native mpv host to the measured video region"
+    );
+    assert!(
+        !playback_source.contains("CONTROL_REGION_HEIGHT"),
+        "The native video host must not overlap controls by subtracting a hard-coded controls height"
+    );
+    assert!(
+        playback_source.contains(
+            "position_video_host(child, bounds.x, bounds.y, bounds.width, bounds.height)"
+        ),
+        "The Windows child HWND must be positioned using the reported x/y/width/height bounds"
+    );
+}
+
 fn test_state(responses: Vec<FakeResponse>, backend: Arc<dyn MpvBackend>) -> AppState {
     let database = Database::open_in_memory().expect("open database");
     database.initialize().expect("initialize database");

@@ -16,8 +16,9 @@ use std::{
 use libloading::Library;
 
 use super::{
-    playback_command_failed, playback_init_failed, playback_library_missing, MpvBackend,
-    MpvEventSink, MpvOpenRequest, MpvPlaybackEvent, PlaybackCommand,
+    playback_command_failed, playback_init_failed, playback_library_missing,
+    record_playback_diagnostic, MpvBackend, MpvEventSink, MpvOpenRequest, MpvPlaybackEvent,
+    PlaybackCommand,
 };
 use crate::errors::AppResult;
 
@@ -81,15 +82,32 @@ impl RuntimeMpvBackend {
 impl MpvBackend for RuntimeMpvBackend {
     fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
         let library = self.library()?;
+        record_playback_diagnostic(format!(
+            "mpv open start session={} wid={}",
+            request.session_id,
+            request
+                .window_id
+                .map(|window_id| window_id.to_string())
+                .unwrap_or_else(|| "none".into())
+        ));
         let handle = Arc::new(RuntimeMpvHandle::new(
             library.create_handle(request.window_id)?,
         ));
         if let Err(error) =
             library.command_async(&handle, &["loadfile", &request.media_url, "replace"])
         {
+            record_playback_diagnostic(format!(
+                "mpv loadfile failed session={} code={}",
+                request.session_id,
+                error.code()
+            ));
             library.destroy(&handle);
             return Err(error);
         }
+        record_playback_diagnostic(format!(
+            "mpv loadfile queued session={}",
+            request.session_id
+        ));
         self.instances
             .lock()
             .map_err(|_| crate::errors::AppError::state_lock_poisoned("mpv_instances"))?
@@ -145,6 +163,7 @@ impl MpvBackend for RuntimeMpvBackend {
     }
 
     fn close(&self, session_id: &str) -> AppResult<()> {
+        record_playback_diagnostic(format!("runtime close remove session={session_id}"));
         let instance = self
             .instances
             .lock()
@@ -152,7 +171,9 @@ impl MpvBackend for RuntimeMpvBackend {
             .remove(session_id);
 
         if let Some(instance) = instance {
+            record_playback_diagnostic(format!("runtime close quit session={session_id}"));
             let _ = instance.library.command(&instance.handle, &["quit"]);
+            record_playback_diagnostic(format!("runtime close destroy session={session_id}"));
             instance.library.destroy(&instance.handle);
         }
 
@@ -481,10 +502,20 @@ fn start_mpv_event_pump(
         };
         match event_id {
             MPV_EVENT_NONE => {}
-            MPV_EVENT_FILE_LOADED | MPV_EVENT_PLAYBACK_RESTART => {
+            MPV_EVENT_FILE_LOADED => {
+                record_playback_diagnostic(format!("mpv event FILE_LOADED session={session_id}"));
+                event_sink.on_mpv_event(&session_id, MpvPlaybackEvent::Loaded);
+            }
+            MPV_EVENT_PLAYBACK_RESTART => {
+                record_playback_diagnostic(format!(
+                    "mpv event PLAYBACK_RESTART session={session_id}"
+                ));
                 event_sink.on_mpv_event(&session_id, MpvPlaybackEvent::Ready);
             }
             MPV_EVENT_END_FILE => {
+                record_playback_diagnostic(format!(
+                    "mpv event END_FILE session={session_id} reason={end_file_reason} error={error}"
+                ));
                 if end_file_reason == MPV_END_FILE_REASON_ERROR {
                     let message = library.error_message(error);
                     event_sink.on_mpv_event(
@@ -497,10 +528,14 @@ fn start_mpv_event_pump(
                 break;
             }
             MPV_EVENT_SHUTDOWN => {
+                record_playback_diagnostic(format!("mpv event SHUTDOWN session={session_id}"));
                 event_sink.on_mpv_event(&session_id, MpvPlaybackEvent::Shutdown);
                 break;
             }
             _ if error < 0 => {
+                record_playback_diagnostic(format!(
+                    "mpv event error session={session_id} event={event_id} error={error}"
+                ));
                 event_sink.on_mpv_event(
                     &session_id,
                     MpvPlaybackEvent::Error(playback_command_failed(library.error_message(error))),

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Film } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useI18n } from "../../lib/i18n";
@@ -23,6 +23,17 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
   const [session, setSession] = useState<PlayerSession | null>(null);
   const [playbackError, setPlaybackError] = useState<AppError | null>(null);
   const closeSent = useRef(false);
+  const videoRegionRef = useRef<HTMLElement | null>(null);
+
+  const destroyWindow = useCallback(() => {
+    const currentWindow = getCurrentWindow();
+    const destroy = "destroy" in currentWindow ? currentWindow.destroy : undefined;
+    if (typeof destroy === "function") {
+      void destroy.call(currentWindow);
+      return;
+    }
+    void currentWindow.close();
+  }, []);
 
   useEffect(() => {
     const unlistenTasks = [
@@ -68,16 +79,21 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
     }
 
     let disposed = false;
-    const unlistenTask = currentWindow.onCloseRequested(() => {
+    const unlistenTask = currentWindow.onCloseRequested(async (event) => {
       if (closeSent.current || !sessionId) {
         return;
       }
 
+      event.preventDefault();
       closeSent.current = true;
-      void closeCommand.mutateAsync({
-        sessionId,
-        command: { kind: "close" },
-      });
+      try {
+        await closeCommand.mutateAsync({
+          sessionId,
+          command: { kind: "close" },
+        });
+      } finally {
+        destroyWindow();
+      }
     });
 
     return () => {
@@ -88,13 +104,50 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
         }
       });
     };
-  }, [closeCommand, sessionId]);
+  }, [closeCommand, destroyWindow, sessionId]);
+
+  useEffect(() => {
+    const reportBounds = () => {
+      const region = videoRegionRef.current;
+      if (!region || !sessionId) {
+        return;
+      }
+      const rect = region.getBoundingClientRect();
+      const bounds = {
+        sessionId,
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+      };
+      void playback.updateSurfaceBounds(bounds).catch(() => undefined);
+    };
+
+    reportBounds();
+    window.addEventListener("resize", reportBounds);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && videoRegionRef.current) {
+      resizeObserver = new ResizeObserver(reportBounds);
+      resizeObserver.observe(videoRegionRef.current);
+    }
+
+    return () => {
+      window.removeEventListener("resize", reportBounds);
+      resizeObserver?.disconnect();
+    };
+  }, [sessionId]);
 
   function handleSessionChange(nextSession: PlayerSession) {
     setSession(nextSession);
     if (nextSession.state === "closed") {
-      void getCurrentWindow().close();
+      destroyWindow();
     }
+  }
+
+  function handleCloseFallback(error: AppError) {
+    setPlaybackError(error);
+    destroyWindow();
   }
 
   const activeSession = session ?? sessionQuery.data ?? null;
@@ -104,7 +157,11 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
 
   return (
     <main className="player-window" aria-labelledby="player-window-title">
-      <section className="player-video-region" aria-label={translate("player.aria.video")}>
+      <section
+        className="player-video-region"
+        aria-label={translate("player.aria.video")}
+        ref={videoRegionRef}
+      >
         <div className="player-video-placeholder">
           <Film aria-hidden="true" size={26} />
           <span>
@@ -140,6 +197,7 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
 
         {activeSession ? (
           <PlayerControls
+            onCloseError={handleCloseFallback}
             onSessionChange={handleSessionChange}
             session={activeSession}
           />

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 
 #[cfg(target_os = "windows")]
 use std::{
@@ -34,6 +34,16 @@ use super::auth::emby_provider_for_state;
 pub struct PlaybackCommandRequest {
     pub session_id: String,
     pub command: PlaybackCommand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackSurfaceBounds {
+    pub session_id: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[tauri::command]
@@ -208,21 +218,7 @@ impl TauriPlaybackHost {
 
 impl PlaybackHost for TauriPlaybackHost {
     fn create_player_window(&self, session_id: &str) -> AppResult<Option<i64>> {
-        let label = format!("player-{session_id}");
-        let url = WebviewUrl::App(format!("index.html?view=player&sessionId={session_id}").into());
-        let window = if let Some(window) = self.app.get_webview_window(&label) {
-            window
-        } else {
-            WebviewWindowBuilder::new(&self.app, label, url)
-                .title("Lumi Player")
-                .inner_size(1120.0, 700.0)
-                .min_inner_size(760.0, 460.0)
-                .resizable(true)
-                .build()
-                .map_err(playback_window_failed)?
-        };
-
-        embedded_window_id_for(&window)
+        create_player_window_on_main_thread(&self.app, session_id)
     }
 
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()> {
@@ -252,6 +248,52 @@ impl PlaybackHost for TauriPlaybackHost {
     }
 }
 
+#[tauri::command]
+pub fn playback_update_surface_bounds(
+    app: AppHandle,
+    bounds: PlaybackSurfaceBounds,
+) -> AppResult<()> {
+    update_surface_bounds_for_session(&app, bounds)
+}
+
+fn create_player_window_on_main_thread(
+    app: &AppHandle,
+    session_id: &str,
+) -> AppResult<Option<i64>> {
+    // The Windows mpv child HWND must be owned by the UI thread's message loop.
+    let app = app.clone();
+    let session_id = session_id.to_string();
+    let (result_tx, result_rx) = mpsc::channel();
+    let app_for_task = app.clone();
+    app.run_on_main_thread(move || {
+        let result = create_player_window_inner(&app_for_task, &session_id);
+        let _ = result_tx.send(result);
+    })
+    .map_err(playback_window_failed)?;
+
+    result_rx
+        .recv()
+        .map_err(|error| playback_window_failed(error.to_string()))?
+}
+
+fn create_player_window_inner(app: &AppHandle, session_id: &str) -> AppResult<Option<i64>> {
+    let label = format!("player-{session_id}");
+    let url = WebviewUrl::App(format!("index.html?view=player&sessionId={session_id}").into());
+    let window = if let Some(window) = app.get_webview_window(&label) {
+        window
+    } else {
+        WebviewWindowBuilder::new(app, label, url)
+            .title("Lumi Player")
+            .inner_size(1120.0, 700.0)
+            .min_inner_size(760.0, 460.0)
+            .resizable(true)
+            .build()
+            .map_err(playback_window_failed)?
+    };
+
+    embedded_window_id_for(&window)
+}
+
 #[cfg(target_os = "windows")]
 fn embedded_window_id_for(window: &tauri::WebviewWindow) -> AppResult<Option<i64>> {
     let handle = window.window_handle().map_err(playback_window_failed)?;
@@ -278,12 +320,10 @@ fn create_video_host_window(
         CreateWindowExW, HMENU, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
-    const CONTROL_REGION_HEIGHT: u32 = 172;
-
     let class_name = wide_null("Static");
     let size = window.inner_size().map_err(playback_window_failed)?;
     let video_width = size.width.max(1);
-    let video_height = size.height.saturating_sub(CONTROL_REGION_HEIGHT).max(1);
+    let video_height = size.height.max(1);
     let child = unsafe {
         CreateWindowExW(
             WINDOW_EX_STYLE::default(),
@@ -308,32 +348,96 @@ fn create_video_host_window(
     }
 
     let child = child as isize;
-    position_video_host(child, video_width, video_height);
+    position_video_host(child, 0, 0, video_width, video_height);
     let session_id = window
         .label()
         .strip_prefix("player-")
         .map(str::to_string)
         .ok_or_else(|| playback_window_failed("player window label is missing session id"))?;
+    crate::player::record_playback_diagnostic(format!(
+        "surface create session={session_id} child={child}"
+    ));
     video_surfaces()
         .lock()
         .map_err(|_| crate::errors::AppError::state_lock_poisoned("video_surfaces"))?
-        .insert(session_id, child);
+        .insert(
+            session_id.clone(),
+            VideoSurface {
+                child,
+                bounds: None,
+            },
+        );
     window.on_window_event(move |event| match event {
         WindowEvent::Resized(size)
         | WindowEvent::ScaleFactorChanged {
             new_inner_size: size,
             ..
         } => {
-            position_video_host(
-                child,
-                size.width.max(1),
-                size.height.saturating_sub(CONTROL_REGION_HEIGHT).max(1),
-            );
+            let fallback = PlaybackSurfaceBounds {
+                session_id: session_id.clone(),
+                x: 0,
+                y: 0,
+                width: size.width.max(1),
+                height: size.height.max(1),
+            };
+            let bounds = video_surfaces()
+                .lock()
+                .ok()
+                .and_then(|surfaces| {
+                    surfaces
+                        .get(&session_id)
+                        .and_then(|surface| surface.bounds.clone())
+                })
+                .unwrap_or(fallback);
+            position_video_host(child, bounds.x, bounds.y, bounds.width, bounds.height);
         }
         _ => {}
     });
 
     Ok(Some(child as i64))
+}
+
+#[cfg(target_os = "windows")]
+fn update_surface_bounds_for_session(
+    app: &AppHandle,
+    bounds: PlaybackSurfaceBounds,
+) -> AppResult<()> {
+    let app = app.clone();
+    app.run_on_main_thread(move || {
+        let Ok(mut surfaces) = video_surfaces().lock() else {
+            return;
+        };
+        let Some(surface) = surfaces.get_mut(&bounds.session_id) else {
+            return;
+        };
+
+        let bounds = PlaybackSurfaceBounds {
+            width: bounds.width.max(1),
+            height: bounds.height.max(1),
+            ..bounds
+        };
+        surface.bounds = Some(bounds.clone());
+        crate::player::record_playback_diagnostic(format!(
+            "surface resize session={} x={} y={} width={} height={}",
+            bounds.session_id, bounds.x, bounds.y, bounds.width, bounds.height
+        ));
+        position_video_host(
+            surface.child,
+            bounds.x,
+            bounds.y,
+            bounds.width,
+            bounds.height,
+        );
+    })
+    .map_err(playback_window_failed)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn update_surface_bounds_for_session(
+    _app: &AppHandle,
+    _bounds: PlaybackSurfaceBounds,
+) -> AppResult<()> {
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -346,11 +450,16 @@ fn show_video_surface_for_session(app: &AppHandle, session_id: &str) -> AppResul
         let Ok(surfaces) = video_surfaces().lock() else {
             return;
         };
-        let Some(child) = surfaces.get(&session_id).copied() else {
+        let Some(surface) = surfaces.get(&session_id) else {
             return;
         };
 
-        let _ = unsafe { ShowWindow(child as windows_sys::Win32::Foundation::HWND, SW_SHOWNA) };
+        let _ = unsafe {
+            ShowWindow(
+                surface.child as windows_sys::Win32::Foundation::HWND,
+                SW_SHOWNA,
+            )
+        };
     })
     .map_err(playback_window_failed)
 }
@@ -370,9 +479,12 @@ fn destroy_video_surface_for_session(app: &AppHandle, session_id: &str) -> AppRe
         let Ok(mut surfaces) = video_surfaces().lock() else {
             return;
         };
-        let child = surfaces.remove(&session_id);
-        if let Some(child) = child {
-            let _ = unsafe { DestroyWindow(child as windows_sys::Win32::Foundation::HWND) };
+        let surface = surfaces.remove(&session_id);
+        if let Some(surface) = surface {
+            crate::player::record_playback_diagnostic(format!(
+                "surface destroy session={session_id}"
+            ));
+            let _ = unsafe { DestroyWindow(surface.child as windows_sys::Win32::Foundation::HWND) };
         }
     })
     .map_err(playback_window_failed)
@@ -384,13 +496,20 @@ fn destroy_video_surface_for_session(_app: &AppHandle, _session_id: &str) -> App
 }
 
 #[cfg(target_os = "windows")]
-fn video_surfaces() -> &'static Mutex<HashMap<String, isize>> {
-    static VIDEO_SURFACES: OnceLock<Mutex<HashMap<String, isize>>> = OnceLock::new();
+#[derive(Debug, Clone)]
+struct VideoSurface {
+    child: isize,
+    bounds: Option<PlaybackSurfaceBounds>,
+}
+
+#[cfg(target_os = "windows")]
+fn video_surfaces() -> &'static Mutex<HashMap<String, VideoSurface>> {
+    static VIDEO_SURFACES: OnceLock<Mutex<HashMap<String, VideoSurface>>> = OnceLock::new();
     VIDEO_SURFACES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 #[cfg(target_os = "windows")]
-fn position_video_host(child: isize, width: u32, height: u32) {
+fn position_video_host(child: isize, x: i32, y: i32, width: u32, height: u32) {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
 
@@ -398,8 +517,8 @@ fn position_video_host(child: isize, width: u32, height: u32) {
         SetWindowPos(
             child as HWND,
             std::ptr::null_mut(),
-            0,
-            0,
+            x,
+            y,
             width as i32,
             height as i32,
             SWP_NOACTIVATE | SWP_NOZORDER,

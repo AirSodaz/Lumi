@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app::{AppSettings, AppSettingsPatch, AppState},
     errors::AppResult,
+    player::recent_playback_diagnostics,
 };
 
 #[tauri::command]
@@ -102,6 +103,11 @@ pub fn export_logs_for_state(state: &AppState) -> AppResult<LogExport> {
     for server in servers {
         contents.push_str(&format!("server: {} {}\n", server.id, server.name));
         contents.push_str(&format!("provider: {:?}\n", server.provider_kind));
+    }
+    contents.push_str("playbackDiagnostics:\n");
+    for line in recent_playback_diagnostics() {
+        contents.push_str(&line);
+        contents.push('\n');
     }
 
     Ok(LogExport {

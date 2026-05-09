@@ -181,3 +181,11 @@ export type PlaybackCommandRequest = {
   sessionId: string;
   command: PlaybackCommand;
 };
+
+export type PlaybackSurfaceBounds = {
+  sessionId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};

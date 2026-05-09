@@ -1,11 +1,11 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
     },
     thread,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
@@ -90,6 +90,7 @@ pub struct MpvOpenRequest {
 
 #[derive(Debug, Clone)]
 pub enum MpvPlaybackEvent {
+    Loaded,
     Ready,
     Ended,
     Error(AppError),
@@ -469,21 +470,28 @@ impl PlayerService for NativePlayerService {
 
     fn close(&self, session_id: &str) -> AppResult<PlayerSession> {
         self.sessions.get(session_id)?;
-        let final_position = self.backend.position_seconds(session_id).ok().flatten();
-        self.backend.close(session_id).inspect_err(|error| {
-            self.emit_error(Some(session_id.into()), error);
-        })?;
         self.host.destroy_video_surface(session_id)?;
         let session = self.sessions.update(session_id, |stored| {
-            if let Some(position_seconds) = final_position {
-                stored.session.position_seconds = position_seconds;
-            }
             stored.session.state = PlayerState::Closed;
         })?;
         self.emit_state(&session)?;
         let _ = self
             .progress_reporter
             .report_progress(progress_from_session(&session, true));
+        let backend = self.backend.clone();
+        let session_id = session_id.to_string();
+        record_playback_diagnostic(format!("close requested session={session_id}"));
+        thread::spawn(move || {
+            record_playback_diagnostic(format!("mpv close start session={session_id}"));
+            if let Err(error) = backend.close(&session_id) {
+                record_playback_diagnostic(format!(
+                    "mpv close failed session={session_id} code={}",
+                    error.code()
+                ));
+            } else {
+                record_playback_diagnostic(format!("mpv close complete session={session_id}"));
+            }
+        });
         Ok(session)
     }
 }
@@ -499,6 +507,7 @@ struct NativeMpvEventSink {
 impl MpvEventSink for NativeMpvEventSink {
     fn on_mpv_event(&self, session_id: &str, event: MpvPlaybackEvent) {
         match event {
+            MpvPlaybackEvent::Loaded => self.handle_loaded(session_id),
             MpvPlaybackEvent::Ready => self.handle_ready(session_id),
             MpvPlaybackEvent::Ended | MpvPlaybackEvent::Shutdown => {
                 self.handle_terminal_state(session_id, PlayerState::Ended)
@@ -509,6 +518,24 @@ impl MpvEventSink for NativeMpvEventSink {
 }
 
 impl NativeMpvEventSink {
+    fn handle_loaded(&self, session_id: &str) {
+        if self.sessions.is_closed(session_id) {
+            return;
+        }
+
+        let Ok(session) = self.sessions.update(session_id, |stored| {
+            if stored.session.state == PlayerState::Opening {
+                stored.session.state = PlayerState::Buffering;
+            }
+        }) else {
+            return;
+        };
+
+        if session.state == PlayerState::Buffering {
+            let _ = self.host.emit_state_changed(&session);
+        }
+    }
+
     fn handle_ready(&self, session_id: &str) {
         if self.sessions.is_closed(session_id) {
             let _ = self.backend.close(session_id);
@@ -709,4 +736,38 @@ pub fn playback_init_failed(source: impl ToString) -> AppError {
     )
     .with_recoverable(true)
     .with_detail(json!({ "source": source.to_string() }))
+}
+
+pub fn record_playback_diagnostic(message: impl Into<String>) {
+    const MAX_DIAGNOSTIC_LINES: usize = 200;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default();
+    let mut line = format!("[{timestamp}] {}", message.into());
+    if line.len() > 500 {
+        line.truncate(500);
+        line.push_str("...");
+    }
+
+    let Ok(mut lines) = playback_diagnostics().lock() else {
+        return;
+    };
+    lines.push_back(line);
+    while lines.len() > MAX_DIAGNOSTIC_LINES {
+        lines.pop_front();
+    }
+}
+
+pub fn recent_playback_diagnostics() -> Vec<String> {
+    playback_diagnostics()
+        .lock()
+        .map(|lines| lines.iter().cloned().collect())
+        .unwrap_or_default()
+}
+
+fn playback_diagnostics() -> &'static Mutex<VecDeque<String>> {
+    static PLAYBACK_DIAGNOSTICS: OnceLock<Mutex<VecDeque<String>>> = OnceLock::new();
+    PLAYBACK_DIAGNOSTICS.get_or_init(|| Mutex::new(VecDeque::new()))
 }

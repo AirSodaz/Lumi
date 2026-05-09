@@ -47,6 +47,7 @@ export type {
   PlaybackCommandRequest,
   PlaybackErrorEvent,
   PlaybackPositionEvent,
+  PlaybackSurfaceBounds,
   PagedResult,
   PlayerOpenRequest,
   PlayerSession,

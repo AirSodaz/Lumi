@@ -1,5 +1,8 @@
 use std::{
-    sync::{mpsc, Arc, Condvar, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        mpsc, Arc, Condvar, Mutex,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -369,7 +372,7 @@ fn native_player_service_close_during_opening_prevents_late_playing_state() {
     assert_eq!(closed.state, PlayerState::Closed);
 
     backend.complete_open(Ok(()));
-    backend.wait_for_close_count(2);
+    backend.wait_for_close_count(1);
 
     let states = host.states.lock().unwrap();
     assert!(!states
@@ -386,6 +389,89 @@ fn native_player_service_close_during_opening_prevents_late_playing_state() {
     assert!(!states
         .iter()
         .any(|state| state.state == PlayerState::Playing));
+}
+
+#[test]
+fn native_player_service_close_returns_before_backend_teardown_finishes() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(HangingCloseMpvBackend::default());
+    let service = NativePlayerService::new(host.clone(), backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    let (result_tx, result_rx) = mpsc::channel();
+    let session_id = session.id.clone();
+    thread::spawn(move || {
+        result_tx
+            .send(service.close(&session_id))
+            .expect("send close result");
+    });
+
+    let closed = result_rx
+        .recv_timeout(Duration::from_millis(100))
+        .expect("close should not wait for backend teardown")
+        .expect("close playback");
+
+    assert_eq!(closed.state, PlayerState::Closed);
+    assert_eq!(
+        host.states.lock().unwrap().last().map(|state| state.state),
+        Some(PlayerState::Closed)
+    );
+    assert_eq!(
+        host.destroyed_surfaces.lock().unwrap().as_slice(),
+        &[session.id.clone()]
+    );
+    backend.wait_for_background_close();
+    assert_eq!(backend.position_calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn native_player_service_close_command_returns_before_backend_teardown_finishes() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(HangingCloseMpvBackend::default());
+    let service = NativePlayerService::new(host, backend.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+
+    let (result_tx, result_rx) = mpsc::channel();
+    let session_id = session.id.clone();
+    thread::spawn(move || {
+        result_tx
+            .send(service.command(&session_id, PlaybackCommand::Close))
+            .expect("send close command result");
+    });
+
+    let closed = result_rx
+        .recv_timeout(Duration::from_millis(100))
+        .expect("close command should not wait for backend teardown")
+        .expect("close playback through command");
+
+    assert_eq!(closed.state, PlayerState::Closed);
+    backend.wait_for_background_close();
 }
 
 #[test]
@@ -429,24 +515,25 @@ fn native_player_service_maps_commands_and_closes_sessions() {
 
     let closed = service.close(&session.id).expect("close playback");
     assert_eq!(closed.state, PlayerState::Closed);
+    backend.wait_for_close_count(1);
 
     let commands = backend.commands.lock().unwrap();
-    assert_eq!(
-        commands.as_slice(),
-        &[
-            ("session-1".into(), PlaybackCommand::Pause),
-            (
-                "session-1".into(),
-                PlaybackCommand::Seek {
-                    position_seconds: 120,
-                },
-            ),
-            (
-                "session-1".into(),
-                PlaybackCommand::SetVolume { volume: 40 },
-            ),
-            ("session-1".into(), PlaybackCommand::Close),
-        ]
+    assert!(commands.contains(&("session-1".into(), PlaybackCommand::Pause)));
+    assert!(commands.contains(&(
+        "session-1".into(),
+        PlaybackCommand::Seek {
+            position_seconds: 120,
+        },
+    )));
+    assert!(commands.contains(&(
+        "session-1".into(),
+        PlaybackCommand::SetVolume { volume: 40 },
+    )));
+    assert!(
+        commands
+            .iter()
+            .any(|(_, command)| matches!(command, PlaybackCommand::Close)),
+        "close should be sent to the backend at least once"
     );
 
     let positions = host.positions.lock().unwrap();
@@ -509,7 +596,7 @@ fn native_player_service_reports_throttled_progress_and_final_position() {
             .iter()
             .map(|report| (report.position_seconds, report.is_final))
             .collect::<Vec<_>>(),
-        vec![(15, false), (46, false), (96, true)]
+        vec![(15, false), (46, false), (46, true)]
     );
 }
 
@@ -658,6 +745,24 @@ impl FakeMpvBackend {
             ..Default::default()
         }
     }
+
+    fn wait_for_close_count(&self, expected: usize) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let count = self
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(_, command)| matches!(command, PlaybackCommand::Close))
+                .count();
+            if count >= expected {
+                return;
+            }
+            assert!(Instant::now() < deadline, "timed out waiting for close");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
 }
 
 impl MpvBackend for FakeMpvBackend {
@@ -797,6 +902,56 @@ impl MpvBackend for ReadyDuringOpenMpvBackend {
 
     fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {
         Ok(None)
+    }
+}
+
+#[derive(Default)]
+struct HangingCloseMpvBackend {
+    position_calls: AtomicUsize,
+    close_started: Mutex<bool>,
+    close_started_changed: Condvar,
+}
+
+impl HangingCloseMpvBackend {
+    fn wait_for_background_close(&self) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut close_started = self.close_started.lock().unwrap();
+        loop {
+            if *close_started {
+                return;
+            }
+            let now = Instant::now();
+            assert!(now < deadline, "timed out waiting for background close");
+            let timeout = deadline.saturating_duration_since(now);
+            close_started = self
+                .close_started_changed
+                .wait_timeout(close_started, timeout)
+                .unwrap()
+                .0;
+        }
+    }
+}
+
+impl MpvBackend for HangingCloseMpvBackend {
+    fn open(&self, _request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn command(&self, _session_id: &str, _command: PlaybackCommand) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn close(&self, _session_id: &str) -> AppResult<()> {
+        *self.close_started.lock().unwrap() = true;
+        self.close_started_changed.notify_all();
+        thread::sleep(Duration::from_secs(30));
+        Ok(())
+    }
+
+    fn position_seconds(&self, _session_id: &str) -> AppResult<Option<u32>> {
+        self.position_calls.fetch_add(1, Ordering::SeqCst);
+        thread::sleep(Duration::from_secs(30));
+        Ok(Some(123))
     }
 }
 

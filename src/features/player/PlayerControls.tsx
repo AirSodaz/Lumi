@@ -13,16 +13,19 @@ import { useI18n } from "../../lib/i18n";
 import { createSurfaceMotion } from "../../lib/motion/presets";
 import {
   usePlaybackCommand,
+  type AppError,
   type PlaybackCommand,
   type PlayerSession,
 } from "../../lib/tauriClient";
 
 type PlayerControlsProps = {
+  onCloseError?: (error: AppError) => void;
   onSessionChange: (session: PlayerSession) => void;
   session: PlayerSession;
 };
 
 export function PlayerControls({
+  onCloseError,
   onSessionChange,
   session,
 }: PlayerControlsProps) {
@@ -34,11 +37,19 @@ export function PlayerControls({
   const isLoading = session.state === "opening" || session.state === "buffering";
 
   async function send(nextCommand: PlaybackCommand) {
-    const updated = await command.mutateAsync({
-      sessionId: session.id,
-      command: nextCommand,
-    });
-    onSessionChange(updated);
+    try {
+      const updated = await command.mutateAsync({
+        sessionId: session.id,
+        command: nextCommand,
+      });
+      onSessionChange(updated);
+    } catch (error) {
+      if (nextCommand.kind === "close" && onCloseError) {
+        onCloseError(normalizePlaybackCommandError(error));
+        return;
+      }
+      throw error;
+    }
   }
 
   async function handleVolume(nextVolume: number) {
@@ -130,6 +141,30 @@ export function PlayerControls({
       </div>
     </motion.section>
   );
+}
+
+function normalizePlaybackCommandError(error: unknown): AppError {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    "message" in error
+  ) {
+    return {
+      code: String((error as { code: unknown }).code),
+      message: String((error as { message: unknown }).message),
+      recoverable:
+        "recoverable" in error
+          ? Boolean((error as { recoverable: unknown }).recoverable)
+          : true,
+    };
+  }
+
+  return {
+    code: "playback.command_failed",
+    message: "Native mpv command failed",
+    recoverable: true,
+  };
 }
 
 function formatPosition(seconds: number) {

@@ -36,6 +36,7 @@ pub fn run() {
             commands::playback::playback_open,
             commands::playback::playback_get_session,
             commands::playback::playback_command,
+            commands::playback::playback_update_surface_bounds,
             commands::settings::settings_get,
             commands::settings::settings_update,
             commands::settings::settings_get_material_state,

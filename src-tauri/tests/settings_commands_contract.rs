@@ -5,7 +5,9 @@ use lumi_lib::{
     commands::settings as settings_commands,
     errors::AppResult,
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
-    player::{MpvBackend, MpvEventSink, MpvOpenRequest, PlaybackCommand},
+    player::{
+        record_playback_diagnostic, MpvBackend, MpvEventSink, MpvOpenRequest, PlaybackCommand,
+    },
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
         ProviderKind, ServerProfile,
@@ -75,9 +77,22 @@ fn settings_exports_redacted_recent_logs() {
 
     assert!(export.file_name.starts_with("lumi-logs-"));
     assert!(export.contents.contains("Lumi diagnostics export"));
+    assert!(export.contents.contains("playbackDiagnostics:"));
     assert!(export.contents.contains("server: server-1"));
     assert!(export.contents.contains(&profile.name));
     assert!(!export.contents.contains("token-value"));
+}
+
+#[test]
+fn settings_exports_recent_playback_diagnostics() {
+    let state = test_state(Arc::new(FakeMpvBackend::default()));
+    record_playback_diagnostic("mpv event PLAYBACK_RESTART session=session-test");
+
+    let export = settings_commands::export_logs_for_state(&state).expect("export logs");
+
+    assert!(export
+        .contents
+        .contains("mpv event PLAYBACK_RESTART session=session-test"));
 }
 
 fn test_state(backend: Arc<dyn MpvBackend>) -> AppState {

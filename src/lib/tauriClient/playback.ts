@@ -5,6 +5,7 @@ import type {
   PlaybackErrorEvent,
   PlaybackPositionEvent,
   PlaybackCommandRequest,
+  PlaybackSurfaceBounds,
   PlayerOpenRequest,
   PlayerSession,
 } from "./types";
@@ -22,6 +23,9 @@ export const playback = {
   },
   command(request: PlaybackCommandRequest) {
     return invoke<PlayerSession>("playback_command", { request });
+  },
+  updateSurfaceBounds(bounds: PlaybackSurfaceBounds) {
+    return invoke<void>("playback_update_surface_bounds", { bounds });
   },
   onStateChanged(handler: (session: PlayerSession) => void) {
     return listen<PlayerSession>(PLAYBACK_STATE_CHANGED, (event) => {

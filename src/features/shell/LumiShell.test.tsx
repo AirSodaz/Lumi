@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 
 const windowApiMocks = vi.hoisted(() => ({
   close: vi.fn(),
+  destroy: vi.fn(),
   minimize: vi.fn(),
   startDragging: vi.fn(),
   toggleMaximize: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: vi.fn(() => ({
     close: windowApiMocks.close,
+    destroy: windowApiMocks.destroy,
     minimize: windowApiMocks.minimize,
     startDragging: windowApiMocks.startDragging,
     toggleMaximize: windowApiMocks.toggleMaximize,
@@ -925,6 +927,105 @@ describe("LumiShell", () => {
         command: { kind: "close" },
       },
     });
+  });
+
+  it("destroys the player window after the close button receives a closed session", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      const request = (args as CommandArgs | undefined)?.request;
+      if (command === "playback_get_session") {
+        return Promise.resolve({
+          id: "session-1",
+          serverId: "server-1",
+          itemId: "movie-1",
+          state: "playing",
+          positionSeconds: 0,
+        });
+      }
+      if (command === "playback_command") {
+        return Promise.resolve({
+          id: request?.sessionId ?? "session-1",
+          serverId: "server-1",
+          itemId: "movie-1",
+          state: "closed",
+          positionSeconds: 0,
+        });
+      }
+      return mockBrowsingCommandsFallback(command, args);
+    });
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Close player" }));
+    await waitFor(() => expect(windowApiMocks.destroy).toHaveBeenCalledTimes(1));
+  });
+
+  it("destroys the player window when the close command rejects", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "playback_get_session") {
+        return Promise.resolve({
+          id: "session-1",
+          serverId: "server-1",
+          itemId: "movie-1",
+          state: "playing",
+          positionSeconds: 0,
+        });
+      }
+      if (command === "playback_command") {
+        return Promise.reject({
+          code: "playback.command_failed",
+          message: "Native mpv command failed",
+          recoverable: true,
+        });
+      }
+      return mockBrowsingCommandsFallback(command, args);
+    });
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Close player" }));
+
+    await waitFor(() => expect(windowApiMocks.destroy).toHaveBeenCalledTimes(1));
+  });
+
+  it("reports the measured video region bounds to the native playback surface", async () => {
+    mockBrowsingCommands();
+    window.history.replaceState(null, "", "/?view=player&sessionId=session-1");
+
+    render(<App />);
+
+    const videoRegion = await screen.findByLabelText("Video");
+    vi.spyOn(videoRegion, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 960,
+      height: 528,
+      top: 0,
+      right: 960,
+      bottom: 528,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    window.dispatchEvent(new Event("resize"));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("playback_update_surface_bounds", {
+        bounds: {
+          sessionId: "session-1",
+          x: 0,
+          y: 0,
+          width: 960,
+          height: 528,
+        },
+      }),
+    );
   });
 
   it("shows player window errors without exposing stream URLs or tokens", async () => {
