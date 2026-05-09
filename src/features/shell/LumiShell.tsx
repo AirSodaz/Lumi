@@ -29,6 +29,7 @@ import { MotionButton } from "../../components/motion";
 import { useI18n } from "../../lib/i18n";
 import {
   directionFromKey,
+  focusAdjacentScope,
   focusElement,
   focusFirstContentEntry,
   isAtScopeBoundary,
@@ -214,7 +215,7 @@ export function LumiShell() {
     }
 
     const direction = directionFromKey(event.key);
-    if (direction !== "left") {
+    if (!direction) {
       return;
     }
 
@@ -223,10 +224,22 @@ export function LumiShell() {
     const scope = focusable?.dataset.focusScope;
 
     if (
+      direction === "left" &&
       focusable &&
       scope &&
       isAtScopeBoundary(scope, focusable, direction) &&
       focusActiveNavigation()
+    ) {
+      event.preventDefault();
+      return;
+    }
+
+    if (
+      (direction === "down" || direction === "up") &&
+      focusable &&
+      scope &&
+      isAtScopeBoundary(scope, focusable, direction) &&
+      focusAdjacentScope(scope, focusable, direction)
     ) {
       event.preventDefault();
     }

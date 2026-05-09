@@ -927,20 +927,20 @@ describe("LumiShell", () => {
     expect(startViewTransitionMock).not.toHaveBeenCalled();
   });
 
-  it("moves from active sidebar navigation into the current media content with ArrowRight", async () => {
+  it("moves from active sidebar navigation into the Home featured carousel with ArrowRight", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
     render(<App />);
 
-    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
+    const featuredButton = await screen.findByRole("button", { name: "Random Feature" });
     const home = screen.getByRole("button", { name: "Home" });
     scrollIntoViewMock.mockClear();
 
     home.focus();
     await user.keyboard("{ArrowRight}");
 
-    expect(firstMovie).toHaveFocus();
+    expect(featuredButton).toHaveFocus();
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
@@ -1141,6 +1141,23 @@ describe("LumiShell", () => {
         request: { serverId: "server-1", itemId: "featured-2" },
       }),
     );
+  });
+
+  it("moves focus between the Home featured carousel and the first media rail", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const featuredButton = await screen.findByRole("button", { name: "Random Feature" });
+    const firstMovie = await screen.findByRole("button", { name: /Demo Movie/ });
+
+    featuredButton.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(firstMovie).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
+    expect(featuredButton).toHaveFocus();
   });
 
   it("keeps Home rail arrow navigation separate from focused carousel controls", async () => {
@@ -1986,7 +2003,7 @@ describe("LumiShell", () => {
     expect(await screen.findByRole("heading", { name: "Third Movie" })).toBeInTheDocument();
   });
 
-  it("keeps Home latest rail as a single horizontal row", async () => {
+  it("keeps Home latest rail horizontal while vertical arrows cross to adjacent rails", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
@@ -1994,6 +2011,7 @@ describe("LumiShell", () => {
 
     const second = await screen.findByRole("button", { name: /Second Movie/ });
     const third = await screen.findByRole("button", { name: /Third Movie/ });
+    const series = await screen.findByRole("button", { name: /Demo Series/ });
     scrollIntoViewMock.mockClear();
 
     second.focus();
@@ -2003,6 +2021,9 @@ describe("LumiShell", () => {
 
     second.focus();
     await user.keyboard("{ArrowDown}");
+    expect(series).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
     expect(second).toHaveFocus();
   });
 

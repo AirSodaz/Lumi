@@ -95,6 +95,48 @@ export function isAtScopeBoundary(
   ) === null;
 }
 
+export function focusAdjacentScope(
+  scope: string,
+  current: HTMLButtonElement,
+  direction: FocusDirection,
+) {
+  if (direction !== "down" && direction !== "up") {
+    return false;
+  }
+
+  const items = getFocusableItems(scope);
+  const index = items.indexOf(current);
+  if (index === -1) {
+    return false;
+  }
+
+  const roots = getScopeRootsWithItems();
+  const currentRootIndex = roots.findIndex(
+    (root) => root.dataset.focusScopeRoot === scope,
+  );
+  if (currentRootIndex === -1) {
+    return false;
+  }
+
+  const adjacentRoot =
+    findAdjacentScopeByGeometry(roots, roots[currentRootIndex], current, direction) ??
+    findAdjacentScopeByDomOrder(roots, currentRootIndex, direction);
+  if (!adjacentRoot) {
+    return false;
+  }
+
+  const targetItems = getFocusableItems(adjacentRoot.dataset.focusScopeRoot ?? "");
+  const target = findNearestHorizontalItem(targetItems, current) ??
+    targetItems[Math.min(index, targetItems.length - 1)];
+
+  if (!target) {
+    return false;
+  }
+
+  focusElement(target);
+  return true;
+}
+
 export function hasFocusableItems(scope: string) {
   return getFocusableItems(scope).length > 0;
 }
@@ -117,6 +159,96 @@ function getFocusableItems(scope: string) {
       `[data-focus-scope="${scope}"]:not(:disabled)`,
     ),
   );
+}
+
+function getScopeRootsWithItems() {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>("[data-focus-scope-root]"),
+  ).filter((root) => {
+    const scope = root.dataset.focusScopeRoot;
+    return scope ? getFocusableItems(scope).length > 0 : false;
+  });
+}
+
+function findAdjacentScopeByGeometry(
+  roots: HTMLElement[],
+  currentRoot: HTMLElement,
+  current: HTMLButtonElement,
+  direction: "down" | "up",
+) {
+  const currentRect = current.getBoundingClientRect();
+  const currentRootRect = currentRoot.getBoundingClientRect();
+
+  if (!hasLayout(currentRect) || !hasLayout(currentRootRect)) {
+    return null;
+  }
+
+  const candidates = roots
+    .filter((root) => root !== currentRoot)
+    .map((root) => ({ rect: root.getBoundingClientRect(), root }))
+    .filter(({ rect }) => {
+      if (!hasLayout(rect)) {
+        return false;
+      }
+
+      return direction === "down"
+        ? rect.top >= currentRootRect.bottom
+        : rect.bottom <= currentRootRect.top;
+    })
+    .sort((a, b) =>
+      direction === "down"
+        ? a.rect.top - b.rect.top
+        : b.rect.bottom - a.rect.bottom,
+    );
+
+  return candidates[0]?.root ?? null;
+}
+
+function findAdjacentScopeByDomOrder(
+  roots: HTMLElement[],
+  currentRootIndex: number,
+  direction: "down" | "up",
+) {
+  return direction === "down"
+    ? roots[currentRootIndex + 1] ?? null
+    : roots[currentRootIndex - 1] ?? null;
+}
+
+function findNearestHorizontalItem(
+  items: HTMLButtonElement[],
+  current: HTMLButtonElement,
+) {
+  const currentRect = current.getBoundingClientRect();
+  if (!hasLayout(currentRect)) {
+    return null;
+  }
+
+  const currentCenter = centerX(currentRect);
+  let closest: HTMLButtonElement | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (const item of items) {
+    const rect = item.getBoundingClientRect();
+    if (!hasLayout(rect)) {
+      return null;
+    }
+
+    const distance = Math.abs(centerX(rect) - currentCenter);
+    if (distance < closestDistance) {
+      closest = item;
+      closestDistance = distance;
+    }
+  }
+
+  return closest;
+}
+
+function centerX(rect: DOMRect) {
+  return rect.left + rect.width / 2;
+}
+
+function hasLayout(rect: DOMRect) {
+  return rect.width > 0 || rect.height > 0;
 }
 
 function columnsForScope(scope: string) {

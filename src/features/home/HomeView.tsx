@@ -361,6 +361,9 @@ export function HomeView({
         aria-labelledby="home-featured-title"
         aria-roledescription="carousel"
         className={`featured-hero ${featuredArtwork ? "has-art" : ""}`.trim()}
+        data-focus-columns={featured ? 1 : undefined}
+        data-focus-entry={featured ? "true" : undefined}
+        data-focus-scope-root={featured ? "home-featured" : undefined}
         data-motion-surface="featured-hero"
         onBlurCapture={handleFeaturedBlur}
         onFocusCapture={handleFeaturedFocus}
@@ -389,6 +392,7 @@ export function HomeView({
           <button
             aria-label={featuredTitle}
             className="featured-hero-button"
+            data-focus-scope="home-featured"
             onClick={() => onOpenMedia(featured)}
             ref={featuredButtonRef}
             type="button"
