@@ -1410,6 +1410,39 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.danger-action {
+  color: var(--color-danger, #f58a8a);
+}
+
+.server-lines-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.server-lines-list {
+  display: grid;
+  gap: 8px;
+}
+
+.server-line-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: var(--color-surface-control);
+}
+
+.server-line-form {
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
 .control-row {
   grid-template-columns: minmax(0, 1fr) 164px;
 }
@@ -1805,6 +1838,93 @@ select:focus-visible {
 }
 
 @media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    min-width: 0;
+  }
+
+  .lumi-shell {
+    --sidebar-current-width: 64px;
+    --sidebar-width: 64px;
+  }
+
+  .windows-titlebar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .titlebar-navigation,
+  .windows-titlebar-drag-region {
+    display: none;
+  }
+
+  .titlebar-window-button {
+    width: 38px;
+  }
+
+  .shell-sidebar {
+    gap: 18px;
+    margin-left: 8px;
+    padding-inline: 8px;
+  }
+
+  .brand-lockup {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 8px;
+    padding-inline: 0;
+  }
+
+  .brand-name,
+  .sidebar-toggle {
+    display: none;
+  }
+
+  .nav-button-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
+  }
+
+  .nav-button {
+    min-height: 42px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .shell-content {
+    padding: 12px 12px 24px;
+    scroll-padding: 18px;
+  }
+
+  .motion-page {
+    min-width: 0;
+  }
+
+  .section-heading,
+  .server-lines-header,
+  .dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-heading > .primary-action,
+  .server-lines-header > .secondary-action,
+  .dialog-actions > button {
+    width: 100%;
+  }
+
+  .settings-tabs {
+    overflow-x: auto;
+    grid-template-columns: repeat(4, minmax(112px, 1fr));
+  }
+
   .server-row {
     grid-template-columns: 36px minmax(0, 1fr);
   }
@@ -1812,6 +1932,19 @@ select:focus-visible {
   .server-row-actions {
     grid-column: 2;
     justify-self: start;
+    flex-wrap: wrap;
+  }
+
+  .server-line-row {
+    grid-template-columns: 1fr;
+  }
+
+  .server-line-row .server-row-actions {
+    grid-column: 1;
+  }
+
+  .server-current-action {
+    white-space: normal;
   }
 }
 

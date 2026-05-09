@@ -20,6 +20,26 @@ const demoServer = {
   providerKind: "emby",
   name: "Demo Server",
   baseUrl: "http://localhost:8096",
+  lines: [
+    {
+      id: "line-1",
+      serverId: "server-1",
+      name: "Primary",
+      baseUrl: "http://localhost:8096",
+      isActive: true,
+      createdAt: "2026-05-07T00:00:00Z",
+      updatedAt: "2026-05-07T00:00:00Z",
+    },
+    {
+      id: "line-2",
+      serverId: "server-1",
+      name: "Remote",
+      baseUrl: "https://remote.example.com/emby",
+      isActive: false,
+      createdAt: "2026-05-08T00:00:00Z",
+      updatedAt: "2026-05-08T00:00:00Z",
+    },
+  ],
   userId: "user-1",
   createdAt: "2026-05-07T00:00:00Z",
   updatedAt: "2026-05-07T00:00:00Z",
@@ -30,10 +50,27 @@ const secondServer = {
   providerKind: "emby",
   name: "Second Server",
   baseUrl: "http://localhost:8097",
+  lines: [
+    {
+      id: "line-3",
+      serverId: "server-2",
+      name: "Primary",
+      baseUrl: "http://localhost:8097",
+      isActive: true,
+      createdAt: "2026-05-07T00:00:00Z",
+      updatedAt: "2026-05-07T00:00:00Z",
+    },
+  ],
   userId: "user-2",
   createdAt: "2026-05-07T00:00:00Z",
   updatedAt: "2026-05-07T00:00:00Z",
 };
+
+function serverWithLines(
+  patch: Partial<typeof demoServer> & { lines?: typeof demoServer.lines },
+) {
+  return { ...demoServer, ...patch };
+}
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({
@@ -130,6 +167,70 @@ describe("SettingsView", () => {
           updatedAt: "2026-05-08T00:00:00Z",
         });
       }
+      if (command === "providers_create_server_line") {
+        return Promise.resolve(
+          serverWithLines({
+            lines: [
+              ...demoServer.lines,
+              {
+                id: "line-3",
+                serverId: "server-1",
+                name:
+                  (args as { request?: { name?: string } } | undefined)?.request?.name ??
+                  "Remote 2",
+                baseUrl:
+                  (args as { request?: { baseUrl?: string } } | undefined)?.request
+                    ?.baseUrl ?? "https://remote2.example.com/emby",
+                isActive: false,
+                createdAt: "2026-05-08T00:01:00Z",
+                updatedAt: "2026-05-08T00:01:00Z",
+              },
+            ],
+            updatedAt: "2026-05-08T00:01:00Z",
+          }),
+        );
+      }
+      if (command === "providers_select_server_line") {
+        return Promise.resolve(
+          serverWithLines({
+            baseUrl: "https://remote.example.com/emby",
+            lines: demoServer.lines.map((line) => ({
+              ...line,
+              isActive: line.id === "line-2",
+            })),
+            updatedAt: "2026-05-08T00:02:00Z",
+          }),
+        );
+      }
+      if (command === "providers_update_server_line") {
+        return Promise.resolve(
+          serverWithLines({
+            baseUrl: "https://remote.example.com/emby",
+            lines: demoServer.lines.map((line) =>
+              line.id === "line-2"
+                ? {
+                    ...line,
+                    name:
+                      (args as { request?: { name?: string } } | undefined)?.request
+                        ?.name ?? "Remote 2",
+                    baseUrl:
+                      (args as { request?: { baseUrl?: string } } | undefined)
+                        ?.request?.baseUrl ?? line.baseUrl,
+                  }
+                : line,
+            ),
+            updatedAt: "2026-05-08T00:03:00Z",
+          }),
+        );
+      }
+      if (command === "providers_delete_server_line") {
+        return Promise.resolve(
+          serverWithLines({
+            lines: demoServer.lines.filter((line) => line.id !== "line-2"),
+            updatedAt: "2026-05-08T00:04:00Z",
+          }),
+        );
+      }
       return Promise.resolve(null);
     });
   });
@@ -160,8 +261,70 @@ describe("SettingsView", () => {
     await user.click(await screen.findByRole("menuitem", { name: "View Server" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Demo Server" });
-    expect(within(dialog).getByText("http://localhost:8096")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("http://localhost:8096")).toHaveLength(2);
+    expect(within(dialog).getByText("Remote")).toBeInTheDocument();
+    expect(within(dialog).getByText("https://remote.example.com/emby")).toBeInTheDocument();
     expect(within(dialog).getByText("user-1")).toBeInTheDocument();
+  });
+
+  it("manages server lines from the server detail dialog", async () => {
+    const user = userEvent.setup();
+    renderSettingsView();
+
+    await screen.findByText("Demo Server");
+    expect(screen.getByText("2 lines")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "More actions for Demo Server" }));
+    await user.click(await screen.findByRole("menuitem", { name: "View Server" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Demo Server" });
+    await user.click(within(dialog).getByRole("button", { name: "Use line Remote" }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("providers_select_server_line", {
+        request: { serverId: "server-1", lineId: "line-2" },
+      }),
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Edit line Remote" }));
+    const nameInput = within(dialog).getByLabelText("Line name");
+    const urlInput = within(dialog).getByLabelText("Line URL");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Remote 2");
+    await user.clear(urlInput);
+    await user.type(urlInput, "https://remote2.example.com/emby");
+    await user.click(within(dialog).getByRole("button", { name: "Save line" }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("providers_update_server_line", {
+        request: {
+          serverId: "server-1",
+          lineId: "line-2",
+          name: "Remote 2",
+          baseUrl: "https://remote2.example.com/emby",
+        },
+      }),
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Add line" }));
+    await user.type(within(dialog).getByLabelText("Line name"), "Backup");
+    await user.type(within(dialog).getByLabelText("Line URL"), "https://backup.example.com");
+    await user.click(within(dialog).getByRole("button", { name: "Create line" }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("providers_create_server_line", {
+        request: {
+          serverId: "server-1",
+          name: "Backup",
+          baseUrl: "https://backup.example.com",
+        },
+      }),
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Delete line Remote" }));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("providers_delete_server_line", {
+        request: { serverId: "server-1", lineId: "line-2" },
+      }),
+    );
   });
 
   it("renames a saved server from the server menu", async () => {

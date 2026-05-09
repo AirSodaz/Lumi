@@ -10,7 +10,8 @@ use lumi_lib::{
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
-        HomeRowsRequest, ListChildrenRequest, LoginRequest, ProviderKind, ServerProfile,
+        HomeRowsRequest, ListChildrenRequest, LoginRequest, ProviderKind, ServerLine,
+        ServerProfile,
     },
 };
 use serde_json::{json, Value};
@@ -47,6 +48,9 @@ mod commands {
 
             assert!(profile.id.starts_with("emby-profile-"));
             assert_ne!(profile.id, "server-1");
+            assert_eq!(profile.lines.len(), 1);
+            assert_eq!(profile.lines[0].base_url, "http://localhost:8096");
+            assert!(profile.lines[0].is_active);
             assert_eq!(
                 provider_commands::list_servers_for_state(&state).expect("list servers"),
                 vec![profile]
@@ -164,6 +168,64 @@ mod commands {
                     .name,
                 profile.name
             );
+        }
+
+        #[test]
+        fn server_line_commands_manage_saved_server_lines() {
+            let state = test_state(vec![]);
+            let profile = seed_profile_with_token(&state);
+
+            let created = provider_commands::create_server_line_for_state(
+                &state,
+                provider_commands::CreateServerLineRequest {
+                    server_id: profile.id.clone(),
+                    name: "  Remote  ".into(),
+                    base_url: "https://remote.example.com/emby/".into(),
+                },
+            )
+            .expect("create line");
+
+            assert_eq!(created.base_url, "http://localhost:8096");
+            assert_eq!(created.lines.len(), 2);
+            let remote = created
+                .lines
+                .iter()
+                .find(|line| line.name == "Remote")
+                .expect("remote line")
+                .clone();
+            assert_eq!(remote.base_url, "https://remote.example.com/emby");
+            assert!(!remote.is_active);
+
+            let selected = provider_commands::select_server_line_for_state(
+                &state,
+                provider_commands::SelectServerLineRequest {
+                    server_id: profile.id.clone(),
+                    line_id: remote.id.clone(),
+                },
+            )
+            .expect("select line");
+
+            assert_eq!(selected.base_url, "https://remote.example.com/emby");
+            assert_eq!(selected.lines.iter().filter(|line| line.is_active).count(), 1);
+
+            let updated = provider_commands::update_server_line_for_state(
+                &state,
+                provider_commands::UpdateServerLineRequest {
+                    server_id: profile.id.clone(),
+                    line_id: remote.id.clone(),
+                    name: "Remote 2".into(),
+                    base_url: "https://remote2.example.com/emby".into(),
+                },
+            )
+            .expect("update line");
+
+            assert_eq!(updated.base_url, "https://remote2.example.com/emby");
+            assert!(updated.lines.iter().any(|line| {
+                line.id == remote.id
+                    && line.name == "Remote 2"
+                    && line.base_url == "https://remote2.example.com/emby"
+                    && line.is_active
+            }));
         }
     }
 
@@ -288,6 +350,15 @@ fn seed_profile_with_token(state: &AppState) -> ServerProfile {
         provider_kind: ProviderKind::Emby,
         name: "Demo Server".into(),
         base_url: "http://localhost:8096".into(),
+        lines: vec![ServerLine {
+            id: "line-1".into(),
+            server_id: "server-1".into(),
+            name: "Primary".into(),
+            base_url: "http://localhost:8096".into(),
+            is_active: true,
+            created_at: "2026-05-07T00:00:00Z".into(),
+            updated_at: "2026-05-07T00:00:00Z".into(),
+        }],
         user_id: "user-1".into(),
         created_at: "2026-05-07T00:00:00Z".into(),
         updated_at: "2026-05-07T00:00:00Z".into(),

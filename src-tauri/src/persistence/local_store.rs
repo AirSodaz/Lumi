@@ -61,6 +61,61 @@ impl LocalStore {
         })
     }
 
+    pub fn create_server_line(
+        &self,
+        server_id: &str,
+        name: &str,
+        base_url: &str,
+        updated_at: &str,
+    ) -> AppResult<ServerProfile> {
+        self.with_database(|database| {
+            ServerProfileRepository::new(database.connection()).create_line(
+                server_id, name, base_url, updated_at,
+            )
+        })
+    }
+
+    pub fn update_server_line(
+        &self,
+        server_id: &str,
+        line_id: &str,
+        name: &str,
+        base_url: &str,
+        updated_at: &str,
+    ) -> AppResult<ServerProfile> {
+        self.with_database(|database| {
+            ServerProfileRepository::new(database.connection()).update_line(
+                server_id, line_id, name, base_url, updated_at,
+            )
+        })
+    }
+
+    pub fn select_server_line(
+        &self,
+        server_id: &str,
+        line_id: &str,
+        updated_at: &str,
+    ) -> AppResult<ServerProfile> {
+        self.with_database(|database| {
+            ServerProfileRepository::new(database.connection()).select_line(
+                server_id, line_id, updated_at,
+            )
+        })
+    }
+
+    pub fn delete_server_line(
+        &self,
+        server_id: &str,
+        line_id: &str,
+        updated_at: &str,
+    ) -> AppResult<ServerProfile> {
+        self.with_database(|database| {
+            ServerProfileRepository::new(database.connection()).delete_line(
+                server_id, line_id, updated_at,
+            )
+        })
+    }
+
     pub fn delete_server_profile(&self, server_id: &str) -> AppResult<()> {
         self.with_database(|database| {
             ServerProfileRepository::new(database.connection()).delete(server_id)

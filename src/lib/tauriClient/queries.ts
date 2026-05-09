@@ -12,10 +12,15 @@ import { providers } from "./providers";
 import { settings } from "./settings";
 import type {
   AppSettingsPatch,
+  CreateServerLineRequest,
+  DeleteServerLineRequest,
   LogoutRequest,
   LoginManualRequest,
   PlaybackCommandRequest,
   PlayerOpenRequest,
+  SelectServerLineRequest,
+  ServerProfile,
+  UpdateServerLineRequest,
   UpdateServerProfileRequest,
 } from "./types";
 
@@ -163,6 +168,53 @@ export function useUpdateServerProfile() {
           : servers,
       );
       void queryClient.invalidateQueries({ queryKey: queryKeys.servers });
+    },
+  });
+}
+
+export function useCreateServerLine() {
+  return useServerLineMutation<CreateServerLineRequest>(providers.createServerLine);
+}
+
+export function useUpdateServerLine() {
+  return useServerLineMutation<UpdateServerLineRequest>(providers.updateServerLine);
+}
+
+export function useSelectServerLine() {
+  return useServerLineMutation<SelectServerLineRequest>(providers.selectServerLine);
+}
+
+export function useDeleteServerLine() {
+  return useServerLineMutation<DeleteServerLineRequest>(providers.deleteServerLine);
+}
+
+type ServerLineMutationRequest =
+  | CreateServerLineRequest
+  | UpdateServerLineRequest
+  | SelectServerLineRequest
+  | DeleteServerLineRequest;
+
+function useServerLineMutation<TRequest extends ServerLineMutationRequest>(
+  mutationFn: (request: TRequest) => Promise<ServerProfile>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn,
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.servers, (servers: unknown) =>
+        Array.isArray(servers)
+          ? servers.map((server) =>
+              isServerProfile(server) && server.id === updated.id ? updated : server,
+            )
+          : servers,
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.servers });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      void queryClient.invalidateQueries({ queryKey: ["children"] });
+      void queryClient.invalidateQueries({ queryKey: ["homeRows"] });
+      void queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      void queryClient.invalidateQueries({ queryKey: ["itemDetail"] });
     },
   });
 }

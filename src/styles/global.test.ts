@@ -60,7 +60,11 @@ describe("global rail styles", () => {
 
   it("keeps custom Windows caption buttons aligned with Win11 interaction affordances", () => {
     const controlsRule = getLastRule(".titlebar-window-controls");
-    const buttonRule = getLastRule(".titlebar-window-button");
+    const buttonRule = getRuleContaining(".titlebar-window-button", "width: 46px;");
+    const compactButtonRule = getRule(
+      "@media (max-width: 720px)",
+      ".titlebar-window-button",
+    );
     const buttonHoverRule = getRule(".titlebar-window-button:not(.close):hover");
     const buttonActiveRule = getRule(".titlebar-window-button:not(.close):active");
     const closeHoverRule = getRule(".titlebar-window-button.close:hover");
@@ -71,6 +75,7 @@ describe("global rail styles", () => {
     expect(buttonRule).toContain("width: 46px;");
     expect(buttonRule).toContain("height: 100%;");
     expect(buttonRule).toContain("border-radius: 0;");
+    expect(compactButtonRule).toContain("width: 38px;");
     expect(buttonHoverRule).toContain("background: var(--color-caption-button-hover);");
     expect(buttonActiveRule).toContain("background: var(--color-caption-button-active);");
     expect(closeHoverRule).toContain("background: var(--color-caption-close-hover);");
@@ -110,4 +115,28 @@ function getLastRule(selector: string) {
   const bodyEnd = globalCss.indexOf("}", bodyStart);
 
   return globalCss.slice(bodyStart + 1, bodyEnd);
+}
+
+function getRuleContaining(selector: string, declaration: string) {
+  let searchStart = 0;
+
+  while (searchStart < globalCss.length) {
+    const ruleStart = globalCss.indexOf(`${selector} {`, searchStart);
+
+    if (ruleStart === -1) {
+      break;
+    }
+
+    const bodyStart = globalCss.indexOf("{", ruleStart);
+    const bodyEnd = globalCss.indexOf("}", bodyStart);
+    const body = globalCss.slice(bodyStart + 1, bodyEnd);
+
+    if (body.includes(declaration)) {
+      return body;
+    }
+
+    searchStart = bodyEnd + 1;
+  }
+
+  throw new Error(`Missing CSS rule for ${selector} containing ${declaration}`);
 }

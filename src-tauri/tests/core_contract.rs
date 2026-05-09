@@ -12,7 +12,7 @@ use lumi_lib::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
         HomeRows, HomeRowsRequest, LibraryItem, LibraryItemDetail, ListChildrenRequest,
         ListFavoritesRequest, LoginRequest, MediaProvider, MediaSource, PagedResult,
-        PlaybackProgressUpdate, ProviderKind, ProviderRegistry, ServerProfile,
+        PlaybackProgressUpdate, ProviderKind, ProviderRegistry, ServerLine, ServerProfile,
     },
 };
 use serde_json::json;
@@ -167,6 +167,7 @@ fn media_command_helper_lists_favorites_from_state() {
         provider_kind: ProviderKind::Emby,
         name: "Demo Server".into(),
         base_url: "http://localhost:8096".into(),
+        lines: demo_lines("server-1"),
         user_id: "user-1".into(),
         created_at: "2026-05-07T00:00:00Z".into(),
         updated_at: "2026-05-07T00:00:00Z".into(),
@@ -237,6 +238,7 @@ impl MediaProvider for MockProvider {
             provider_kind: ProviderKind::Emby,
             name: "Demo Server".into(),
             base_url: "http://localhost:8096".into(),
+            lines: demo_lines("server-1"),
             user_id: "user-1".into(),
             created_at: "2026-05-07T00:00:00Z".into(),
             updated_at: "2026-05-07T00:00:00Z".into(),
@@ -305,6 +307,18 @@ impl MediaProvider for MockProvider {
     fn report_progress(&self, _progress: PlaybackProgressUpdate) -> AppResult<()> {
         Ok(())
     }
+}
+
+fn demo_lines(server_id: &str) -> Vec<ServerLine> {
+    vec![ServerLine {
+        id: "line-1".into(),
+        server_id: server_id.into(),
+        name: "Primary".into(),
+        base_url: "http://localhost:8096".into(),
+        is_active: true,
+        created_at: "2026-05-07T00:00:00Z".into(),
+        updated_at: "2026-05-07T00:00:00Z".into(),
+    }]
 }
 
 struct MockPlayerService;

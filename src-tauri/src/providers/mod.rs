@@ -14,11 +14,24 @@ pub enum ProviderKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ServerLine {
+    pub id: String,
+    pub server_id: String,
+    pub name: String,
+    pub base_url: String,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServerProfile {
     pub id: String,
     pub provider_kind: ProviderKind,
     pub name: String,
     pub base_url: String,
+    pub lines: Vec<ServerLine>,
     pub user_id: String,
     pub created_at: String,
     pub updated_at: String,
