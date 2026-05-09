@@ -147,6 +147,34 @@ export function HomeView({
     return () => window.clearInterval(timer);
   }, [canCycleFeatured, nextFeaturedId, prefersReducedMotion]);
 
+  const showNoServerHome = !server && !serversLoading;
+
+  if (showNoServerHome) {
+    return (
+      <section className="view-stack home-view app-workbench" aria-labelledby="home-title">
+        <h1 className="sr-only" id="home-title">{translate("nav.home")}</h1>
+        <motion.div
+          aria-labelledby="home-no-server-title"
+          className="home-no-server"
+          data-motion-surface="home-no-server"
+          {...createSurfaceMotion(reducedMotion, 0)}
+        >
+          <div className="home-no-server-copy">
+            <span className="workbench-kicker">{translate("home.noServer.kicker")}</span>
+            <h2 id="home-no-server-title">{translate("home.noServer.title")}</h2>
+            <p>{translate("home.noServer.description")}</p>
+            <div className="home-no-server-actions">
+              <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
+                <Server aria-hidden="true" size={15} />
+                <span>{translate("home.action.addServer")}</span>
+              </MotionButton>
+            </div>
+          </div>
+        </motion.div>
+      </section>
+    );
+  }
+
   return (
     <section className="view-stack home-view app-workbench" aria-labelledby="home-title">
       <h1 className="sr-only" id="home-title">{translate("nav.home")}</h1>
@@ -182,7 +210,6 @@ export function HomeView({
                 key={featuredMotionKey}
                 {...featuredCopyMotion}
               >
-              <span className="workbench-kicker">{translate("home.featured.featured")}</span>
               <span className="featured-title-wrap">
                 {featured.logoUrl ? (
                   <img

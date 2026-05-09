@@ -917,6 +917,7 @@ describe("LumiShell", () => {
 
     expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
     expect(screen.getByText("A random library pick.")).toBeInTheDocument();
+    expect(screen.queryByText("Featured")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Demo Movie" })).not.toBeInTheDocument();
 
     const featuredHero = document.querySelector(".featured-hero");
@@ -939,6 +940,26 @@ describe("LumiShell", () => {
     expect(screen.queryByRole("button", { name: "More Info" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Next featured item" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Previous featured item" })).not.toBeInTheDocument();
+  });
+
+  it("shows a focused no-server Home state and opens the Add Server dialog from it", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Connect your media library" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Add an Emby server to make Lumi feel like home.")).toBeInTheDocument();
+    expect(screen.queryByText("Continue Watching")).not.toBeInTheDocument();
+    expect(screen.queryByText("Media Libraries")).not.toBeInTheDocument();
+    expect(screen.queryByText("Latest in Movies")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Add Server" }));
+
+    expect(await screen.findByRole("heading", { name: "Settings", hidden: true })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Add Emby Server" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Server URL")).toHaveFocus();
   });
 
   it("uses fallback text for featured items without logo artwork", async () => {

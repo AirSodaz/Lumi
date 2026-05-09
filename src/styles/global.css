@@ -837,6 +837,65 @@ select:focus-visible {
   box-shadow: var(--shadow-focus);
 }
 
+.home-no-server {
+  position: relative;
+  display: grid;
+  min-height: clamp(320px, 44vw, 500px);
+  align-items: end;
+  overflow: hidden;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 20px;
+  padding: 42px;
+  background:
+    radial-gradient(circle at 18% 20%, rgb(143 216 202 / 22%), transparent 30%),
+    linear-gradient(135deg, rgb(19 28 32 / 92%), rgb(10 12 15 / 96%));
+  box-shadow: var(--shadow-panel);
+  isolation: isolate;
+}
+
+.home-no-server::before {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(0 0 0 / 34%), transparent 58%),
+    linear-gradient(0deg, rgb(0 0 0 / 54%), transparent 72%);
+  content: "";
+  pointer-events: none;
+}
+
+.home-no-server-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  max-width: min(560px, 72%);
+  gap: 12px;
+}
+
+.home-no-server-copy h2 {
+  margin: 0;
+  max-width: 560px;
+  overflow-wrap: anywhere;
+  font-size: clamp(40px, 6vw, 74px);
+  font-weight: 760;
+  line-height: 0.96;
+  text-wrap: balance;
+}
+
+.home-no-server-copy p {
+  margin: 0;
+  max-width: 480px;
+  color: rgb(247 244 237 / 76%);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.home-no-server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
 @keyframes featured-drift {
   from {
     transform: scale(1.025) translateX(0);
@@ -1976,6 +2035,15 @@ select:focus-visible {
 
   .featured-copy {
     max-width: min(520px, 72%);
+  }
+
+  .home-no-server {
+    min-height: clamp(300px, 52vw, 440px);
+    padding: 30px;
+  }
+
+  .home-no-server-copy {
+    max-width: min(520px, 82%);
   }
 
   .library-grid[data-grid-orientation="portrait"] {

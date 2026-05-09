@@ -58,6 +58,18 @@ describe("global rail styles", () => {
     expect(reducedMotionRule).toContain("animation: none;");
   });
 
+  it("styles the no-server Home entry as a stable standalone setup surface", () => {
+    const noServerRule = getRule(".home-no-server");
+    const noServerActionsRule = getRule(".home-no-server-actions");
+
+    expect(noServerRule).toContain("min-height: clamp(320px, 44vw, 500px);");
+    expect(noServerRule).toContain("display: grid;");
+    expect(noServerRule).toContain("border: 1px solid var(--color-border-soft);");
+    expect(noServerRule).toContain("border-radius: 20px;");
+    expect(noServerActionsRule).toContain("display: flex;");
+    expect(noServerActionsRule).toContain("flex-wrap: wrap;");
+  });
+
   it("keeps custom Windows caption buttons aligned with Win11 interaction affordances", () => {
     const controlsRule = getLastRule(".titlebar-window-controls");
     const buttonRule = getRuleContaining(".titlebar-window-button", "width: 46px;");

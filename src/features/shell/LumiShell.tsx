@@ -84,6 +84,7 @@ export function LumiShell() {
     current: initialRoute,
     forwardStack: [],
   }));
+  const [openAddServerDialog, setOpenAddServerDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     readSidebarCollapsedPreference,
   );
@@ -176,6 +177,11 @@ export function LumiShell() {
   function selectActiveServer(serverId: string) {
     setPreferredServerId(serverId);
     writeSelectedServerPreference(serverId);
+  }
+
+  function openSettingsForAddServer() {
+    setOpenAddServerDialog(true);
+    setRouteWithTransition({ kind: "view", view: "settings" });
   }
 
   function toggleSidebarCollapsed() {
@@ -275,6 +281,8 @@ export function LumiShell() {
       case "settings":
         currentView = (
           <SettingsView
+            openAddServerDialog={openAddServerDialog}
+            onAddServerDialogOpenChange={setOpenAddServerDialog}
             onSelectServer={selectActiveServer}
             selectedServerId={selectedServerId}
           />
@@ -288,9 +296,7 @@ export function LumiShell() {
             librariesLoading={librariesQuery.isLoading}
             onOpenLibrary={openLibrary}
             onOpenMedia={(item) => openMediaDetail(item, "home")}
-            onOpenSettings={() =>
-              setRouteWithTransition({ kind: "view", view: "settings" })
-            }
+            onOpenSettings={openSettingsForAddServer}
             selectedServer={selectedServer}
             servers={servers}
             serversLoading={serversQuery.isLoading}

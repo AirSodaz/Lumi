@@ -54,6 +54,8 @@ const panels: Array<{ id: SettingsPanel }> = [
 ];
 
 type SettingsViewProps = {
+  openAddServerDialog?: boolean;
+  onAddServerDialogOpenChange?: (open: boolean) => void;
   onSelectServer: (serverId: string) => void;
   selectedServerId: string | null;
 };
@@ -75,12 +77,15 @@ function languagePreferenceLabelKey(languagePreference: LanguagePreference) {
 }
 
 export function SettingsView({
+  openAddServerDialog = false,
+  onAddServerDialogOpenChange,
   onSelectServer,
   selectedServerId,
 }: SettingsViewProps) {
-  const [panel, setPanel] = useState<SettingsPanel>("servers");
+  const [selectedPanel, setSelectedPanel] = useState<SettingsPanel>("servers");
   const reducedMotion = useReducedMotion();
   const { translate } = useI18n();
+  const panel = openAddServerDialog ? "servers" : selectedPanel;
 
   return (
     <section className="settings-view app-workbench" aria-labelledby="settings-title">
@@ -92,7 +97,7 @@ export function SettingsView({
             <MotionButton
               aria-current={panel === item.id ? "page" : undefined}
               key={item.id}
-              onClick={() => setPanel(item.id)}
+              onClick={() => setSelectedPanel(item.id)}
               type="button"
             >
               {translate(panelLabelKey(item.id))}
@@ -109,6 +114,8 @@ export function SettingsView({
           >
             {panel === "servers" ? (
               <ServersPanel
+                addServerDialogOpen={openAddServerDialog}
+                onAddServerDialogOpenChange={onAddServerDialogOpenChange}
                 onSelectServer={onSelectServer}
                 selectedServerId={selectedServerId}
               />
@@ -124,11 +131,15 @@ export function SettingsView({
 }
 
 type ServersPanelProps = {
+  addServerDialogOpen: boolean;
+  onAddServerDialogOpenChange?: (open: boolean) => void;
   onSelectServer: (serverId: string) => void;
   selectedServerId: string | null;
 };
 
 function ServersPanel({
+  addServerDialogOpen,
+  onAddServerDialogOpenChange,
   onSelectServer,
   selectedServerId,
 }: ServersPanelProps) {
@@ -150,7 +161,10 @@ function ServersPanel({
               : translate("settings.server.zero")}
           </p>
         </div>
-        <AddServerDialog />
+        <AddServerDialog
+          externalOpen={addServerDialogOpen}
+          onExternalOpenChange={onAddServerDialogOpenChange}
+        />
       </div>
 
       <div className="settings-list">
@@ -274,9 +288,17 @@ function ServersPanel({
   );
 }
 
-function AddServerDialog() {
+type AddServerDialogProps = {
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
+};
+
+function AddServerDialog({
+  externalOpen,
+  onExternalOpenChange,
+}: AddServerDialogProps) {
   const { translate } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [baseUrl, setBaseUrl] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -284,13 +306,16 @@ function AddServerDialog() {
   const [error, setError] = useState<AppError | null>(null);
   const login = useLoginManual();
   const firstInputRef = useRef<HTMLInputElement>(null);
+  const controlled = onExternalOpenChange !== undefined;
+  const open = controlled ? Boolean(externalOpen) : internalOpen;
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
       setError(null);
     }
 
-    setOpen(nextOpen);
+    onExternalOpenChange?.(nextOpen);
+    setInternalOpen(nextOpen);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -307,7 +332,7 @@ function AddServerDialog() {
       });
       setDisplayName("");
       setPassword("");
-      setOpen(false);
+      handleOpenChange(false);
     } catch (caught) {
       setError(toAppError(caught, translate("app.error.unknown")));
     }
