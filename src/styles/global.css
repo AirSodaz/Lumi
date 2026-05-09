@@ -1,25 +1,26 @@
 @import "tailwindcss";
 
-:root {
-  --color-background: #050606;
-  --color-background-raised: #111417;
-  --color-surface-fallback: #181d20;
-  --color-surface-content-glass: rgb(255 255 255 / 9%);
-  --color-surface-content-glass-strong: rgb(255 255 255 / 15%);
-  --color-surface-control: rgb(255 255 255 / 12%);
-  --color-surface-control-hover: rgb(255 255 255 / 15%);
-  --color-border: rgb(255 255 255 / 16%);
-  --color-border-strong: rgb(255 255 255 / 28%);
-  --color-border-soft: rgb(255 255 255 / 10%);
-  --color-text-primary: #f7f4ed;
-  --color-text-secondary: rgb(247 244 237 / 74%);
-  --color-text-tertiary: rgb(247 244 237 / 54%);
-  --color-text-muted: rgb(247 244 237 / 42%);
-  --color-selected-text: #101211;
-  --color-selected-background: rgb(255 255 255 / 92%);
-  --color-selected-border: rgb(255 255 255 / 70%);
-  --color-accent: #8fd8ca;
-  --color-accent-strong: #f0c96a;
+:root,
+:root[data-theme="dark"] {
+  --color-background: #0b0f12;
+  --color-background-raised: #121820;
+  --color-surface-fallback: #161d25;
+  --color-surface-content-glass: rgb(229 238 242 / 9%);
+  --color-surface-content-glass-strong: rgb(229 238 242 / 15%);
+  --color-surface-control: rgb(229 238 242 / 11%);
+  --color-surface-control-hover: rgb(229 238 242 / 16%);
+  --color-border: rgb(229 238 242 / 15%);
+  --color-border-strong: rgb(229 238 242 / 28%);
+  --color-border-soft: rgb(229 238 242 / 9%);
+  --color-text-primary: #f4f7f8;
+  --color-text-secondary: rgb(244 247 248 / 74%);
+  --color-text-tertiary: rgb(244 247 248 / 55%);
+  --color-text-muted: rgb(244 247 248 / 42%);
+  --color-selected-text: #0d1114;
+  --color-selected-background: rgb(230 238 241 / 92%);
+  --color-selected-border: rgb(230 238 241 / 68%);
+  --color-accent: #82d3ca;
+  --color-accent-strong: #e6c46c;
   --color-danger-text: #fff;
   --color-danger-background: rgb(211 47 47 / 88%);
   --color-caption-button-hover: rgb(255 255 255 / 12%);
@@ -27,48 +28,48 @@
   --color-caption-close-hover: #c42b1c;
   --color-caption-close-active: #a4261d;
   --color-body-background:
-    linear-gradient(115deg, rgb(4 5 5 / 98%), rgb(10 13 14 / 96%) 42%, rgb(19 12 9 / 94%)),
-    linear-gradient(90deg, rgb(143 216 202 / 12%), rgb(240 201 106 / 9%));
+    linear-gradient(115deg, rgb(8 12 15 / 98%), rgb(12 17 22 / 96%) 46%, rgb(15 21 27 / 94%)),
+    linear-gradient(90deg, rgb(130 211 202 / 10%), rgb(230 196 108 / 6%));
   --color-shell-vignette:
-    radial-gradient(circle at 68% 14%, rgb(255 255 255 / 9%), transparent 24%),
-    radial-gradient(circle at 82% 78%, rgb(240 201 106 / 10%), transparent 30%),
-    linear-gradient(180deg, rgb(255 255 255 / 7%), transparent 36%),
-    rgb(5 6 6 / 82%);
+    radial-gradient(circle at 68% 14%, rgb(229 238 242 / 8%), transparent 24%),
+    radial-gradient(circle at 82% 78%, rgb(130 211 202 / 8%), transparent 30%),
+    linear-gradient(180deg, rgb(229 238 242 / 6%), transparent 36%),
+    rgb(9 13 16 / 84%);
   --color-titlebar-background:
-    linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 3%)),
-    rgb(14 16 17 / 64%);
+    linear-gradient(180deg, rgb(229 238 242 / 8%), rgb(229 238 242 / 3%)),
+    rgb(17 22 27 / 66%);
   --color-sidebar-background:
-    linear-gradient(180deg, rgb(255 255 255 / 12%), rgb(255 255 255 / 5%)),
-    rgb(10 11 12 / 56%);
+    linear-gradient(180deg, rgb(229 238 242 / 10%), rgb(229 238 242 / 4%)),
+    rgb(11 15 19 / 58%);
   --color-panel-background:
-    linear-gradient(180deg, rgb(255 255 255 / 12%), rgb(255 255 255 / 6%)),
-    rgb(12 13 14 / 46%);
+    linear-gradient(180deg, rgb(229 238 242 / 10%), rgb(229 238 242 / 5%)),
+    rgb(13 18 23 / 52%);
   --color-featured-background:
-    linear-gradient(180deg, rgb(255 255 255 / 10%), rgb(255 255 255 / 4%)),
-    rgb(10 12 13 / 50%);
+    linear-gradient(180deg, rgb(229 238 242 / 9%), rgb(229 238 242 / 4%)),
+    rgb(12 17 22 / 52%);
   --color-media-placeholder-background:
-    linear-gradient(135deg, rgb(247 244 237 / 18%), transparent 48%),
-    linear-gradient(145deg, #2d3d3e, #251f1b 58%, #101313);
+    linear-gradient(135deg, rgb(244 247 248 / 16%), transparent 48%),
+    linear-gradient(145deg, #293941, #19232c 58%, #10161b);
   --color-cinematic-background:
-    linear-gradient(130deg, #15191b, #090b0c 58%, #1b110c),
+    linear-gradient(130deg, #172027, #0d1217 58%, #111a21),
     var(--color-background-raised);
   --color-cinematic-backdrop:
-    linear-gradient(135deg, rgb(247 244 237 / 12%), transparent 42%),
-    linear-gradient(145deg, #263235, #0e1112 52%, #241510);
+    linear-gradient(135deg, rgb(244 247 248 / 11%), transparent 42%),
+    linear-gradient(145deg, #273740, #10171d 52%, #17232c);
   --color-cinematic-shade:
     linear-gradient(90deg, rgb(0 0 0 / 82%), rgb(0 0 0 / 50%) 44%, rgb(0 0 0 / 16%)),
     linear-gradient(0deg, rgb(0 0 0 / 82%), transparent 54%),
     linear-gradient(180deg, rgb(255 255 255 / 6%), transparent 28%);
-  --color-input-background: rgb(0 0 0 / 22%);
+  --color-input-background: rgb(3 7 10 / 34%);
   --color-dialog-overlay: rgb(0 0 0 / 54%);
   --color-dialog-background:
-    linear-gradient(180deg, rgb(255 255 255 / 13%), rgb(255 255 255 / 7%)),
-    color-mix(in srgb, var(--color-background-raised) 88%, transparent);
+    linear-gradient(180deg, rgb(229 238 242 / 12%), rgb(229 238 242 / 6%)),
+    color-mix(in srgb, var(--color-background-raised) 90%, transparent);
   --color-player-background:
     linear-gradient(180deg, rgb(0 0 0 / 22%), rgb(0 0 0 / 72%)),
     var(--color-background);
   --color-player-controls-background: rgb(12 14 15 / 96%);
-  --color-menu-background: rgb(18 20 21 / 94%);
+  --color-menu-background: rgb(18 24 30 / 95%);
   --color-primary-action-shadow: 0 14px 38px rgb(0 0 0 / 30%);
   --color-control-region-shadow: 0 -28px 70px rgb(0 0 0 / 44%);
   --font-system:
@@ -310,18 +311,18 @@ strong {
   --shell-top-offset: var(--macos-titlebar-safe-area);
   --sidebar-current-width: var(--macos-source-list-width);
   --sidebar-item-radius: 10px;
-  --sidebar-item-hover-background: rgb(255 255 255 / 8%);
-  --sidebar-item-pressed-background: rgb(255 255 255 / 11%);
-  --sidebar-item-selected-background: rgb(255 255 255 / 14%);
+  --sidebar-item-hover-background: rgb(229 238 242 / 9%);
+  --sidebar-item-pressed-background: rgb(229 238 242 / 13%);
+  --sidebar-item-selected-background: rgb(229 238 242 / 17%);
 }
 
 .lumi-shell[data-platform="windows"] {
   --windows-source-list-width: 238px;
   --sidebar-current-width: var(--windows-source-list-width);
   --sidebar-item-radius: 10px;
-  --sidebar-item-hover-background: rgb(255 255 255 / 9%);
-  --sidebar-item-pressed-background: rgb(255 255 255 / 13%);
-  --sidebar-item-selected-background: rgb(255 255 255 / 16%);
+  --sidebar-item-hover-background: rgb(229 238 242 / 10%);
+  --sidebar-item-pressed-background: rgb(229 238 242 / 14%);
+  --sidebar-item-selected-background: rgb(229 238 242 / 18%);
 }
 
 .lumi-shell[data-platform="macos"] .shell-vignette,

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use lumi_lib::{
-    app::{AppSettingsPatch, AppState, PlayerSettings, SubtitlePreference},
+    app::{AppSettingsPatch, AppState, PlayerSettings, SubtitlePreference, ThemePreference},
     commands::settings as settings_commands,
     errors::AppResult,
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
@@ -38,6 +38,41 @@ fn settings_update_persists_player_preferences() {
         }
     );
     assert_eq!(state.settings().player.default_volume, 72);
+}
+
+#[test]
+fn settings_update_persists_theme_across_state_reloads() {
+    let database = Database::open_in_memory().expect("open database");
+    database.initialize().expect("initialize database");
+    let local_store = Arc::new(LocalStore::new(database));
+    let state = AppState::with_services_and_player(
+        local_store.clone(),
+        Arc::new(MemoryCredentialStore::default()),
+        Arc::new(FakeEmbyTransport),
+        Arc::new(FixedClock),
+        Arc::new(FakePlayerBackend::default()),
+    );
+
+    let updated = settings_commands::update_settings_for_state(
+        &state,
+        AppSettingsPatch {
+            theme: Some(ThemePreference::Dark),
+            ..Default::default()
+        },
+    )
+    .expect("update settings");
+
+    assert_eq!(updated.theme, ThemePreference::Dark);
+
+    let reloaded = AppState::with_services_and_player(
+        local_store,
+        Arc::new(MemoryCredentialStore::default()),
+        Arc::new(FakeEmbyTransport),
+        Arc::new(FixedClock),
+        Arc::new(FakePlayerBackend::default()),
+    );
+
+    assert_eq!(reloaded.settings().theme, ThemePreference::Dark);
 }
 
 #[test]

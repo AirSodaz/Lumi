@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const globalCss = readFileSync("src/styles/global.css", "utf8");
+const globalCss = readFileSync("src/styles/global.css", "utf8").replace(/\r\n/g, "\n");
 
 describe("global rail styles", () => {
   it("keeps horizontal rails padded so hover and focus scale are not clipped", () => {
@@ -24,6 +24,19 @@ describe("global rail styles", () => {
     expect(lightThemeRule).toContain("--color-text-primary:");
     expect(lightThemeRule).toContain("--scrollbar-thumb:");
     expect(lightThemeRule).toContain("--shadow-panel:");
+  });
+
+  it("defines explicit neutral dark theme tokens for readable app chrome", () => {
+    const darkThemeRule = getRule(":root,\n:root[data-theme=\"dark\"]");
+
+    expect(darkThemeRule).toContain("--color-background: #0b0f12;");
+    expect(darkThemeRule).toContain("--color-background-raised: #121820;");
+    expect(darkThemeRule).toContain("--color-surface-fallback: #161d25;");
+    expect(darkThemeRule).toContain("--color-text-primary: #f4f7f8;");
+    expect(darkThemeRule).toContain("--color-selected-background: rgb(230 238 241 / 92%);");
+    expect(darkThemeRule).toContain("--color-body-background:");
+    expect(darkThemeRule).not.toContain("#251f1b");
+    expect(darkThemeRule).not.toContain("#1b110c");
   });
 
   it("styles the Home featured carousel as one full-stage hero surface", () => {

@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { I18nProvider, languagePreferenceStorageKey } from "../../lib/i18n";
-import { ThemeProvider, themePreferenceStorageKey } from "../../lib/theme";
+import { ThemeProvider } from "../../lib/theme";
 import { SettingsView } from "./SettingsView";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -77,13 +77,13 @@ function wrapper({ children }: { children: ReactNode }) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return (
-    <ThemeProvider>
-      <I18nProvider>
-        <QueryClientProvider client={client}>
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <I18nProvider>
           <Tooltip.Provider>{children}</Tooltip.Provider>
-        </QueryClientProvider>
-      </I18nProvider>
-    </ThemeProvider>
+        </I18nProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -125,15 +125,15 @@ describe("SettingsView", () => {
         });
       }
       if (command === "settings_update") {
+        const patch = (args as { patch?: { defaultVolume?: number; theme?: string } } | undefined)
+          ?.patch;
         return Promise.resolve({
           materialEffectsEnabled: true,
           player: {
-            defaultVolume:
-              (args as { patch?: { defaultVolume?: number } } | undefined)?.patch
-                ?.defaultVolume ?? 80,
+            defaultVolume: patch?.defaultVolume ?? 80,
             subtitlePreference: "serverDefault",
           },
-          theme: "system",
+          theme: patch?.theme ?? "system",
         });
       }
       if (command === "settings_get_material_state") {
@@ -435,26 +435,24 @@ describe("SettingsView", () => {
     ).toHaveLength(settingsUpdateCallsBefore.length);
   });
 
-  it("switches theme locally without updating backend settings", async () => {
+  it("switches theme through backend settings and updates the document theme", async () => {
     const user = userEvent.setup();
     renderSettingsView();
 
     await user.click(await screen.findByRole("button", { name: "Appearance" }));
     await screen.findByRole("heading", { name: "Appearance", level: 2 });
-    const settingsUpdateCallsBefore = invokeMock.mock.calls.filter(
-      ([command]) => command === "settings_update",
+
+    await user.selectOptions(screen.getByLabelText("Theme"), "dark");
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("settings_update", {
+        patch: { theme: "dark" },
+      }),
     );
-
-    await user.selectOptions(screen.getByLabelText("Theme"), "light");
-
-    expect(window.localStorage.getItem(themePreferenceStorageKey)).toBe("light");
-    expect(screen.getByLabelText("Theme")).toHaveValue("light");
-    expect(document.documentElement).toHaveAttribute("data-theme", "light");
-    expect(document.documentElement).toHaveAttribute("data-theme-preference", "light");
-    expect(document.documentElement.style.colorScheme).toBe("light");
-    expect(
-      invokeMock.mock.calls.filter(([command]) => command === "settings_update"),
-    ).toHaveLength(settingsUpdateCallsBefore.length);
+    expect(screen.getByLabelText("Theme")).toHaveValue("dark");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(document.documentElement).toHaveAttribute("data-theme-preference", "dark");
+    expect(document.documentElement.style.colorScheme).toBe("dark");
   });
 
   it("switches the current server from the servers list without updating backend settings", async () => {

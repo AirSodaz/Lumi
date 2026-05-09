@@ -144,6 +144,8 @@ impl AppState {
         clock: Arc<dyn Clock>,
         player_backend: Arc<dyn PlayerBackend>,
     ) -> Self {
+        let settings = local_store.settings().unwrap_or_default();
+
         Self {
             provider_registry: ProviderRegistry::default(),
             local_store,
@@ -152,7 +154,7 @@ impl AppState {
             clock,
             player_backend,
             player_sessions: Arc::new(PlaybackSessionStore::default()),
-            settings: RwLock::new(AppSettings::default()),
+            settings: RwLock::new(settings),
         }
     }
 
@@ -196,10 +198,11 @@ impl AppState {
     }
 
     pub fn update_settings(&self, patch: AppSettingsPatch) -> AppResult<AppSettings> {
-        let mut settings = self
+        let mut settings_guard = self
             .settings
             .write()
             .map_err(|_| AppError::state_lock_poisoned("settings"))?;
+        let mut settings = settings_guard.clone();
 
         if let Some(theme) = patch.theme {
             settings.theme = theme;
@@ -216,6 +219,10 @@ impl AppState {
         if let Some(subtitle_preference) = patch.subtitle_preference {
             settings.player.subtitle_preference = subtitle_preference;
         }
+
+        self.local_store.update_settings(&settings)?;
+
+        *settings_guard = settings.clone();
 
         Ok(settings.clone())
     }

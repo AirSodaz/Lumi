@@ -1,11 +1,12 @@
 use std::sync::Mutex;
 
 use crate::{
+    app::AppSettings,
     errors::{AppError, AppResult},
     providers::{LibraryItem, ProviderKind, ServerProfile},
 };
 
-use super::{Database, MediaCacheRepository, ServerProfileRepository};
+use super::{AppSettingsRepository, Database, MediaCacheRepository, ServerProfileRepository};
 
 pub struct LocalStore {
     database: Mutex<Database>,
@@ -69,9 +70,8 @@ impl LocalStore {
         updated_at: &str,
     ) -> AppResult<ServerProfile> {
         self.with_database(|database| {
-            ServerProfileRepository::new(database.connection()).create_line(
-                server_id, name, base_url, updated_at,
-            )
+            ServerProfileRepository::new(database.connection())
+                .create_line(server_id, name, base_url, updated_at)
         })
     }
 
@@ -84,9 +84,8 @@ impl LocalStore {
         updated_at: &str,
     ) -> AppResult<ServerProfile> {
         self.with_database(|database| {
-            ServerProfileRepository::new(database.connection()).update_line(
-                server_id, line_id, name, base_url, updated_at,
-            )
+            ServerProfileRepository::new(database.connection())
+                .update_line(server_id, line_id, name, base_url, updated_at)
         })
     }
 
@@ -97,9 +96,8 @@ impl LocalStore {
         updated_at: &str,
     ) -> AppResult<ServerProfile> {
         self.with_database(|database| {
-            ServerProfileRepository::new(database.connection()).select_line(
-                server_id, line_id, updated_at,
-            )
+            ServerProfileRepository::new(database.connection())
+                .select_line(server_id, line_id, updated_at)
         })
     }
 
@@ -110,15 +108,24 @@ impl LocalStore {
         updated_at: &str,
     ) -> AppResult<ServerProfile> {
         self.with_database(|database| {
-            ServerProfileRepository::new(database.connection()).delete_line(
-                server_id, line_id, updated_at,
-            )
+            ServerProfileRepository::new(database.connection())
+                .delete_line(server_id, line_id, updated_at)
         })
     }
 
     pub fn delete_server_profile(&self, server_id: &str) -> AppResult<()> {
         self.with_database(|database| {
             ServerProfileRepository::new(database.connection()).delete(server_id)
+        })
+    }
+
+    pub fn settings(&self) -> AppResult<AppSettings> {
+        self.with_database(|database| AppSettingsRepository::new(database.connection()).get())
+    }
+
+    pub fn update_settings(&self, settings: &AppSettings) -> AppResult<()> {
+        self.with_database(|database| {
+            AppSettingsRepository::new(database.connection()).update(settings)
         })
     }
 

@@ -1,7 +1,8 @@
 use lumi_lib::{
+    app::{AppSettings, PlayerSettings, SubtitlePreference, ThemePreference},
     persistence::{
-        CredentialKey, CredentialStore, Database, MediaCacheRepository, MemoryCredentialStore,
-        ServerProfileRepository,
+        AppSettingsRepository, CredentialKey, CredentialStore, Database, MediaCacheRepository,
+        MemoryCredentialStore, ServerProfileRepository,
     },
     providers::{LibraryItem, ProviderKind, ServerLine, ServerProfile},
 };
@@ -12,10 +13,34 @@ fn persistence_database_initialization_applies_schema_migrations() {
 
     database.initialize().expect("initialize database");
 
-    assert_eq!(database.applied_migration_versions().unwrap(), vec![1, 2]);
+    assert_eq!(
+        database.applied_migration_versions().unwrap(),
+        vec![1, 2, 3]
+    );
     assert!(database.table_exists("server_profiles").unwrap());
     assert!(database.table_exists("server_profile_lines").unwrap());
     assert!(database.table_exists("media_cache").unwrap());
+    assert!(database.table_exists("app_settings").unwrap());
+}
+
+#[test]
+fn persistence_app_settings_repository_reads_defaults_and_roundtrips_updates() {
+    let database = initialized_database();
+    let repository = AppSettingsRepository::new(database.connection());
+
+    assert_eq!(repository.get().unwrap(), AppSettings::default());
+
+    let updated = AppSettings {
+        theme: ThemePreference::Dark,
+        material_effects_enabled: false,
+        player: PlayerSettings {
+            default_volume: 72,
+            subtitle_preference: SubtitlePreference::Always,
+        },
+    };
+    repository.update(&updated).expect("persist app settings");
+
+    assert_eq!(repository.get().unwrap(), updated);
 }
 
 #[test]
@@ -85,7 +110,10 @@ fn persistence_server_profile_repository_manages_lines_and_current_base_url() {
         .expect("select remote line");
 
     assert_eq!(selected.base_url, "https://remote.example.com/emby");
-    assert_eq!(selected.lines.iter().filter(|line| line.is_active).count(), 1);
+    assert_eq!(
+        selected.lines.iter().filter(|line| line.is_active).count(),
+        1
+    );
     assert!(selected
         .lines
         .iter()

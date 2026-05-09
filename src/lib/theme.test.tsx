@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import {
   ThemeProvider,
   readThemePreference,
@@ -10,6 +12,12 @@ import {
   writeThemePreference,
   type ThemePreference,
 } from "./theme";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+const invokeMock = vi.mocked(invoke);
 
 function ThemeProbe() {
   const { resolvedTheme, setThemePreference, themePreference } = useTheme();
@@ -31,6 +39,15 @@ function ThemeProbe() {
 describe("theme", () => {
   afterEach(() => {
     window.localStorage.clear();
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue({
+      materialEffectsEnabled: true,
+      player: {
+        defaultVolume: 100,
+        subtitlePreference: "serverDefault",
+      },
+      theme: "system",
+    });
     vi.restoreAllMocks();
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-theme-preference");
@@ -56,19 +73,43 @@ describe("theme", () => {
     expect(window.localStorage.getItem(themePreferenceStorageKey)).toBe("dark");
   });
 
-  it("syncs the document theme and follows system changes while preference is system", async () => {
+  it("syncs the document theme from backend settings and follows system changes while preference is system", async () => {
     const user = userEvent.setup();
     const mediaQuery = createMatchMedia(false);
     vi.stubGlobal("matchMedia", mediaQuery.matchMedia);
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "settings_get") {
+        return Promise.resolve({
+          materialEffectsEnabled: true,
+          player: {
+            defaultVolume: 100,
+            subtitlePreference: "serverDefault",
+          },
+          theme: "dark",
+        });
+      }
+      if (command === "settings_update") {
+        return Promise.resolve({
+          materialEffectsEnabled: true,
+          player: {
+            defaultVolume: 100,
+            subtitlePreference: "serverDefault",
+          },
+          theme:
+            (args as { patch?: { theme?: ThemePreference } } | undefined)?.patch
+              ?.theme ?? "system",
+        });
+      }
 
-    window.localStorage.setItem(themePreferenceStorageKey, "dark" satisfies ThemePreference);
+      return Promise.resolve(null);
+    });
 
-    render(
-      <ThemeProvider>
-        <ThemeProbe />
-      </ThemeProvider>,
+    renderThemeProbe();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("preference")).toHaveTextContent("dark"),
     );
-
+    expect(invokeMock).toHaveBeenCalledWith("settings_get");
     expect(screen.getByTestId("preference")).toHaveTextContent("dark");
     expect(screen.getByTestId("resolved")).toHaveTextContent("dark");
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
@@ -79,7 +120,11 @@ describe("theme", () => {
 
     expect(screen.getByTestId("preference")).toHaveTextContent("light");
     expect(screen.getByTestId("resolved")).toHaveTextContent("light");
-    expect(window.localStorage.getItem(themePreferenceStorageKey)).toBe("light");
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("settings_update", {
+        patch: { theme: "light" },
+      }),
+    );
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
     expect(document.documentElement.style.colorScheme).toBe("light");
 
@@ -91,11 +136,27 @@ describe("theme", () => {
 
     mediaQuery.setMatches(true);
 
-    expect(await screen.findByText("dark")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("resolved")).toHaveTextContent("dark"),
+    );
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(document.documentElement.style.colorScheme).toBe("dark");
   });
 });
+
+function renderThemeProbe() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+
+  return render(
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <ThemeProbe />
+      </ThemeProvider>
+    </QueryClientProvider>,
+  );
+}
 
 function createMatchMedia(initialMatches: boolean) {
   let matches = initialMatches;

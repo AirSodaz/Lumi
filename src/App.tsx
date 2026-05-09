@@ -28,9 +28,9 @@ function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <ThemeProvider>
-        <I18nProvider>
-          <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <I18nProvider>
             {route.view === "player" ? (
               <PlayerWindowView controlsOnly={route.controlsOnly} sessionId={route.sessionId} />
             ) : (
@@ -38,9 +38,9 @@ function App() {
                 <LumiShell />
               </HashRouter>
             )}
-          </QueryClientProvider>
-        </I18nProvider>
-      </ThemeProvider>
+          </I18nProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
     </MotionConfig>
   );
 }

@@ -1,3 +1,4 @@
+mod app_settings;
 mod credentials;
 mod database;
 mod local_store;
@@ -7,6 +8,7 @@ mod server_profiles;
 
 use serde_json::json;
 
+pub use app_settings::AppSettingsRepository;
 pub use credentials::{
     CredentialKey, CredentialStore, MemoryCredentialStore, SystemCredentialStore,
 };
