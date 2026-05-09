@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { I18nProvider, languagePreferenceStorageKey } from "../../lib/i18n";
+import { ThemeProvider, themePreferenceStorageKey } from "../../lib/theme";
 import { SettingsView } from "./SettingsView";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -29,11 +30,13 @@ function wrapper({ children }: { children: ReactNode }) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return (
-    <I18nProvider>
-      <QueryClientProvider client={client}>
-        <Tooltip.Provider>{children}</Tooltip.Provider>
-      </QueryClientProvider>
-    </I18nProvider>
+    <ThemeProvider>
+      <I18nProvider>
+        <QueryClientProvider client={client}>
+          <Tooltip.Provider>{children}</Tooltip.Provider>
+        </QueryClientProvider>
+      </I18nProvider>
+    </ThemeProvider>
   );
 }
 
@@ -208,6 +211,28 @@ describe("SettingsView", () => {
     expect(await screen.findByRole("heading", { name: "设置" })).toBeInTheDocument();
     expect(screen.getByLabelText("语言")).toHaveValue("zh");
     expect(document.documentElement).toHaveAttribute("lang", "zh-CN");
+    expect(
+      invokeMock.mock.calls.filter(([command]) => command === "settings_update"),
+    ).toHaveLength(settingsUpdateCallsBefore.length);
+  });
+
+  it("switches theme locally without updating backend settings", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView />, { wrapper });
+
+    await user.click(await screen.findByRole("button", { name: "Appearance" }));
+    await screen.findByRole("heading", { name: "Appearance", level: 2 });
+    const settingsUpdateCallsBefore = invokeMock.mock.calls.filter(
+      ([command]) => command === "settings_update",
+    );
+
+    await user.selectOptions(screen.getByLabelText("Theme"), "light");
+
+    expect(window.localStorage.getItem(themePreferenceStorageKey)).toBe("light");
+    expect(screen.getByLabelText("Theme")).toHaveValue("light");
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(document.documentElement).toHaveAttribute("data-theme-preference", "light");
+    expect(document.documentElement.style.colorScheme).toBe("light");
     expect(
       invokeMock.mock.calls.filter(([command]) => command === "settings_update"),
     ).toHaveLength(settingsUpdateCallsBefore.length);

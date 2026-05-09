@@ -15,6 +15,7 @@ import {
 import { GlassPanel } from "../../components/layout";
 import { MotionButton } from "../../components/motion";
 import { useI18n, type LanguagePreference } from "../../lib/i18n";
+import { useTheme } from "../../lib/theme";
 import {
   createSurfaceMotion,
   dialogContentMotion,
@@ -470,6 +471,7 @@ function AppearancePanel() {
     setLanguagePreference,
     translate,
   } = useI18n();
+  const { setThemePreference, themePreference } = useTheme();
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const material = useMaterialState();
@@ -493,11 +495,9 @@ function AppearancePanel() {
           <select
             aria-label={translate("settings.appearance.theme")}
             onChange={(event) =>
-              updateSettings.mutate({
-                theme: event.target.value as ThemePreference,
-              })
+              setThemePreference(event.target.value as ThemePreference)
             }
-            value={current.theme}
+            value={themePreference}
           >
             <option value="system">{translate("settings.theme.system")}</option>
             <option value="light">{translate("settings.theme.light")}</option>

@@ -11,6 +11,20 @@ describe("global rail styles", () => {
     expect(railItemsRule).toContain("margin: -10px -12px -12px;");
     expect(railItemsRule).toContain("scroll-padding-inline: 14px;");
   });
+
+  it("defines light theme tokens for the app chrome and shared surfaces", () => {
+    const lightThemeRule = getRule(":root[data-theme=\"light\"]");
+
+    expect(lightThemeRule).toContain("--color-background:");
+    expect(lightThemeRule).toContain("--color-background-raised:");
+    expect(lightThemeRule).toContain("--color-surface-fallback:");
+    expect(lightThemeRule).toContain("--color-surface-content-glass:");
+    expect(lightThemeRule).toContain("--color-surface-control:");
+    expect(lightThemeRule).toContain("--color-border:");
+    expect(lightThemeRule).toContain("--color-text-primary:");
+    expect(lightThemeRule).toContain("--scrollbar-thumb:");
+    expect(lightThemeRule).toContain("--shadow-panel:");
+  });
 });
 
 function getRule(selector: string) {

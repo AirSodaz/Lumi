@@ -4,6 +4,7 @@ import { MotionConfig } from "motion/react";
 import { PlayerWindowView } from "./features/player/PlayerWindowView";
 import { LumiShell } from "./features/shell/LumiShell";
 import { I18nProvider } from "./lib/i18n";
+import { ThemeProvider } from "./lib/theme";
 import "./styles/global.css";
 
 function App() {
@@ -26,15 +27,17 @@ function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <I18nProvider>
-        <QueryClientProvider client={queryClient}>
-          {route.view === "player" ? (
-            <PlayerWindowView controlsOnly={route.controlsOnly} sessionId={route.sessionId} />
-          ) : (
-            <LumiShell />
-          )}
-        </QueryClientProvider>
-      </I18nProvider>
+      <ThemeProvider>
+        <I18nProvider>
+          <QueryClientProvider client={queryClient}>
+            {route.view === "player" ? (
+              <PlayerWindowView controlsOnly={route.controlsOnly} sessionId={route.sessionId} />
+            ) : (
+              <LumiShell />
+            )}
+          </QueryClientProvider>
+        </I18nProvider>
+      </ThemeProvider>
     </MotionConfig>
   );
 }

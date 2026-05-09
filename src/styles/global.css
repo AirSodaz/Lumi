@@ -7,13 +7,66 @@
   --color-surface-content-glass: rgb(255 255 255 / 9%);
   --color-surface-content-glass-strong: rgb(255 255 255 / 15%);
   --color-surface-control: rgb(255 255 255 / 12%);
+  --color-surface-control-hover: rgb(255 255 255 / 15%);
   --color-border: rgb(255 255 255 / 16%);
   --color-border-strong: rgb(255 255 255 / 28%);
+  --color-border-soft: rgb(255 255 255 / 10%);
   --color-text-primary: #f7f4ed;
   --color-text-secondary: rgb(247 244 237 / 74%);
   --color-text-tertiary: rgb(247 244 237 / 54%);
+  --color-text-muted: rgb(247 244 237 / 42%);
+  --color-selected-text: #101211;
+  --color-selected-background: rgb(255 255 255 / 92%);
+  --color-selected-border: rgb(255 255 255 / 70%);
   --color-accent: #8fd8ca;
   --color-accent-strong: #f0c96a;
+  --color-danger-text: #fff;
+  --color-danger-background: rgb(211 47 47 / 88%);
+  --color-body-background:
+    linear-gradient(115deg, rgb(4 5 5 / 98%), rgb(10 13 14 / 96%) 42%, rgb(19 12 9 / 94%)),
+    linear-gradient(90deg, rgb(143 216 202 / 12%), rgb(240 201 106 / 9%));
+  --color-shell-vignette:
+    radial-gradient(circle at 68% 14%, rgb(255 255 255 / 9%), transparent 24%),
+    radial-gradient(circle at 82% 78%, rgb(240 201 106 / 10%), transparent 30%),
+    linear-gradient(180deg, rgb(255 255 255 / 7%), transparent 36%),
+    rgb(5 6 6 / 82%);
+  --color-titlebar-background:
+    linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 3%)),
+    rgb(14 16 17 / 64%);
+  --color-sidebar-background:
+    linear-gradient(180deg, rgb(255 255 255 / 12%), rgb(255 255 255 / 5%)),
+    rgb(10 11 12 / 56%);
+  --color-panel-background:
+    linear-gradient(180deg, rgb(255 255 255 / 12%), rgb(255 255 255 / 6%)),
+    rgb(12 13 14 / 46%);
+  --color-featured-background:
+    linear-gradient(180deg, rgb(255 255 255 / 10%), rgb(255 255 255 / 4%)),
+    rgb(10 12 13 / 50%);
+  --color-media-placeholder-background:
+    linear-gradient(135deg, rgb(247 244 237 / 18%), transparent 48%),
+    linear-gradient(145deg, #2d3d3e, #251f1b 58%, #101313);
+  --color-cinematic-background:
+    linear-gradient(130deg, #15191b, #090b0c 58%, #1b110c),
+    var(--color-background-raised);
+  --color-cinematic-backdrop:
+    linear-gradient(135deg, rgb(247 244 237 / 12%), transparent 42%),
+    linear-gradient(145deg, #263235, #0e1112 52%, #241510);
+  --color-cinematic-shade:
+    linear-gradient(90deg, rgb(0 0 0 / 82%), rgb(0 0 0 / 50%) 44%, rgb(0 0 0 / 16%)),
+    linear-gradient(0deg, rgb(0 0 0 / 82%), transparent 54%),
+    linear-gradient(180deg, rgb(255 255 255 / 6%), transparent 28%);
+  --color-input-background: rgb(0 0 0 / 22%);
+  --color-dialog-overlay: rgb(0 0 0 / 54%);
+  --color-dialog-background:
+    linear-gradient(180deg, rgb(255 255 255 / 13%), rgb(255 255 255 / 7%)),
+    color-mix(in srgb, var(--color-background-raised) 88%, transparent);
+  --color-player-background:
+    linear-gradient(180deg, rgb(0 0 0 / 22%), rgb(0 0 0 / 72%)),
+    var(--color-background);
+  --color-player-controls-background: rgb(12 14 15 / 96%);
+  --color-menu-background: rgb(18 20 21 / 94%);
+  --color-primary-action-shadow: 0 14px 38px rgb(0 0 0 / 30%);
+  --color-control-region-shadow: 0 -28px 70px rgb(0 0 0 / 44%);
   --font-system:
     "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", ui-sans-serif,
     system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -47,6 +100,80 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme="light"] {
+  --color-background: #f5f3ee;
+  --color-background-raised: #fffaf2;
+  --color-surface-fallback: #ffffff;
+  --color-surface-content-glass: rgb(255 255 255 / 68%);
+  --color-surface-content-glass-strong: rgb(255 255 255 / 86%);
+  --color-surface-control: rgb(17 31 35 / 8%);
+  --color-surface-control-hover: rgb(17 31 35 / 13%);
+  --color-border: rgb(33 47 50 / 15%);
+  --color-border-strong: rgb(33 47 50 / 28%);
+  --color-border-soft: rgb(33 47 50 / 10%);
+  --color-text-primary: #142022;
+  --color-text-secondary: rgb(20 32 34 / 72%);
+  --color-text-tertiary: rgb(20 32 34 / 52%);
+  --color-text-muted: rgb(20 32 34 / 42%);
+  --color-selected-text: #f8fbf8;
+  --color-selected-background: rgb(20 32 34 / 92%);
+  --color-selected-border: rgb(20 32 34 / 78%);
+  --color-accent: #187a78;
+  --color-accent-strong: #9a6a09;
+  --color-body-background:
+    linear-gradient(115deg, rgb(247 245 239 / 98%), rgb(236 243 240 / 96%) 45%, rgb(255 247 231 / 94%)),
+    linear-gradient(90deg, rgb(24 122 120 / 12%), rgb(154 106 9 / 10%));
+  --color-shell-vignette:
+    radial-gradient(circle at 70% 12%, rgb(255 255 255 / 74%), transparent 24%),
+    radial-gradient(circle at 82% 78%, rgb(240 201 106 / 18%), transparent 30%),
+    linear-gradient(180deg, rgb(255 255 255 / 52%), transparent 38%),
+    rgb(246 244 238 / 72%);
+  --color-titlebar-background:
+    linear-gradient(180deg, rgb(255 255 255 / 84%), rgb(255 255 255 / 58%)),
+    rgb(246 244 238 / 74%);
+  --color-sidebar-background:
+    linear-gradient(180deg, rgb(255 255 255 / 82%), rgb(255 255 255 / 58%)),
+    rgb(255 255 255 / 64%);
+  --color-panel-background:
+    linear-gradient(180deg, rgb(255 255 255 / 86%), rgb(255 255 255 / 64%)),
+    rgb(255 255 255 / 58%);
+  --color-featured-background:
+    linear-gradient(180deg, rgb(255 255 255 / 86%), rgb(255 255 255 / 62%)),
+    rgb(255 255 255 / 54%);
+  --color-media-placeholder-background:
+    linear-gradient(135deg, rgb(24 122 120 / 14%), transparent 48%),
+    linear-gradient(145deg, #d7ebe7, #f7ebce 58%, #fffaf2);
+  --color-cinematic-background:
+    linear-gradient(130deg, #e7f0ed, #fffaf2 58%, #f5e3ca),
+    var(--color-background-raised);
+  --color-cinematic-backdrop:
+    linear-gradient(135deg, rgb(24 122 120 / 16%), transparent 42%),
+    linear-gradient(145deg, #cfebe7, #fff8ec 52%, #f3d8b6);
+  --color-cinematic-shade:
+    linear-gradient(90deg, rgb(255 255 255 / 84%), rgb(255 255 255 / 56%) 48%, rgb(255 255 255 / 20%)),
+    linear-gradient(0deg, rgb(255 255 255 / 74%), transparent 56%),
+    linear-gradient(180deg, rgb(20 32 34 / 8%), transparent 28%);
+  --color-input-background: rgb(255 255 255 / 72%);
+  --color-dialog-overlay: rgb(20 32 34 / 28%);
+  --color-dialog-background:
+    linear-gradient(180deg, rgb(255 255 255 / 90%), rgb(255 255 255 / 74%)),
+    color-mix(in srgb, var(--color-background-raised) 90%, transparent);
+  --color-player-background:
+    linear-gradient(180deg, rgb(255 255 255 / 18%), rgb(20 32 34 / 8%)),
+    var(--color-background);
+  --color-player-controls-background: rgb(255 255 255 / 88%);
+  --color-menu-background: rgb(255 255 255 / 94%);
+  --scrollbar-thumb: rgb(20 32 34 / 24%);
+  --scrollbar-thumb-hover: rgb(20 32 34 / 38%);
+  --scrollbar-track: rgb(20 32 34 / 6%);
+  --shadow-focus:
+    0 0 0 3px rgb(20 32 34 / 34%),
+    0 18px 46px rgb(20 32 34 / 18%);
+  --shadow-panel: 0 24px 70px rgb(36 43 39 / 16%);
+  --color-primary-action-shadow: 0 14px 34px rgb(36 43 39 / 18%);
+  --color-control-region-shadow: 0 -22px 50px rgb(36 43 39 / 14%);
 }
 
 * {
@@ -93,9 +220,7 @@ body,
 
 body {
   overflow: hidden;
-  background:
-    linear-gradient(115deg, rgb(4 5 5 / 98%), rgb(10 13 14 / 96%) 42%, rgb(19 12 9 / 94%)),
-    linear-gradient(90deg, rgb(143 216 202 / 12%), rgb(240 201 106 / 9%));
+  background: var(--color-body-background);
 }
 
 button,
@@ -172,11 +297,7 @@ strong {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 68% 14%, rgb(255 255 255 / 9%), transparent 24%),
-    radial-gradient(circle at 82% 78%, rgb(240 201 106 / 10%), transparent 30%),
-    linear-gradient(180deg, rgb(255 255 255 / 7%), transparent 36%),
-    rgb(5 6 6 / 82%);
+  background: var(--color-shell-vignette);
 }
 
 .windows-titlebar {
@@ -188,12 +309,10 @@ strong {
   grid-template-columns: auto auto minmax(96px, 1fr) auto;
   align-items: center;
   gap: 8px;
-  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  border-bottom: 1px solid var(--color-border-soft);
   padding: 0 4px 0 8px;
   color: var(--color-text-primary);
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 3%)),
-    rgb(14 16 17 / 64%);
+  background: var(--color-titlebar-background);
   backdrop-filter: blur(26px) saturate(1.12);
   user-select: none;
 }
@@ -257,7 +376,7 @@ strong {
 .titlebar-menu-trigger[data-state="open"],
 .titlebar-window-button:hover {
   color: var(--color-text-primary);
-  background: rgb(255 255 255 / 10%);
+  background: var(--color-surface-control);
 }
 
 .titlebar-icon-button:disabled {
@@ -266,8 +385,8 @@ strong {
 }
 
 .titlebar-window-button.close:hover {
-  color: #fff;
-  background: rgb(211 47 47 / 88%);
+  color: var(--color-danger-text);
+  background: var(--color-danger-background);
 }
 
 .titlebar-menu-content {
@@ -284,8 +403,8 @@ strong {
 }
 
 .titlebar-menu-item[aria-current="page"] {
-  color: #101211;
-  background: rgb(255 255 255 / 88%);
+  color: var(--color-selected-text);
+  background: var(--color-selected-background);
 }
 
 .titlebar-menu-item[data-disabled] {
@@ -318,9 +437,7 @@ strong {
   border: 1px solid var(--color-border);
   border-radius: 18px;
   padding: 14px 10px;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 12%), rgb(255 255 255 / 5%)),
-    rgb(10 11 12 / 56%);
+  background: var(--color-sidebar-background);
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(34px) saturate(1.2);
   overflow: hidden;
@@ -343,7 +460,7 @@ strong {
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 32%);
+  border: 1px solid var(--color-border-strong);
   border-radius: 50%;
   color: #101211;
   background: linear-gradient(145deg, #f8c3cc, #f4ebd7);
@@ -366,7 +483,7 @@ strong {
   border: 1px solid var(--color-border);
   border-radius: 50%;
   color: var(--color-text-secondary);
-  background: rgb(255 255 255 / 9%);
+  background: var(--color-surface-content-glass);
   transition:
     box-shadow var(--motion-focus-enter),
     background var(--motion-focus-enter),
@@ -375,7 +492,7 @@ strong {
 
 .sidebar-toggle:hover {
   color: var(--color-text-primary);
-  background: rgb(255 255 255 / 15%);
+  background: var(--color-surface-control-hover);
 }
 
 .primary-nav,
@@ -459,10 +576,10 @@ select:focus-visible {
 }
 
 .nav-button[aria-current="page"] {
-  border-color: rgb(255 255 255 / 74%);
-  color: #101211;
-  background: rgb(255 255 255 / 92%);
-  box-shadow: 0 16px 42px rgb(0 0 0 / 34%);
+  border-color: var(--color-selected-border);
+  color: var(--color-selected-text);
+  background: var(--color-selected-background);
+  box-shadow: var(--color-primary-action-shadow);
 }
 
 .lumi-shell[data-sidebar-collapsed="true"] .shell-sidebar {
@@ -529,7 +646,7 @@ select:focus-visible {
   align-items: end;
   justify-content: space-between;
   gap: 18px;
-  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  border-bottom: 1px solid var(--color-border-soft);
   padding: 8px 0 14px;
 }
 
@@ -580,11 +697,11 @@ select:focus-visible {
 .browser-toolbar {
   min-height: 44px;
   flex-wrap: wrap;
-  border: 1px solid rgb(255 255 255 / 11%);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 6px 8px;
   color: var(--color-text-secondary);
-  background: rgb(255 255 255 / 6%);
+  background: var(--color-surface-content-glass);
   backdrop-filter: blur(18px) saturate(1.12);
 }
 
@@ -623,12 +740,10 @@ select:focus-visible {
   align-items: stretch;
   gap: 16px;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 12%);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 12px;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 10%), rgb(255 255 255 / 4%)),
-    rgb(10 12 13 / 50%);
+  background: var(--color-featured-background);
   backdrop-filter: blur(26px) saturate(1.16);
 }
 
@@ -636,11 +751,9 @@ select:focus-visible {
   display: block;
   min-height: 126px;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background:
-    linear-gradient(135deg, rgb(247 244 237 / 18%), transparent 48%),
-    linear-gradient(145deg, #2d3d3e, #251f1b 58%, #101313);
+  background: var(--color-media-placeholder-background);
   background-position: center;
   background-size: cover;
 }
@@ -696,7 +809,7 @@ select:focus-visible {
   border: 0;
   border-radius: 50%;
   padding: 0;
-  background: rgb(255 255 255 / 36%);
+  background: var(--color-surface-control-hover);
   transition:
     background var(--motion-focus-enter),
     transform var(--motion-focus-enter);
@@ -709,7 +822,7 @@ select:focus-visible {
 
 .featured-carousel-dot:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgb(255 255 255 / 54%);
+  box-shadow: var(--shadow-focus);
 }
 
 .cinematic-header,
@@ -723,7 +836,7 @@ select:focus-visible {
 
 .eyebrow {
   margin-bottom: 8px;
-  color: rgb(247 244 237 / 72%);
+  color: var(--color-text-secondary);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
@@ -750,9 +863,7 @@ select:focus-visible {
   align-items: end;
   overflow: hidden;
   border-radius: 20px;
-  background:
-    linear-gradient(130deg, #15191b, #090b0c 58%, #1b110c),
-    var(--color-background-raised);
+  background: var(--color-cinematic-background);
   box-shadow: var(--shadow-panel);
   isolation: isolate;
 }
@@ -761,9 +872,7 @@ select:focus-visible {
   position: absolute;
   inset: -18px;
   z-index: 0;
-  background:
-    linear-gradient(135deg, rgb(247 244 237 / 12%), transparent 42%),
-    linear-gradient(145deg, #263235, #0e1112 52%, #241510);
+  background: var(--color-cinematic-backdrop);
   background-position: center;
   background-size: cover;
   filter: saturate(1.06);
@@ -775,10 +884,7 @@ select:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 1;
-  background:
-    linear-gradient(90deg, rgb(0 0 0 / 82%), rgb(0 0 0 / 50%) 44%, rgb(0 0 0 / 16%)),
-    linear-gradient(0deg, rgb(0 0 0 / 82%), transparent 54%),
-    linear-gradient(180deg, rgb(255 255 255 / 6%), transparent 28%);
+  background: var(--color-cinematic-shade);
 }
 
 .cinematic-hero-content {
@@ -801,10 +907,10 @@ select:focus-visible {
   min-width: 132px;
   aspect-ratio: 2 / 3;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 22%);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-poster);
   background: var(--color-surface-fallback);
-  box-shadow: 0 20px 62px rgb(0 0 0 / 48%);
+  box-shadow: var(--shadow-panel);
 }
 
 .hero-poster img {
@@ -827,7 +933,7 @@ select:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  color: rgb(247 244 237 / 84%);
+  color: var(--color-text-secondary);
   font-size: 14px;
   font-weight: 560;
 }
@@ -855,7 +961,7 @@ select:focus-visible {
   border-radius: 999px;
   padding: 0 12px;
   color: var(--color-text-secondary);
-  background: rgb(255 255 255 / 10%);
+  background: var(--color-surface-control);
   backdrop-filter: blur(18px);
 }
 
@@ -869,7 +975,7 @@ select:focus-visible {
   border-radius: 999px;
   padding: 0 12px;
   color: var(--color-text-primary);
-  background: rgb(255 255 255 / 10%);
+  background: var(--color-surface-control);
   backdrop-filter: blur(18px);
 }
 
@@ -992,7 +1098,7 @@ select:focus-visible {
 .library-card:hover,
 .library-card:focus-visible {
   z-index: 2;
-  border-color: rgb(255 255 255 / 46%);
+  border-color: var(--color-border-strong);
   box-shadow: var(--shadow-focus);
 }
 
@@ -1003,13 +1109,11 @@ select:focus-visible {
   aspect-ratio: 16 / 9;
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 13%);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   color: var(--color-text-tertiary);
-  background:
-    linear-gradient(135deg, rgb(247 244 237 / 18%), transparent 48%),
-    linear-gradient(145deg, #2d3d3e, #251f1b 58%, #101313);
-  box-shadow: 0 12px 30px rgb(0 0 0 / 28%);
+  background: var(--color-media-placeholder-background);
+  box-shadow: var(--shadow-panel);
   font-size: 12px;
 }
 
@@ -1057,7 +1161,7 @@ select:focus-visible {
   margin: 0 4px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgb(255 255 255 / 14%);
+  background: var(--color-surface-control);
 }
 
 .poster-progress span {
@@ -1092,10 +1196,8 @@ select:focus-visible {
 .server-row,
 .settings-row {
   border: 1px solid var(--color-border);
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 12%), rgb(255 255 255 / 6%)),
-    rgb(12 13 14 / 46%);
-  box-shadow: 0 18px 54px rgb(0 0 0 / 30%);
+  background: var(--color-panel-background);
+  box-shadow: var(--shadow-panel);
   backdrop-filter: blur(26px) saturate(1.15);
 }
 
@@ -1164,7 +1266,7 @@ select:focus-visible {
   border-radius: 12px;
   padding: 9px 11px;
   color: var(--color-text-primary);
-  background: rgb(0 0 0 / 22%);
+  background: var(--color-input-background);
 }
 
 .search-panel input {
@@ -1178,7 +1280,7 @@ select:focus-visible {
 }
 
 .search-panel input::placeholder {
-  color: rgb(247 244 237 / 42%);
+  color: var(--color-text-muted);
 }
 
 .settings-view {
@@ -1196,7 +1298,7 @@ select:focus-visible {
   border: 1px solid var(--color-border);
   border-radius: 16px;
   padding: 6px;
-  background: rgb(255 255 255 / 7%);
+  background: var(--color-surface-content-glass);
   backdrop-filter: blur(22px);
 }
 
@@ -1213,9 +1315,9 @@ select:focus-visible {
 }
 
 .settings-tabs button[aria-current="page"] {
-  border-color: rgb(255 255 255 / 64%);
-  color: #101211;
-  background: rgb(255 255 255 / 90%);
+  border-color: var(--color-selected-border);
+  color: var(--color-selected-text);
+  background: var(--color-selected-background);
 }
 
 .settings-panel,
@@ -1255,9 +1357,9 @@ select:focus-visible {
 }
 
 .primary-action {
-  color: #101211;
-  background: rgb(255 255 255 / 92%);
-  box-shadow: 0 14px 38px rgb(0 0 0 / 30%);
+  color: var(--color-selected-text);
+  background: var(--color-selected-background);
+  box-shadow: var(--color-primary-action-shadow);
 }
 
 .primary-action:disabled {
@@ -1269,7 +1371,7 @@ select:focus-visible {
 .icon-button {
   border: 1px solid var(--color-border);
   color: var(--color-text-primary);
-  background: rgb(255 255 255 / 11%);
+  background: var(--color-surface-control);
   backdrop-filter: blur(18px);
 }
 
@@ -1339,7 +1441,7 @@ select:focus-visible {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgb(0 0 0 / 54%);
+  background: var(--color-dialog-overlay);
   backdrop-filter: blur(12px);
 }
 
@@ -1355,10 +1457,8 @@ select:focus-visible {
   border-radius: 18px;
   padding: 16px;
   color: var(--color-text-primary);
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 13%), rgb(255 255 255 / 7%)),
-    color-mix(in srgb, var(--color-background-raised) 88%, transparent);
-  box-shadow: 0 32px 100px rgb(0 0 0 / 62%);
+  background: var(--color-dialog-background);
+  box-shadow: var(--shadow-panel);
   translate: -50% -50%;
   backdrop-filter: blur(30px) saturate(1.18);
 }
@@ -1426,11 +1526,12 @@ select:focus-visible {
   min-height: 0;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  background: rgb(0 0 0 / 82%);
+  background: var(--color-player-background);
 }
 
 .player-window.controls-only {
-  background: transparent;
+  grid-template-rows: 1fr;
+  background: var(--color-player-controls-background);
 }
 
 .player-video-region {
@@ -1529,11 +1630,11 @@ select:focus-visible {
   right: 10px;
   display: flex;
   gap: 4px;
-  border: 1px solid rgb(255 255 255 / 11%);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 3px;
-  background: rgb(14 15 16 / 48%);
-  box-shadow: 0 12px 34px rgb(0 0 0 / 38%);
+  background: var(--color-surface-content-glass);
+  box-shadow: var(--shadow-panel);
   backdrop-filter: blur(22px) saturate(1.14);
 }
 
@@ -1552,12 +1653,12 @@ select:focus-visible {
 
 .player-window-controls button:hover {
   color: var(--color-text-primary);
-  background: rgb(255 255 255 / 12%);
+  background: var(--color-surface-control);
 }
 
 .player-window-controls button.close:hover {
-  color: #fff;
-  background: rgb(211 47 47 / 88%);
+  color: var(--color-danger-text);
+  background: var(--color-danger-background);
 }
 
 .player-controls {
@@ -1568,15 +1669,11 @@ select:focus-visible {
   grid-column: 1 / -1;
   grid-template-columns: minmax(84px, auto) minmax(120px, 1fr) auto;
   gap: 12px;
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: 1px solid var(--color-border);
   border-radius: 18px;
   padding: 11px 13px;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 9%), rgb(255 255 255 / 4%)),
-    rgb(14 15 16 / 58%);
-  box-shadow:
-    0 20px 58px rgb(0 0 0 / 46%),
-    inset 0 1px 0 rgb(255 255 255 / 10%);
+  background: var(--color-panel-background);
+  box-shadow: var(--shadow-panel);
   backdrop-filter: blur(32px) saturate(1.22);
 }
 
@@ -1593,7 +1690,7 @@ select:focus-visible {
   overflow: hidden;
   height: 4px;
   border-radius: 999px;
-  background: rgb(255 255 255 / 17%);
+  background: var(--color-surface-control);
 }
 
 .player-progress-track span {
@@ -1601,7 +1698,7 @@ select:focus-visible {
   width: 38%;
   height: 100%;
   border-radius: inherit;
-  background: rgb(255 255 255 / 86%);
+  background: var(--color-selected-background);
 }
 
 .player-control-buttons {
@@ -1616,10 +1713,10 @@ select:focus-visible {
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 12%);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   color: var(--color-text-primary);
-  background: rgb(255 255 255 / 10%);
+  background: var(--color-surface-control);
 }
 
 .player-control-buttons button > span {
@@ -1668,8 +1765,8 @@ select:focus-visible {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   color: var(--color-text-primary);
-  background: rgb(18 20 21 / 94%);
-  box-shadow: 0 18px 46px rgb(0 0 0 / 42%);
+  background: var(--color-menu-background);
+  box-shadow: var(--shadow-panel);
   backdrop-filter: blur(18px);
 }
 
