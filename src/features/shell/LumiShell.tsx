@@ -322,10 +322,6 @@ export function LumiShell() {
           id="lumi-primary-sidebar"
         >
           <div className="brand-lockup">
-            <span className="brand-mark" aria-hidden="true">
-              L
-            </span>
-            <strong className="brand-name">Lumi</strong>
             <Tooltip.Root>
               <Tooltip.Trigger asChild>
                 <MotionButton

@@ -457,26 +457,13 @@ strong {
 
 .brand-lockup {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  grid-template-columns: 34px;
   align-items: center;
-  gap: 10px;
+  justify-content: end;
   padding: 0 6px;
   font-size: 15px;
 }
 
-.brand-mark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 50%;
-  color: #101211;
-  background: linear-gradient(145deg, #f8c3cc, #f4ebd7);
-  font-weight: 760;
-}
-
-.brand-name,
 .nav-button-label {
   min-width: 0;
   overflow: hidden;
@@ -598,7 +585,6 @@ select:focus-visible {
   padding-inline: 0;
 }
 
-.lumi-shell[data-sidebar-collapsed="true"] .brand-name,
 .lumi-shell[data-sidebar-collapsed="true"] .nav-button-label {
   display: none;
 }

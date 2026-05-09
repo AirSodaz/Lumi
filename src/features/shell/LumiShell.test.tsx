@@ -738,6 +738,17 @@ describe("LumiShell", () => {
     expect(window.localStorage.getItem("lumi.sidebarCollapsed")).toBe("false");
   });
 
+  it("keeps the sidebar toggle without rendering sidebar brand text or mark", async () => {
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home" });
+
+    const sidebar = screen.getByLabelText("Primary");
+    expect(within(sidebar).getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+    expect(within(sidebar).queryByText("Lumi")).not.toBeInTheDocument();
+    expect(within(sidebar).queryByText("L")).not.toBeInTheDocument();
+  });
+
   it("loads the persisted collapsed sidebar preference", async () => {
     window.localStorage.setItem("lumi.sidebarCollapsed", "true");
 
