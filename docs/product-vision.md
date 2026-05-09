@@ -2,6 +2,8 @@
 
 Lumi 是一个面向桌面的通用媒体聚合客户端。长期目标是把 Emby、Jellyfin、Plex、NAS、本地媒体目录等来源组织到同一套观影体验里；V1 只实现 Emby-first 观影闭环，先把连接、浏览、详情、播放、进度同步和基础设置做扎实。
 
+本文按 P8 收尾口径同步当前实现。没有真实 Emby server、libmpv 和跨平台机器参与的项目，只能记录为待人工验收，不能写成已通过。
+
 ## 产品定位
 
 - **产品形态**：Tauri 2 桌面客户端，不是网页管理后台，也不是服务端控制台。
@@ -27,6 +29,28 @@ V1 的成功标准是完成一条真实可用的 Emby 观影路径：
 
 V1 默认只支持手动 URL 连接。局域网发现、Emby Connect、远程穿透引导可以在后续版本进入规划。
 
+## V1 当前实现状态
+
+当前实现已经具备：
+
+- 手动 Emby URL 登录，服务器 profile 存 SQLite，token 存系统钥匙串。
+- Home 作为主要入口，包含 Continue Watching、Media Libraries、latest rails 和 featured carousel。
+- 媒体库从 Home 的 `Media Libraries` rail 进入，支持库、剧集、季、集和常见视频容器浏览。
+- 媒体详情展示海报、背景图、标题、年份、时长、简介、播放状态和播放入口。
+- Favorites 顶层页展示当前服务器的 Emby 收藏，V1 为只读列表并支持懒加载。
+- 播放通过 Rust `PlayerService` 打开独立播放器窗口，并由 runtime-loaded libmpv 承载。
+- 播放命令支持 play、pause、seek、volume、close。
+- 播放进度由 Rust 上报 Emby，播放中走 progress，退出走 stopped。
+- Settings 包含 Servers、Player、Appearance、Logs；日志导出不包含 token 或密码。
+- 轻量本地化已支持系统语言、英文和中文偏好。
+
+仍需人工验收：
+
+- 使用真实 Emby server 从登录、浏览、播放到退出后进度同步的完整 E2E。
+- Windows 11 的 Mica/Acrylic 真实窗口效果、播放器窗口、全屏和安装包。
+- 当前 macOS 的 Liquid Glass/vibrancy 可用范围、播放器窗口和打包限制。
+- 已 staged 或系统安装 libmpv 后的真实播放稳定性。
+
 ## 非 V1 范围
 
 以下能力不进入 V1 实现，但文档和代码边界要避免阻断后续扩展：
@@ -36,6 +60,8 @@ V1 默认只支持手动 URL 连接。局域网发现、Emby Connect、远程穿
 - 离线下载、后台同步、移动端或电视端原生应用。
 - 多服务器聚合搜索、跨 provider 去重和统一播放历史。
 - 商店渠道分发。V1 优先 GitHub Releases 直发。
+- 对收藏的写操作、跨服务器收藏聚合和跨 provider 去重。
+- 完整跨库搜索和智能推荐。
 
 ## Provider 策略
 
@@ -61,6 +87,8 @@ Lumi 的产品愿景是通用媒体聚合，但 V1 只写一个生产级 `EmbyPr
 - 键盘方向键和控制器能完成主要浏览与播放流程。
 - 播放退出后，Emby 上的播放进度与本地 UI 一致。
 - Windows 11 和当前 macOS 上能看到真实系统材质；旧系统有明确降级。
+
+P8 验收时，以上指标以 `docs/validation/v1-acceptance.md` 的状态为准。自动化命令只能证明 contract、类型、构建和单元覆盖，不能替代真实 Emby 与平台材质手测。
 
 ## 参考资料
 
