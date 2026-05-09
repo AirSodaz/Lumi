@@ -75,6 +75,7 @@ export type LibraryItem = {
   title: string;
   sortTitle?: string | null;
   posterUrl?: string | null;
+  logoUrl?: string | null;
   backdropUrl?: string | null;
   year?: number | null;
   runtimeSeconds?: number | null;

@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { motion, useReducedMotion } from "motion/react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Info, Server } from "lucide-react";
+import { Check, ChevronDown, Server } from "lucide-react";
 import { MediaRail } from "../../components/media";
 import { MotionButton } from "../../components/motion";
 import { useI18n } from "../../lib/i18n";
@@ -16,6 +16,10 @@ import {
 
 const FEATURED_CAROUSEL_INTERVAL_MS = 8_000;
 const EMPTY_FEATURED_ITEMS: LibraryItem[] = [];
+
+type FeaturedArtworkStyle = CSSProperties & {
+  "--featured-artwork": string;
+};
 
 type HomeViewProps = {
   libraries: LibraryItem[];
@@ -86,7 +90,10 @@ export function HomeView({
       : translate("home.featured.connectDescription"));
   const featuredArtwork = featured?.backdropUrl ?? featured?.posterUrl ?? null;
   const featuredArtworkStyle = featuredArtwork
-    ? ({ backgroundImage: `url("${featuredArtwork}")` } satisfies CSSProperties)
+    ? ({
+        "--featured-artwork": `url("${featuredArtwork}")`,
+        backgroundImage: `url("${featuredArtwork}")`,
+      } satisfies FeaturedArtworkStyle)
     : undefined;
 
   useEffect(() => {
@@ -100,18 +107,6 @@ export function HomeView({
 
     return () => window.clearInterval(timer);
   }, [canCycleFeatured, nextFeaturedId, prefersReducedMotion]);
-
-  function showPreviousFeatured() {
-    const previousIndex = featuredIndex === 0
-      ? featuredItems.length - 1
-      : featuredIndex - 1;
-    setSelectedFeaturedId(featuredItems[previousIndex]?.id ?? null);
-  }
-
-  function showNextFeatured() {
-    const nextIndex = (featuredIndex + 1) % featuredItems.length;
-    setSelectedFeaturedId(featuredItems[nextIndex]?.id ?? null);
-  }
 
   return (
     <section className="view-stack home-view app-workbench" aria-labelledby="home-title">
@@ -150,80 +145,77 @@ export function HomeView({
         </div>
       </header>
 
-      <motion.section
+      <motion.div
         aria-labelledby="home-featured-title"
-        className={`featured-shelf ${featuredArtwork ? "has-art" : ""}`.trim()}
-        data-motion-surface="featured-shelf"
+        className={`featured-hero ${featuredArtwork ? "has-art" : ""}`.trim()}
+        data-motion-surface="featured-hero"
+        key={featured?.id ?? "empty-featured"}
+        style={featuredArtworkStyle}
         {...createSurfaceMotion(reducedMotion, 0)}
       >
-        <span aria-hidden="true" className="featured-art" style={featuredArtworkStyle} />
-        <div className="featured-copy">
-          <span className="workbench-kicker">
-            {featured
-              ? translate("home.featured.featured")
-              : translate("home.featured.start")}
-          </span>
-          <h2 id="home-featured-title">{featuredTitle}</h2>
-          <p>{featuredDescription}</p>
-          <div className="featured-actions">
-            {featured ? (
-              <>
-                <MotionButton
-                  className="primary-action"
-                  onClick={() => onOpenMedia(featured)}
-                  type="button"
-                >
-                  <Info aria-hidden="true" size={15} />
-                  <span>{translate("home.action.moreInfo")}</span>
-                </MotionButton>
-                <span className="status-chip">{formatMetadata(featured, locale)}</span>
-                {canCycleFeatured ? (
-                  <div
-                    aria-label={translate("home.featured.carouselControls")}
-                    className="featured-carousel-controls"
-                  >
-                    <MotionButton
-                      aria-label={translate("home.featured.previous")}
-                      className="icon-button featured-carousel-button"
-                      onClick={showPreviousFeatured}
-                      type="button"
-                    >
-                      <ChevronLeft aria-hidden="true" size={15} />
-                    </MotionButton>
-                    <MotionButton
-                      aria-label={translate("home.featured.next")}
-                      className="icon-button featured-carousel-button"
-                      onClick={showNextFeatured}
-                      type="button"
-                    >
-                      <ChevronRight aria-hidden="true" size={15} />
-                    </MotionButton>
-                    <span className="featured-carousel-dots">
-                      {featuredItems.map((item, index) => (
-                        <button
-                          aria-label={translate("home.featured.showItem", {
-                            title: item.title,
-                          })}
-                          aria-pressed={index === featuredIndex}
-                          className="featured-carousel-dot"
-                          key={item.id}
-                          onClick={() => setSelectedFeaturedId(item.id)}
-                          type="button"
-                        />
-                      ))}
-                    </span>
-                  </div>
+        {featured ? (
+          <button
+            aria-label={featuredTitle}
+            className="featured-hero-button"
+            onClick={() => onOpenMedia(featured)}
+            type="button"
+          >
+            <span className="featured-copy">
+              <span className="workbench-kicker">{translate("home.featured.featured")}</span>
+              <span className="featured-title-wrap">
+                {featured.logoUrl ? (
+                  <img
+                    alt={featuredTitle}
+                    className="featured-title-logo"
+                    src={featured.logoUrl}
+                  />
                 ) : null}
-              </>
-            ) : (
+                <h2
+                  className={featured.logoUrl ? "sr-only" : "featured-title-text"}
+                  id="home-featured-title"
+                >
+                  {featuredTitle}
+                </h2>
+              </span>
+              <span className="featured-meta">{formatMetadata(featured, locale)}</span>
+              <span className="featured-description">{featuredDescription}</span>
+            </span>
+          </button>
+        ) : (
+          <div className="featured-hero-empty">
+            <div className="featured-copy">
+              <span className="workbench-kicker">{translate("home.featured.start")}</span>
+              <h2 className="featured-title-text" id="home-featured-title">
+                {featuredTitle}
+              </h2>
+              <p className="featured-description">{featuredDescription}</p>
               <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
                 <Server aria-hidden="true" size={15} />
                 <span>{translate("home.action.addServer")}</span>
               </MotionButton>
-            )}
+            </div>
           </div>
-        </div>
-      </motion.section>
+        )}
+        {canCycleFeatured ? (
+          <div
+            aria-label={translate("home.featured.carouselControls")}
+            className="featured-carousel-dots"
+          >
+            {featuredItems.map((item, index) => (
+              <button
+                aria-label={translate("home.featured.showItem", {
+                  title: item.title,
+                })}
+                aria-pressed={index === featuredIndex}
+                className="featured-carousel-dot"
+                key={item.id}
+                onClick={() => setSelectedFeaturedId(item.id)}
+                type="button"
+              />
+            ))}
+          </div>
+        ) : null}
+      </motion.div>
 
       <MediaRail
         emptyText={translate("home.empty.continueWatching")}

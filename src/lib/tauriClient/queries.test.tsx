@@ -140,6 +140,7 @@ describe("tauri query hooks", () => {
           serverId: "server-1",
           itemType: "movie",
           title: "Random Feature",
+          logoUrl: "http://localhost:8096/Items/featured-1/Images/Logo?tag=random-logo",
         },
       ],
     });
@@ -169,6 +170,9 @@ describe("tauri query hooks", () => {
       expect(result.current.data?.continueWatching[0]?.title).toBe("Demo Movie"),
     );
     expect(result.current.data?.featuredItems[0]?.title).toBe("Random Feature");
+    expect(result.current.data?.featuredItems[0]?.logoUrl).toBe(
+      "http://localhost:8096/Items/featured-1/Images/Logo?tag=random-logo",
+    );
     expect(invokeMock).toHaveBeenCalledWith("media_get_home_rows", {
       request: {
         continueWatchingLimit: 10,

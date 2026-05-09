@@ -803,9 +803,11 @@ impl EmbyClient {
 
     fn map_item(&self, item: EmbyItem, server_id: &str) -> AppResult<LibraryItem> {
         let title = item.name.unwrap_or_else(|| item.id.clone());
+        let image_tags = item.image_tags;
         let poster_tag = item
             .primary_image_tag
-            .or(item.image_tags.and_then(|tags| tags.primary));
+            .or_else(|| image_tags.as_ref().and_then(|tags| tags.primary.clone()));
+        let logo_tag = image_tags.and_then(|tags| tags.logo);
         let backdrop_tag = item
             .backdrop_image_tags
             .and_then(|tags| tags.into_iter().next());
@@ -828,6 +830,9 @@ impl EmbyClient {
             sort_title: item.sort_name,
             poster_url: poster_tag
                 .map(|tag| self.image_url(&item.id, "Primary", &tag))
+                .transpose()?,
+            logo_url: logo_tag
+                .map(|tag| self.image_url(&item.id, "Logo", &tag))
                 .transpose()?,
             backdrop_url: backdrop_tag
                 .map(|tag| self.image_url(&item.id, "Backdrop", &tag))
@@ -990,6 +995,7 @@ struct EmbyItem {
 #[serde(rename_all = "PascalCase")]
 struct EmbyImageTags {
     primary: Option<String>,
+    logo: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

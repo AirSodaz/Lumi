@@ -44,6 +44,7 @@ pub struct LibraryItem {
     pub title: String,
     pub sort_title: Option<String>,
     pub poster_url: Option<String>,
+    pub logo_url: Option<String>,
     pub backdrop_url: Option<String>,
     pub year: Option<u16>,
     pub runtime_seconds: Option<u32>,

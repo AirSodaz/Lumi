@@ -25,6 +25,22 @@ describe("global rail styles", () => {
     expect(lightThemeRule).toContain("--scrollbar-thumb:");
     expect(lightThemeRule).toContain("--shadow-panel:");
   });
+
+  it("styles the Home featured carousel as one full-stage hero surface", () => {
+    const featuredHeroRule = getRule(".featured-hero");
+    const featuredHeroBeforeRule = getRule(".featured-hero::before");
+    const featuredDotsRule = getRule(".featured-carousel-dots");
+    const featuredDotRule = getRule(".featured-carousel-dot");
+    const featuredActiveDotRule = getRule(".featured-carousel-dot[aria-pressed=\"true\"]");
+
+    expect(featuredHeroRule).toContain("min-height: clamp(300px, 42vw, 520px);");
+    expect(featuredHeroRule).toContain("background-image: var(--featured-artwork);");
+    expect(featuredHeroRule).not.toContain("grid-template-columns: minmax(178px, 28%) minmax(0, 1fr);");
+    expect(featuredHeroBeforeRule).toContain("background: var(--featured-shade);");
+    expect(featuredDotsRule).toContain("position: absolute;");
+    expect(featuredDotRule).toContain("width: 7px;");
+    expect(featuredActiveDotRule).toContain("width: 22px;");
+  });
 });
 
 function getRule(selector: string) {

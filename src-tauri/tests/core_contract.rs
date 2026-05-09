@@ -264,6 +264,7 @@ impl MediaProvider for MockProvider {
                 title: "Demo".into(),
                 sort_title: None,
                 poster_url: None,
+                logo_url: None,
                 backdrop_url: None,
                 year: None,
                 runtime_seconds: None,

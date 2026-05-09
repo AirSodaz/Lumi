@@ -242,7 +242,7 @@ mod providers {
                             "ProductionYear": 2026,
                             "RunTimeTicks": 72000000000u64,
                             "Overview": "A mapped item",
-                            "ImageTags": { "Primary": "movie-poster" },
+                            "ImageTags": { "Primary": "movie-poster", "Logo": "movie-logo" },
                             "BackdropImageTags": ["movie-backdrop"]
                         }],
                         "TotalRecordCount": 22
@@ -267,6 +267,7 @@ mod providers {
                         "http://localhost:8096/Items/library-1/Images/Primary?tag=poster-tag"
                             .into()
                     ),
+                    logo_url: None,
                     backdrop_url: Some(
                         "http://localhost:8096/Items/library-1/Images/Backdrop?tag=backdrop-tag"
                             .into()
@@ -293,6 +294,10 @@ mod providers {
             assert_eq!(
                 children.items[0].poster_url,
                 Some("http://localhost:8096/Items/movie-1/Images/Primary?tag=movie-poster".into())
+            );
+            assert_eq!(
+                children.items[0].logo_url,
+                Some("http://localhost:8096/Items/movie-1/Images/Logo?tag=movie-logo".into())
             );
 
             let children_request = transport.request_at(1);
@@ -352,7 +357,7 @@ mod providers {
                             "Name": "Random Feature",
                             "Type": "Movie",
                             "Overview": "A random library pick.",
-                            "ImageTags": { "Primary": "featured-poster" },
+                            "ImageTags": { "Primary": "featured-poster", "Logo": "featured-logo" },
                             "BackdropImageTags": ["featured-backdrop"],
                             "UserData": {
                                 "PlayedPercentage": 12.5,
@@ -390,6 +395,10 @@ mod providers {
             assert_eq!(rows.featured_items[0].title, "Random Feature");
             assert_eq!(rows.featured_items[0].item_type, "movie");
             assert_eq!(rows.featured_items[0].played_percentage, Some(12.5));
+            assert_eq!(
+                rows.featured_items[0].logo_url,
+                Some("http://localhost:8096/Items/featured-1/Images/Logo?tag=featured-logo".into())
+            );
             assert_eq!(
                 rows.featured_items[0].backdrop_url,
                 Some(

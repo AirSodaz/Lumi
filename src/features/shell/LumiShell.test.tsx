@@ -161,6 +161,7 @@ const randomFeature: LibraryItem = {
   title: "Random Feature",
   overview: "A random library pick.",
   backdropUrl: "http://localhost:8096/Items/featured-1/Images/Backdrop?tag=random-backdrop",
+  logoUrl: "http://localhost:8096/Items/featured-1/Images/Logo?tag=random-logo",
   posterUrl: "http://localhost:8096/Items/featured-1/Images/Primary?tag=random-poster",
 };
 
@@ -386,6 +387,24 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
     });
   }
   return Promise.resolve(null);
+}
+
+function getPosterCardButtonsByName(name: string | RegExp) {
+  return screen
+    .getAllByRole("button", { name })
+    .filter((button) => button.classList.contains("poster-card"));
+}
+
+async function findPosterCardButtonByName(name: string | RegExp) {
+  return await waitFor(() => {
+    const button = getPosterCardButtonsByName(name)[0];
+
+    if (!button) {
+      throw new Error(`Expected a poster card named ${String(name)}`);
+    }
+
+    return button;
+  });
 }
 
 describe("LumiShell", () => {
@@ -858,7 +877,7 @@ describe("LumiShell", () => {
     );
   });
 
-  it("prefers random library featured items in the Home carousel", async () => {
+  it("renders random featured items as a full-stage Home hero with logo artwork", async () => {
     mockBrowsingCommands();
 
     render(<App />);
@@ -867,29 +886,53 @@ describe("LumiShell", () => {
     expect(screen.getByText("A random library pick.")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Demo Movie" })).not.toBeInTheDocument();
 
-    const featuredShelf = document.querySelector(".featured-shelf");
-    const featuredArt = document.querySelector(".featured-art");
-    expect(featuredShelf).toBeInTheDocument();
-    expect(featuredArt).toHaveStyle({
+    const featuredHero = document.querySelector(".featured-hero");
+    expect(featuredHero).toBeInTheDocument();
+    expect(featuredHero).toHaveStyle({
       backgroundImage:
         'url("http://localhost:8096/Items/featured-1/Images/Backdrop?tag=random-backdrop")',
     });
-    expect(featuredShelf?.querySelector(".hero-poster")).not.toBeInTheDocument();
+    expect(featuredHero?.querySelector(".featured-art")).not.toBeInTheDocument();
+    expect(featuredHero?.querySelector(".hero-poster")).not.toBeInTheDocument();
+
+    const logo = screen.getByRole("img", { name: "Random Feature" });
+    expect(logo).toHaveAttribute(
+      "src",
+      "http://localhost:8096/Items/featured-1/Images/Logo?tag=random-logo",
+    );
+    expect(screen.queryByRole("button", { name: "More Info" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Next featured item" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Previous featured item" })).not.toBeInTheDocument();
   });
 
-  it("advances the Home featured carousel and opens the active item detail", async () => {
+  it("uses fallback text for featured items without logo artwork", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Next featured item" }));
+    await user.click(screen.getByRole("button", { name: "Show Second Random Feature" }));
 
     expect(
       await screen.findByRole("heading", { name: "Second Random Feature" }),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "More Info" }));
+    expect(document.querySelector(".featured-title-logo")).not.toBeInTheDocument();
+  });
+
+  it("advances the Home featured carousel with dots and opens the active item detail from the wallpaper", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show Second Random Feature" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Second Random Feature" }));
 
     expect(await screen.findByRole("heading", { name: "Second Random Feature" })).toBeInTheDocument();
     await waitFor(() =>
@@ -1349,9 +1392,9 @@ describe("LumiShell", () => {
     await user.click(await screen.findByRole("menuitem", { name: /Second Server/ }));
 
     expect(window.localStorage.getItem("lumi.selectedServerId")).toBe("server-2");
-    expect(
-      await screen.findAllByRole("button", { name: /Second Server Movie/ }),
-    ).toHaveLength(2);
+    await waitFor(() =>
+      expect(getPosterCardButtonsByName(/Second Server Movie/)).toHaveLength(2),
+    );
     expect(await screen.findByRole("button", { name: "Kids" })).toBeInTheDocument();
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("providers_list_libraries", {
@@ -1487,7 +1530,7 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Movie Folder/ }));
+    await user.click(await findPosterCardButtonByName(/Movie Folder/));
 
     expect(await screen.findByRole("heading", { name: "Movie Folder" })).toBeInTheDocument();
     expect(await screen.findByText("Plays first available item")).toBeInTheDocument();
@@ -1530,7 +1573,7 @@ describe("LumiShell", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Home Video/ }));
+    await user.click(await findPosterCardButtonByName(/Home Video/));
 
     expect(await screen.findByRole("button", { name: "Play" })).toBeEnabled();
     expect(screen.getByRole("heading", { name: "Home Video" })).toBeInTheDocument();

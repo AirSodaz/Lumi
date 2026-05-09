@@ -127,6 +127,7 @@ fn demo_library_item(server_id: &str, item_id: &str, title: &str) -> LibraryItem
         title: title.into(),
         sort_title: Some(title.into()),
         poster_url: None,
+        logo_url: None,
         backdrop_url: None,
         year: Some(2026),
         runtime_seconds: Some(7200),
