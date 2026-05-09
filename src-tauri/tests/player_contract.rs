@@ -10,10 +10,10 @@ use std::{
 use lumi_lib::{
     errors::{AppError, AppResult},
     player::{
-        MpvBackend, MpvEventSink, MpvOpenRequest, MpvPlaybackEvent, NativePlayerService,
-        PlaybackCommand, PlaybackErrorEvent, PlaybackHost, PlaybackPositionEvent,
-        PlaybackProgressReporter, PlayerOpenRequest, PlayerService, PlayerSession, PlayerState,
-        ResolvedPlaybackSource,
+        NativePlayerService, PlaybackCommand, PlaybackErrorEvent, PlaybackHost,
+        PlaybackPositionEvent, PlaybackProgressReporter, PlayerBackend, PlayerBackendEvent,
+        PlayerBackendEventSink, PlayerBackendOpenRequest, PlayerOpenRequest, PlayerService,
+        PlayerSession, PlayerState, ResolvedPlaybackSource,
     },
     providers::PlaybackProgressUpdate,
 };
@@ -21,7 +21,7 @@ use lumi_lib::{
 #[test]
 fn native_player_service_returns_opening_then_loads_source_asynchronously() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let session = service
@@ -59,7 +59,7 @@ fn native_player_service_returns_opening_then_loads_source_asynchronously() {
 #[test]
 fn native_player_service_marks_playing_only_after_backend_ready_event() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     service
@@ -84,7 +84,7 @@ fn native_player_service_marks_playing_only_after_backend_ready_event() {
     );
     assert!(!host.has_state(PlayerState::Playing));
 
-    backend.emit_event(MpvPlaybackEvent::Ready);
+    backend.emit_event(PlayerBackendEvent::Ready);
 
     assert_eq!(
         host.wait_for_state(PlayerState::Playing).state,
@@ -96,7 +96,7 @@ fn native_player_service_marks_playing_only_after_backend_ready_event() {
 #[test]
 fn native_player_service_does_not_regress_ready_during_open_back_to_buffering() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(ReadyDuringOpenMpvBackend::default());
+    let backend = Arc::new(ReadyDuringOpenPlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend);
 
     let session = service
@@ -129,7 +129,7 @@ fn native_player_service_does_not_regress_ready_during_open_back_to_buffering() 
 #[test]
 fn native_player_service_ignores_duplicate_ready_events() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     service
@@ -149,8 +149,8 @@ fn native_player_service_ignores_duplicate_ready_events() {
     backend.wait_for_open_request();
     backend.complete_open(Ok(()));
     host.wait_for_state(PlayerState::Buffering);
-    backend.emit_event(MpvPlaybackEvent::Ready);
-    backend.emit_event(MpvPlaybackEvent::Ready);
+    backend.emit_event(PlayerBackendEvent::Ready);
+    backend.emit_event(PlayerBackendEvent::Ready);
 
     assert_eq!(
         host.wait_for_state(PlayerState::Playing).state,
@@ -163,7 +163,7 @@ fn native_player_service_ignores_duplicate_ready_events() {
 #[test]
 fn native_player_service_reports_async_backend_load_errors_as_events() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let session = service
@@ -183,7 +183,7 @@ fn native_player_service_reports_async_backend_load_errors_as_events() {
     backend.wait_for_open_request();
     backend.complete_open(Ok(()));
     host.wait_for_state(PlayerState::Buffering);
-    backend.emit_event(MpvPlaybackEvent::Error(playback_test_error()));
+    backend.emit_event(PlayerBackendEvent::Error(playback_test_error()));
 
     let error = host.wait_for_error("playback.test_open_failed");
     assert_eq!(error.session_id.as_deref(), Some(session.id.as_str()));
@@ -201,7 +201,7 @@ fn native_player_service_reports_async_backend_load_errors_as_events() {
 #[test]
 fn native_player_service_open_does_not_wait_for_blocked_backend() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host, backend.clone());
     let (result_tx, result_rx) = mpsc::channel();
 
@@ -234,7 +234,7 @@ fn native_player_service_open_does_not_wait_for_blocked_backend() {
 #[test]
 fn native_player_service_passes_embedded_window_target_to_backend() {
     let host = Arc::new(FakePlaybackHost::with_window_id(4242));
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host, backend.clone());
 
     let session = service
@@ -260,7 +260,7 @@ fn native_player_service_passes_embedded_window_target_to_backend() {
 #[test]
 fn native_player_service_returns_window_errors_before_opening_backend() {
     let host = Arc::new(FakePlaybackHost::failing_window());
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let error = service
@@ -290,7 +290,7 @@ fn native_player_service_returns_window_errors_before_opening_backend() {
 #[test]
 fn native_player_service_returns_existing_sessions_without_source_url() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host, backend.clone());
 
     let opened = service
@@ -317,7 +317,7 @@ fn native_player_service_returns_existing_sessions_without_source_url() {
 #[test]
 fn native_player_service_reports_backend_open_errors_as_events() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let session = service
@@ -350,7 +350,7 @@ fn native_player_service_reports_backend_open_errors_as_events() {
 #[test]
 fn native_player_service_close_during_opening_prevents_late_playing_state() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(BlockingMpvBackend::default());
+    let backend = Arc::new(BlockingPlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let session = service
@@ -384,7 +384,7 @@ fn native_player_service_close_during_opening_prevents_late_playing_state() {
     );
 
     drop(states);
-    backend.emit_event(MpvPlaybackEvent::Ready);
+    backend.emit_event(PlayerBackendEvent::Ready);
     let states = host.states.lock().unwrap();
     assert!(!states
         .iter()
@@ -394,7 +394,7 @@ fn native_player_service_close_during_opening_prevents_late_playing_state() {
 #[test]
 fn native_player_service_close_returns_before_backend_teardown_finishes() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(HangingCloseMpvBackend::default());
+    let backend = Arc::new(HangingClosePlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let session = service
@@ -440,7 +440,7 @@ fn native_player_service_close_returns_before_backend_teardown_finishes() {
 #[test]
 fn native_player_service_close_returns_before_final_progress_finishes() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(FakeMpvBackend::with_position(96));
+    let backend = Arc::new(FakePlayerBackend::with_position(96));
     let reporter = Arc::new(HangingProgressReporter::default());
     let service =
         NativePlayerService::with_progress_reporter(host.clone(), backend, reporter.clone());
@@ -491,7 +491,7 @@ fn native_player_service_close_returns_before_final_progress_finishes() {
 #[test]
 fn native_player_service_close_command_returns_before_backend_teardown_finishes() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(HangingCloseMpvBackend::default());
+    let backend = Arc::new(HangingClosePlayerBackend::default());
     let service = NativePlayerService::new(host, backend.clone());
 
     let session = service
@@ -528,7 +528,7 @@ fn native_player_service_close_command_returns_before_backend_teardown_finishes(
 #[test]
 fn native_player_service_maps_commands_and_closes_sessions() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let service = NativePlayerService::new(host.clone(), backend.clone());
 
     let session = service
@@ -597,7 +597,7 @@ fn native_player_service_maps_commands_and_closes_sessions() {
 #[test]
 fn native_player_service_reports_throttled_progress_and_final_position() {
     let host = Arc::new(FakePlaybackHost::default());
-    let backend = Arc::new(FakeMpvBackend::with_position(96));
+    let backend = Arc::new(FakePlayerBackend::with_position(96));
     let reporter = Arc::new(FakeProgressReporter::default());
     let service = NativePlayerService::with_progress_reporter(host, backend, reporter.clone());
 
@@ -656,7 +656,7 @@ fn native_player_service_reports_throttled_progress_and_final_position() {
 fn native_player_service_returns_stable_missing_session_error() {
     let service = NativePlayerService::new(
         Arc::new(FakePlaybackHost::default()),
-        Arc::new(FakeMpvBackend::default()),
+        Arc::new(FakePlayerBackend::default()),
     );
 
     let error = service
@@ -784,13 +784,13 @@ impl FakePlaybackHost {
 }
 
 #[derive(Default)]
-struct FakeMpvBackend {
-    opened: Mutex<Vec<MpvOpenRequest>>,
+struct FakePlayerBackend {
+    opened: Mutex<Vec<PlayerBackendOpenRequest>>,
     commands: Mutex<Vec<(String, PlaybackCommand)>>,
     position_seconds: Mutex<u32>,
 }
 
-impl FakeMpvBackend {
+impl FakePlayerBackend {
     fn with_position(position_seconds: u32) -> Self {
         Self {
             position_seconds: Mutex::new(position_seconds),
@@ -817,8 +817,12 @@ impl FakeMpvBackend {
     }
 }
 
-impl MpvBackend for FakeMpvBackend {
-    fn open(&self, request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+impl PlayerBackend for FakePlayerBackend {
+    fn open(
+        &self,
+        request: PlayerBackendOpenRequest,
+        _event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()> {
         self.opened.lock().unwrap().push(request);
         Ok(())
     }
@@ -841,17 +845,17 @@ impl MpvBackend for FakeMpvBackend {
 }
 
 #[derive(Default)]
-struct BlockingMpvBackend {
-    opened: Mutex<Vec<MpvOpenRequest>>,
+struct BlockingPlayerBackend {
+    opened: Mutex<Vec<PlayerBackendOpenRequest>>,
     commands: Mutex<Vec<(String, PlaybackCommand)>>,
     open_started: Condvar,
     open_outcome: Mutex<Option<AppResult<()>>>,
     open_completed: Condvar,
-    event_sink: Mutex<Option<(String, Arc<dyn MpvEventSink>)>>,
+    event_sink: Mutex<Option<(String, Arc<dyn PlayerBackendEventSink>)>>,
 }
 
-impl BlockingMpvBackend {
-    fn wait_for_open_request(&self) -> MpvOpenRequest {
+impl BlockingPlayerBackend {
+    fn wait_for_open_request(&self) -> PlayerBackendOpenRequest {
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut opened = self.opened.lock().unwrap();
         loop {
@@ -870,7 +874,7 @@ impl BlockingMpvBackend {
         self.open_completed.notify_all();
     }
 
-    fn emit_event(&self, event: MpvPlaybackEvent) {
+    fn emit_event(&self, event: PlayerBackendEvent) {
         let (session_id, event_sink) = self
             .event_sink
             .lock()
@@ -878,7 +882,7 @@ impl BlockingMpvBackend {
             .as_ref()
             .expect("backend event sink")
             .clone();
-        event_sink.on_mpv_event(&session_id, event);
+        event_sink.on_backend_event(&session_id, event);
     }
 
     fn wait_for_close_count(&self, expected: usize) {
@@ -900,8 +904,12 @@ impl BlockingMpvBackend {
     }
 }
 
-impl MpvBackend for BlockingMpvBackend {
-    fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+impl PlayerBackend for BlockingPlayerBackend {
+    fn open(
+        &self,
+        request: PlayerBackendOpenRequest,
+        event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()> {
         *self.event_sink.lock().unwrap() = Some((request.session_id.clone(), event_sink));
         self.opened.lock().unwrap().push(request);
         self.open_started.notify_all();
@@ -933,14 +941,18 @@ impl MpvBackend for BlockingMpvBackend {
 }
 
 #[derive(Default)]
-struct ReadyDuringOpenMpvBackend {
-    opened: Mutex<Vec<MpvOpenRequest>>,
+struct ReadyDuringOpenPlayerBackend {
+    opened: Mutex<Vec<PlayerBackendOpenRequest>>,
 }
 
-impl MpvBackend for ReadyDuringOpenMpvBackend {
-    fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+impl PlayerBackend for ReadyDuringOpenPlayerBackend {
+    fn open(
+        &self,
+        request: PlayerBackendOpenRequest,
+        event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()> {
         self.opened.lock().unwrap().push(request.clone());
-        event_sink.on_mpv_event(&request.session_id, MpvPlaybackEvent::Ready);
+        event_sink.on_backend_event(&request.session_id, PlayerBackendEvent::Ready);
         Ok(())
     }
 
@@ -958,13 +970,13 @@ impl MpvBackend for ReadyDuringOpenMpvBackend {
 }
 
 #[derive(Default)]
-struct HangingCloseMpvBackend {
+struct HangingClosePlayerBackend {
     position_calls: AtomicUsize,
     close_started: Mutex<bool>,
     close_started_changed: Condvar,
 }
 
-impl HangingCloseMpvBackend {
+impl HangingClosePlayerBackend {
     fn wait_for_background_close(&self) {
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut close_started = self.close_started.lock().unwrap();
@@ -984,8 +996,12 @@ impl HangingCloseMpvBackend {
     }
 }
 
-impl MpvBackend for HangingCloseMpvBackend {
-    fn open(&self, _request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+impl PlayerBackend for HangingClosePlayerBackend {
+    fn open(
+        &self,
+        _request: PlayerBackendOpenRequest,
+        _event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()> {
         Ok(())
     }
 
@@ -1036,7 +1052,11 @@ impl FakeProgressReporter {
             let now = Instant::now();
             assert!(now < deadline, "timed out waiting for progress reports");
             let timeout = deadline.saturating_duration_since(now);
-            reports = self.reports_changed.wait_timeout(reports, timeout).unwrap().0;
+            reports = self
+                .reports_changed
+                .wait_timeout(reports, timeout)
+                .unwrap()
+                .0;
         }
     }
 }
@@ -1058,7 +1078,11 @@ impl HangingProgressReporter {
             let now = Instant::now();
             assert!(now < deadline, "timed out waiting for progress report");
             let timeout = deadline.saturating_duration_since(now);
-            started = self.started_changed.wait_timeout(started, timeout).unwrap().0;
+            started = self
+                .started_changed
+                .wait_timeout(started, timeout)
+                .unwrap()
+                .0;
         }
     }
 }

@@ -6,7 +6,8 @@ use lumi_lib::{
     errors::AppResult,
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
     player::{
-        record_playback_diagnostic, MpvBackend, MpvEventSink, MpvOpenRequest, PlaybackCommand,
+        record_playback_diagnostic, PlaybackCommand, PlayerBackend, PlayerBackendEventSink,
+        PlayerBackendOpenRequest,
     },
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
@@ -17,7 +18,7 @@ use serde_json::Value;
 
 #[test]
 fn settings_update_persists_player_preferences() {
-    let state = test_state(Arc::new(FakeMpvBackend::default()));
+    let state = test_state(Arc::new(FakePlayerBackend::default()));
 
     let updated = settings_commands::update_settings_for_state(
         &state,
@@ -41,7 +42,7 @@ fn settings_update_persists_player_preferences() {
 
 #[test]
 fn settings_update_clamps_default_volume() {
-    let state = test_state(Arc::new(FakeMpvBackend::default()));
+    let state = test_state(Arc::new(FakePlayerBackend::default()));
 
     let updated = settings_commands::update_settings_for_state(
         &state,
@@ -57,7 +58,7 @@ fn settings_update_clamps_default_volume() {
 
 #[test]
 fn settings_reports_material_state_and_player_diagnostics() {
-    let state = test_state(Arc::new(FakeMpvBackend::default()));
+    let state = test_state(Arc::new(FakePlayerBackend::default()));
 
     let material = settings_commands::get_material_state_for_state(&state).expect("material state");
     let diagnostic = settings_commands::diagnose_mpv_for_state(&state).expect("mpv diagnostic");
@@ -70,7 +71,7 @@ fn settings_reports_material_state_and_player_diagnostics() {
 
 #[test]
 fn settings_exports_redacted_recent_logs() {
-    let state = test_state(Arc::new(FakeMpvBackend::default()));
+    let state = test_state(Arc::new(FakePlayerBackend::default()));
     let profile = seed_profile_with_token(&state);
 
     let export = settings_commands::export_logs_for_state(&state).expect("export logs");
@@ -85,7 +86,7 @@ fn settings_exports_redacted_recent_logs() {
 
 #[test]
 fn settings_exports_recent_playback_diagnostics() {
-    let state = test_state(Arc::new(FakeMpvBackend::default()));
+    let state = test_state(Arc::new(FakePlayerBackend::default()));
     record_playback_diagnostic("mpv event PLAYBACK_RESTART session=session-test");
 
     let export = settings_commands::export_logs_for_state(&state).expect("export logs");
@@ -95,7 +96,7 @@ fn settings_exports_recent_playback_diagnostics() {
         .contains("mpv event PLAYBACK_RESTART session=session-test"));
 }
 
-fn test_state(backend: Arc<dyn MpvBackend>) -> AppState {
+fn test_state(backend: Arc<dyn PlayerBackend>) -> AppState {
     let database = Database::open_in_memory().expect("open database");
     database.initialize().expect("initialize database");
     AppState::with_services_and_player(
@@ -151,12 +152,16 @@ impl EmbyHttpTransport for FakeEmbyTransport {
 }
 
 #[derive(Default)]
-struct FakeMpvBackend {
+struct FakePlayerBackend {
     commands: Mutex<Vec<(String, PlaybackCommand)>>,
 }
 
-impl MpvBackend for FakeMpvBackend {
-    fn open(&self, _request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+impl PlayerBackend for FakePlayerBackend {
+    fn open(
+        &self,
+        _request: PlayerBackendOpenRequest,
+        _event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()> {
         Ok(())
     }
 

@@ -10,7 +10,7 @@ use crate::{
     persistence::{
         CredentialStore, Database, LocalStore, MemoryCredentialStore, SystemCredentialStore,
     },
-    player::{MpvBackend, PlaybackSessionStore, RuntimeMpvBackend},
+    player::{PlaybackSessionStore, PlayerBackend, RuntimeMpvBackend},
     providers::{
         emby::{Clock, EmbyHttpTransport, ReqwestEmbyHttpTransport, SystemClock},
         ProviderRegistry, ServerProfile,
@@ -82,7 +82,7 @@ pub struct AppState {
     credential_store: Arc<dyn CredentialStore>,
     emby_transport: Arc<dyn EmbyHttpTransport>,
     clock: Arc<dyn Clock>,
-    player_backend: Arc<dyn MpvBackend>,
+    player_backend: Arc<dyn PlayerBackend>,
     player_sessions: Arc<PlaybackSessionStore>,
     settings: RwLock<AppSettings>,
 }
@@ -142,7 +142,7 @@ impl AppState {
         credential_store: Arc<dyn CredentialStore>,
         emby_transport: Arc<dyn EmbyHttpTransport>,
         clock: Arc<dyn Clock>,
-        player_backend: Arc<dyn MpvBackend>,
+        player_backend: Arc<dyn PlayerBackend>,
     ) -> Self {
         Self {
             provider_registry: ProviderRegistry::default(),
@@ -176,7 +176,7 @@ impl AppState {
         self.clock.clone()
     }
 
-    pub fn player_backend(&self) -> Arc<dyn MpvBackend> {
+    pub fn player_backend(&self) -> Arc<dyn PlayerBackend> {
         self.player_backend.clone()
     }
 

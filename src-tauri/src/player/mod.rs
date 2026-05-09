@@ -82,14 +82,14 @@ pub struct PlaybackErrorEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MpvOpenRequest {
+pub struct PlayerBackendOpenRequest {
     pub session_id: String,
     pub window_id: Option<i64>,
     pub media_url: String,
 }
 
 #[derive(Debug, Clone)]
-pub enum MpvPlaybackEvent {
+pub enum PlayerBackendEvent {
     Loaded,
     Ready,
     Ended,
@@ -128,8 +128,12 @@ impl PlaybackProgressReporter for NoopPlaybackProgressReporter {
     }
 }
 
-pub trait MpvBackend: Send + Sync {
-    fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()>;
+pub trait PlayerBackend: Send + Sync {
+    fn open(
+        &self,
+        request: PlayerBackendOpenRequest,
+        event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()>;
 
     fn command(&self, session_id: &str, command: PlaybackCommand) -> AppResult<()>;
 
@@ -138,8 +142,8 @@ pub trait MpvBackend: Send + Sync {
     fn position_seconds(&self, session_id: &str) -> AppResult<Option<u32>>;
 }
 
-pub trait MpvEventSink: Send + Sync {
-    fn on_mpv_event(&self, session_id: &str, event: MpvPlaybackEvent);
+pub trait PlayerBackendEventSink: Send + Sync {
+    fn on_backend_event(&self, session_id: &str, event: PlayerBackendEvent);
 }
 
 pub trait PlayerService: Send + Sync {
@@ -269,20 +273,20 @@ struct StoredPlayerSession {
 pub struct NativePlayerService {
     sessions: Arc<PlaybackSessionStore>,
     host: Arc<dyn PlaybackHost>,
-    backend: Arc<dyn MpvBackend>,
+    backend: Arc<dyn PlayerBackend>,
     progress_reporter: Arc<dyn PlaybackProgressReporter>,
     progress_report_interval_seconds: u32,
 }
 
 impl NativePlayerService {
-    pub fn new(host: Arc<dyn PlaybackHost>, backend: Arc<dyn MpvBackend>) -> Self {
+    pub fn new(host: Arc<dyn PlaybackHost>, backend: Arc<dyn PlayerBackend>) -> Self {
         Self::with_store(Arc::new(PlaybackSessionStore::default()), host, backend)
     }
 
     pub fn with_store(
         sessions: Arc<PlaybackSessionStore>,
         host: Arc<dyn PlaybackHost>,
-        backend: Arc<dyn MpvBackend>,
+        backend: Arc<dyn PlayerBackend>,
     ) -> Self {
         Self::with_store_and_progress_reporter(
             sessions,
@@ -294,7 +298,7 @@ impl NativePlayerService {
 
     pub fn with_progress_reporter(
         host: Arc<dyn PlaybackHost>,
-        backend: Arc<dyn MpvBackend>,
+        backend: Arc<dyn PlayerBackend>,
         progress_reporter: Arc<dyn PlaybackProgressReporter>,
     ) -> Self {
         Self::with_store_and_progress_reporter(
@@ -308,7 +312,7 @@ impl NativePlayerService {
     pub fn with_store_and_progress_reporter(
         sessions: Arc<PlaybackSessionStore>,
         host: Arc<dyn PlaybackHost>,
-        backend: Arc<dyn MpvBackend>,
+        backend: Arc<dyn PlayerBackend>,
         progress_reporter: Arc<dyn PlaybackProgressReporter>,
     ) -> Self {
         Self {
@@ -367,7 +371,7 @@ impl PlayerService for NativePlayerService {
         let report_interval_seconds = self.progress_report_interval_seconds;
         let session_id_for_open = session_id.clone();
         thread::spawn(move || {
-            let event_sink = Arc::new(NativeMpvEventSink {
+            let event_sink = Arc::new(NativePlayerBackendEventSink {
                 sessions: sessions.clone(),
                 backend: backend.clone(),
                 host: host.clone(),
@@ -375,7 +379,7 @@ impl PlayerService for NativePlayerService {
                 report_interval_seconds,
             });
             let open_result = backend.open(
-                MpvOpenRequest {
+                PlayerBackendOpenRequest {
                     session_id: session_id_for_open.clone(),
                     window_id,
                     media_url: source.url,
@@ -484,42 +488,42 @@ impl PlayerService for NativePlayerService {
         let session_id = session_id.to_string();
         record_playback_diagnostic(format!("close requested session={session_id}"));
         thread::spawn(move || {
-            record_playback_diagnostic(format!("mpv close start session={session_id}"));
+            record_playback_diagnostic(format!("backend close start session={session_id}"));
             if let Err(error) = backend.close(&session_id) {
                 record_playback_diagnostic(format!(
-                    "mpv close failed session={session_id} code={}",
+                    "backend close failed session={session_id} code={}",
                     error.code()
                 ));
             } else {
-                record_playback_diagnostic(format!("mpv close complete session={session_id}"));
+                record_playback_diagnostic(format!("backend close complete session={session_id}"));
             }
         });
         Ok(session)
     }
 }
 
-struct NativeMpvEventSink {
+struct NativePlayerBackendEventSink {
     sessions: Arc<PlaybackSessionStore>,
-    backend: Arc<dyn MpvBackend>,
+    backend: Arc<dyn PlayerBackend>,
     host: Arc<dyn PlaybackHost>,
     progress_reporter: Arc<dyn PlaybackProgressReporter>,
     report_interval_seconds: u32,
 }
 
-impl MpvEventSink for NativeMpvEventSink {
-    fn on_mpv_event(&self, session_id: &str, event: MpvPlaybackEvent) {
+impl PlayerBackendEventSink for NativePlayerBackendEventSink {
+    fn on_backend_event(&self, session_id: &str, event: PlayerBackendEvent) {
         match event {
-            MpvPlaybackEvent::Loaded => self.handle_loaded(session_id),
-            MpvPlaybackEvent::Ready => self.handle_ready(session_id),
-            MpvPlaybackEvent::Ended | MpvPlaybackEvent::Shutdown => {
+            PlayerBackendEvent::Loaded => self.handle_loaded(session_id),
+            PlayerBackendEvent::Ready => self.handle_ready(session_id),
+            PlayerBackendEvent::Ended | PlayerBackendEvent::Shutdown => {
                 self.handle_terminal_state(session_id, PlayerState::Ended)
             }
-            MpvPlaybackEvent::Error(error) => self.handle_error(session_id, error),
+            PlayerBackendEvent::Error(error) => self.handle_error(session_id, error),
         }
     }
 }
 
-impl NativeMpvEventSink {
+impl NativePlayerBackendEventSink {
     fn handle_loaded(&self, session_id: &str) {
         if self.sessions.is_closed(session_id) {
             return;
@@ -638,7 +642,7 @@ fn apply_command_to_session(session: &mut PlayerSession, command: &PlaybackComma
 
 fn start_position_poller(
     sessions: Arc<PlaybackSessionStore>,
-    backend: Arc<dyn MpvBackend>,
+    backend: Arc<dyn PlayerBackend>,
     host: Arc<dyn PlaybackHost>,
     progress_reporter: Arc<dyn PlaybackProgressReporter>,
     session_id: String,

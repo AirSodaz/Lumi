@@ -17,8 +17,8 @@ use libloading::Library;
 
 use super::{
     playback_command_failed, playback_init_failed, playback_library_missing,
-    record_playback_diagnostic, MpvBackend, MpvEventSink, MpvOpenRequest, MpvPlaybackEvent,
-    PlaybackCommand,
+    record_playback_diagnostic, PlaybackCommand, PlayerBackend, PlayerBackendEvent,
+    PlayerBackendEventSink, PlayerBackendOpenRequest,
 };
 use crate::errors::AppResult;
 
@@ -79,8 +79,12 @@ impl RuntimeMpvBackend {
     }
 }
 
-impl MpvBackend for RuntimeMpvBackend {
-    fn open(&self, request: MpvOpenRequest, event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+impl PlayerBackend for RuntimeMpvBackend {
+    fn open(
+        &self,
+        request: PlayerBackendOpenRequest,
+        event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()> {
         let library = self.library()?;
         record_playback_diagnostic(format!(
             "mpv open start session={} wid={}",
@@ -489,7 +493,7 @@ fn start_mpv_event_pump(
     session_id: String,
     handle: Arc<RuntimeMpvHandle>,
     library: Arc<MpvLibrary>,
-    event_sink: Arc<dyn MpvEventSink>,
+    event_sink: Arc<dyn PlayerBackendEventSink>,
 ) {
     thread::spawn(move || loop {
         if handle.is_destroyed() {
@@ -504,13 +508,13 @@ fn start_mpv_event_pump(
             MPV_EVENT_NONE => {}
             MPV_EVENT_FILE_LOADED => {
                 record_playback_diagnostic(format!("mpv event FILE_LOADED session={session_id}"));
-                event_sink.on_mpv_event(&session_id, MpvPlaybackEvent::Loaded);
+                event_sink.on_backend_event(&session_id, PlayerBackendEvent::Loaded);
             }
             MPV_EVENT_PLAYBACK_RESTART => {
                 record_playback_diagnostic(format!(
                     "mpv event PLAYBACK_RESTART session={session_id}"
                 ));
-                event_sink.on_mpv_event(&session_id, MpvPlaybackEvent::Ready);
+                event_sink.on_backend_event(&session_id, PlayerBackendEvent::Ready);
             }
             MPV_EVENT_END_FILE => {
                 record_playback_diagnostic(format!(
@@ -518,27 +522,29 @@ fn start_mpv_event_pump(
                 ));
                 if end_file_reason == MPV_END_FILE_REASON_ERROR {
                     let message = library.error_message(error);
-                    event_sink.on_mpv_event(
+                    event_sink.on_backend_event(
                         &session_id,
-                        MpvPlaybackEvent::Error(playback_command_failed(message)),
+                        PlayerBackendEvent::Error(playback_command_failed(message)),
                     );
                 } else {
-                    event_sink.on_mpv_event(&session_id, MpvPlaybackEvent::Ended);
+                    event_sink.on_backend_event(&session_id, PlayerBackendEvent::Ended);
                 }
                 break;
             }
             MPV_EVENT_SHUTDOWN => {
                 record_playback_diagnostic(format!("mpv event SHUTDOWN session={session_id}"));
-                event_sink.on_mpv_event(&session_id, MpvPlaybackEvent::Shutdown);
+                event_sink.on_backend_event(&session_id, PlayerBackendEvent::Shutdown);
                 break;
             }
             _ if error < 0 => {
                 record_playback_diagnostic(format!(
                     "mpv event error session={session_id} event={event_id} error={error}"
                 ));
-                event_sink.on_mpv_event(
+                event_sink.on_backend_event(
                     &session_id,
-                    MpvPlaybackEvent::Error(playback_command_failed(library.error_message(error))),
+                    PlayerBackendEvent::Error(playback_command_failed(
+                        library.error_message(error),
+                    )),
                 );
             }
             _ => {}

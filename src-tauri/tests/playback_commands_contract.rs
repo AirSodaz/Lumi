@@ -9,8 +9,8 @@ use lumi_lib::{
     errors::AppResult,
     persistence::{CredentialKey, Database, LocalStore, MemoryCredentialStore},
     player::{
-        MpvBackend, MpvEventSink, MpvOpenRequest, PlaybackCommand, PlaybackErrorEvent,
-        PlaybackHost, PlaybackPositionEvent, PlayerOpenRequest, PlayerSession,
+        PlaybackCommand, PlaybackErrorEvent, PlaybackHost, PlaybackPositionEvent, PlayerBackend,
+        PlayerBackendEventSink, PlayerBackendOpenRequest, PlayerOpenRequest, PlayerSession,
         ResolvedPlaybackSource,
     },
     providers::{
@@ -22,7 +22,7 @@ use serde_json::{json, Value};
 
 #[test]
 fn playback_open_resolves_first_provider_source_without_exposing_url_to_react() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -69,7 +69,7 @@ fn playback_open_resolves_first_provider_source_without_exposing_url_to_react() 
 
 #[test]
 fn playback_open_resolves_container_to_first_playable_descendant() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -129,7 +129,7 @@ fn playback_open_resolves_container_to_first_playable_descendant() {
 
 #[test]
 fn playback_open_uses_transcoding_source_when_direct_stream_is_unavailable() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -176,7 +176,7 @@ fn playback_open_uses_transcoding_source_when_direct_stream_is_unavailable() {
 
 #[test]
 fn playback_open_does_not_duplicate_existing_api_key() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -222,7 +222,7 @@ fn playback_open_does_not_duplicate_existing_api_key() {
 
 #[test]
 fn playback_open_resolves_file_protocol_sources_to_emby_static_streams() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -273,7 +273,7 @@ fn playback_open_resolves_file_protocol_sources_to_emby_static_streams() {
 
 #[test]
 fn playback_open_returns_no_source_for_empty_container_without_creating_window() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -315,7 +315,7 @@ fn playback_open_returns_no_source_for_empty_container_without_creating_window()
 
 #[test]
 fn playback_open_event_failure_does_not_expose_stream_url() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -362,7 +362,7 @@ fn playback_open_event_failure_does_not_expose_stream_url() {
 
 #[test]
 fn playback_open_returns_source_errors_before_creating_player_session() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -407,7 +407,7 @@ fn playback_open_returns_source_errors_before_creating_player_session() {
 
 #[test]
 fn playback_open_resolved_target_opens_without_provider_lookup() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(Vec::new(), backend.clone());
     let host = Arc::new(FakePlaybackHost::default());
 
@@ -441,7 +441,7 @@ fn playback_open_resolved_target_opens_without_provider_lookup() {
 
 #[test]
 fn playback_open_resolved_target_passes_window_target_to_backend() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(Vec::new(), backend.clone());
     let host = Arc::new(FakePlaybackHost {
         window_id: Some(31337),
@@ -473,7 +473,7 @@ fn playback_open_resolved_target_passes_window_target_to_backend() {
 
 #[test]
 fn playback_get_session_returns_existing_session_without_source_url() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -520,7 +520,7 @@ fn playback_get_session_returns_existing_session_without_source_url() {
 
 #[test]
 fn playback_command_delegates_to_existing_player_session() {
-    let backend = Arc::new(FakeMpvBackend::default());
+    let backend = Arc::new(FakePlayerBackend::default());
     let state = test_state(
         vec![
             FakeResponse::json(
@@ -646,7 +646,7 @@ fn windows_video_host_uses_reported_video_region_bounds() {
     );
 }
 
-fn test_state(responses: Vec<FakeResponse>, backend: Arc<dyn MpvBackend>) -> AppState {
+fn test_state(responses: Vec<FakeResponse>, backend: Arc<dyn PlayerBackend>) -> AppState {
     let database = Database::open_in_memory().expect("open database");
     database.initialize().expect("initialize database");
     AppState::with_services_and_player(
@@ -790,14 +790,18 @@ impl PlaybackHost for FailingPlaybackHost {
 }
 
 #[derive(Default)]
-struct FakeMpvBackend {
-    opened: Mutex<Vec<MpvOpenRequest>>,
+struct FakePlayerBackend {
+    opened: Mutex<Vec<PlayerBackendOpenRequest>>,
     commands: Mutex<Vec<(String, PlaybackCommand)>>,
     opened_changed: Condvar,
 }
 
-impl MpvBackend for FakeMpvBackend {
-    fn open(&self, request: MpvOpenRequest, _event_sink: Arc<dyn MpvEventSink>) -> AppResult<()> {
+impl PlayerBackend for FakePlayerBackend {
+    fn open(
+        &self,
+        request: PlayerBackendOpenRequest,
+        _event_sink: Arc<dyn PlayerBackendEventSink>,
+    ) -> AppResult<()> {
         self.opened.lock().unwrap().push(request);
         self.opened_changed.notify_all();
         Ok(())
@@ -820,8 +824,8 @@ impl MpvBackend for FakeMpvBackend {
     }
 }
 
-impl FakeMpvBackend {
-    fn wait_for_opened(&self) -> MpvOpenRequest {
+impl FakePlayerBackend {
+    fn wait_for_opened(&self) -> PlayerBackendOpenRequest {
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut opened = self.opened.lock().unwrap();
         loop {
