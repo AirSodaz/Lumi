@@ -29,7 +29,7 @@ function App() {
       <I18nProvider>
         <QueryClientProvider client={queryClient}>
           {route.view === "player" ? (
-            <PlayerWindowView sessionId={route.sessionId} />
+            <PlayerWindowView controlsOnly={route.controlsOnly} sessionId={route.sessionId} />
           ) : (
             <LumiShell />
           )}
@@ -44,11 +44,12 @@ function getAppRoute() {
   if (params.get("view") === "player") {
     return {
       view: "player" as const,
+      controlsOnly: params.get("surface") === "controls",
       sessionId: params.get("sessionId") ?? "",
     };
   }
 
-  return { view: "shell" as const };
+  return { controlsOnly: false, view: "shell" as const };
 }
 
 export default App;

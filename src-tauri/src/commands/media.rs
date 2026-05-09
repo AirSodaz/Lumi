@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-use super::auth::emby_provider_for_state;
+use super::auth::{emby_provider_for_deps, emby_provider_for_state};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,8 +25,8 @@ pub async fn media_list_children(
     state: State<'_, AppState>,
     request: ListChildrenRequest,
 ) -> AppResult<PagedResult<LibraryItem>> {
-    let state = super::state_for_blocking(state.inner());
-    super::run_blocking_command(move || list_children_for_state(&state, request)).await
+    let deps = super::BlockingProviderDeps::from_state(state.inner());
+    super::run_blocking_command(move || emby_provider_for_deps(&deps).list_children(request)).await
 }
 
 pub fn list_children_for_state(
@@ -41,8 +41,8 @@ pub async fn media_list_favorites(
     state: State<'_, AppState>,
     request: ListFavoritesRequest,
 ) -> AppResult<PagedResult<LibraryItem>> {
-    let state = super::state_for_blocking(state.inner());
-    super::run_blocking_command(move || list_favorites_for_state(&state, request)).await
+    let deps = super::BlockingProviderDeps::from_state(state.inner());
+    super::run_blocking_command(move || emby_provider_for_deps(&deps).list_favorites(request)).await
 }
 
 pub fn list_favorites_for_state(
@@ -57,8 +57,11 @@ pub async fn media_get_item(
     state: State<'_, AppState>,
     request: GetItemRequest,
 ) -> AppResult<LibraryItemDetail> {
-    let state = super::state_for_blocking(state.inner());
-    super::run_blocking_command(move || get_item_for_state(&state, request)).await
+    let deps = super::BlockingProviderDeps::from_state(state.inner());
+    super::run_blocking_command(move || {
+        emby_provider_for_deps(&deps).get_item(&request.server_id, &request.item_id)
+    })
+    .await
 }
 
 pub fn get_item_for_state(
@@ -73,8 +76,8 @@ pub async fn media_get_home_rows(
     state: State<'_, AppState>,
     request: HomeRowsRequest,
 ) -> AppResult<HomeRows> {
-    let state = super::state_for_blocking(state.inner());
-    super::run_blocking_command(move || get_home_rows_for_state(&state, request)).await
+    let deps = super::BlockingProviderDeps::from_state(state.inner());
+    super::run_blocking_command(move || emby_provider_for_deps(&deps).get_home_rows(request)).await
 }
 
 pub fn get_home_rows_for_state(state: &AppState, request: HomeRowsRequest) -> AppResult<HomeRows> {

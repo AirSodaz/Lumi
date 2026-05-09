@@ -13,10 +13,11 @@ import {
 import { PlayerControls } from "./PlayerControls";
 
 type PlayerWindowViewProps = {
+  controlsOnly?: boolean;
   sessionId: string;
 };
 
-export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
+export function PlayerWindowView({ controlsOnly = false, sessionId }: PlayerWindowViewProps) {
   const { translate } = useI18n();
   const sessionQuery = usePlaybackSession(sessionId);
   const closeCommand = usePlaybackCommand();
@@ -107,6 +108,10 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
   }, [closeCommand, destroyWindow, sessionId]);
 
   useEffect(() => {
+    if (controlsOnly) {
+      return;
+    }
+
     const reportBounds = () => {
       const region = videoRegionRef.current;
       if (!region || !sessionId) {
@@ -136,7 +141,7 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
       window.removeEventListener("resize", reportBounds);
       resizeObserver?.disconnect();
     };
-  }, [sessionId]);
+  }, [controlsOnly, sessionId]);
 
   function handleSessionChange(nextSession: PlayerSession) {
     setSession(nextSession);
@@ -156,21 +161,26 @@ export function PlayerWindowView({ sessionId }: PlayerWindowViewProps) {
     : translate("player.state.opening");
 
   return (
-    <main className="player-window" aria-labelledby="player-window-title">
-      <section
-        className="player-video-region"
-        aria-label={translate("player.aria.video")}
-        ref={videoRegionRef}
-      >
-        <div className="player-video-placeholder">
-          <Film aria-hidden="true" size={26} />
-          <span>
-            {activeSession?.state === "playing"
-              ? translate("player.video.active")
-              : translate("player.video.starting")}
-          </span>
-        </div>
-      </section>
+    <main
+      className={controlsOnly ? "player-window controls-only" : "player-window"}
+      aria-labelledby="player-window-title"
+    >
+      {controlsOnly ? null : (
+        <section
+          className="player-video-region"
+          aria-label={translate("player.aria.video")}
+          ref={videoRegionRef}
+        >
+          <div className="player-video-placeholder">
+            <Film aria-hidden="true" size={26} />
+            <span>
+              {activeSession?.state === "playing"
+                ? translate("player.video.active")
+                : translate("player.video.starting")}
+            </span>
+          </div>
+        </section>
+      )}
 
       <section className="player-control-region">
         <div className="player-window-header">

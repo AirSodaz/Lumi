@@ -475,9 +475,11 @@ impl PlayerService for NativePlayerService {
             stored.session.state = PlayerState::Closed;
         })?;
         self.emit_state(&session)?;
-        let _ = self
-            .progress_reporter
-            .report_progress(progress_from_session(&session, true));
+        let progress_reporter = self.progress_reporter.clone();
+        let final_progress = progress_from_session(&session, true);
+        thread::spawn(move || {
+            let _ = progress_reporter.report_progress(final_progress);
+        });
         let backend = self.backend.clone();
         let session_id = session_id.to_string();
         record_playback_diagnostic(format!("close requested session={session_id}"));

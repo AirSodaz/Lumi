@@ -1,4 +1,4 @@
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 
 #[cfg(target_os = "windows")]
 use std::{
@@ -10,7 +10,10 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
 use tauri::WindowEvent;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewBuilder, WebviewUrl,
+    Window, WindowBuilder,
+};
 
 use crate::{
     app::AppState,
@@ -27,7 +30,7 @@ use crate::{
     },
 };
 
-use super::auth::emby_provider_for_state;
+use super::auth::{emby_provider_for_deps, emby_provider_for_state};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,10 +55,10 @@ pub async fn playback_open(
     state: State<'_, AppState>,
     request: PlayerOpenRequest,
 ) -> AppResult<PlayerSession> {
-    let blocking_state = super::state_for_blocking(state.inner());
+    let deps = super::BlockingProviderDeps::from_state(state.inner());
     let request_for_resolve = request.clone();
     let target = super::run_blocking_command(move || {
-        resolve_playback_target_for_state(&blocking_state, &request_for_resolve)
+        resolve_playback_target(&emby_provider_for_deps(&deps), &request_for_resolve)
     })
     .await?;
     let host = Arc::new(TauriPlaybackHost::new(app));
@@ -218,7 +221,7 @@ impl TauriPlaybackHost {
 
 impl PlaybackHost for TauriPlaybackHost {
     fn create_player_window(&self, session_id: &str) -> AppResult<Option<i64>> {
-        create_player_window_on_main_thread(&self.app, session_id)
+        create_player_window(&self.app, session_id)
     }
 
     fn emit_state_changed(&self, session: &PlayerSession) -> AppResult<()> {
@@ -256,17 +259,119 @@ pub fn playback_update_surface_bounds(
     update_surface_bounds_for_session(&app, bounds)
 }
 
-fn create_player_window_on_main_thread(
+fn create_player_window(app: &AppHandle, session_id: &str) -> AppResult<Option<i64>> {
+    let label = format!("player-{session_id}");
+    let controls_label = player_controls_label(session_id);
+    let url = WebviewUrl::App(
+        format!("index.html?view=player&surface=controls&sessionId={session_id}").into(),
+    );
+    let window = if let Some(window) = app.get_window(&label) {
+        window
+    } else {
+        WindowBuilder::new(app, label)
+            .title("Lumi Player")
+            .inner_size(1120.0, 700.0)
+            .min_inner_size(760.0, 460.0)
+            .resizable(true)
+            .build()
+            .map_err(playback_window_failed)?
+    };
+    ensure_controls_webview(&window, &controls_label, url)?;
+
+    embedded_window_id_for(app, &window)
+}
+
+fn ensure_controls_webview(
+    window: &Window,
+    controls_label: &str,
+    url: WebviewUrl,
+) -> AppResult<()> {
+    let size = window.inner_size().map_err(playback_window_failed)?;
+    let bounds = controls_bounds_for_window_size(size.width, size.height);
+
+    if let Some(webview) = window.get_webview(controls_label) {
+        webview
+            .set_position(PhysicalPosition::new(bounds.x, bounds.y))
+            .map_err(playback_window_failed)?;
+        webview
+            .set_size(PhysicalSize::new(bounds.width, bounds.height))
+            .map_err(playback_window_failed)?;
+        return Ok(());
+    }
+
+    let webview = WebviewBuilder::new(controls_label, url);
+    window
+        .add_child(
+            webview,
+            PhysicalPosition::new(bounds.x, bounds.y),
+            PhysicalSize::new(bounds.width, bounds.height),
+        )
+        .map_err(playback_window_failed)?;
+    Ok(())
+}
+
+fn player_controls_label(session_id: &str) -> String {
+    format!("player-controls-{session_id}")
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ControlsBounds {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+const PLAYER_CONTROLS_HEIGHT: u32 = 172;
+
+fn controls_bounds_for_window_size(width: u32, height: u32) -> ControlsBounds {
+    let controls_height = PLAYER_CONTROLS_HEIGHT.min(height.saturating_sub(1)).max(1);
+    ControlsBounds {
+        x: 0,
+        y: height.saturating_sub(controls_height) as i32,
+        width: width.max(1),
+        height: controls_height,
+    }
+}
+
+fn video_bounds_for_window_size(width: u32, height: u32) -> PlaybackSurfaceBounds {
+    let controls = controls_bounds_for_window_size(width, height);
+    PlaybackSurfaceBounds {
+        session_id: String::new(),
+        x: 0,
+        y: 0,
+        width: width.max(1),
+        height: controls.y.max(1) as u32,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn embedded_window_id_for(app: &AppHandle, window: &Window) -> AppResult<Option<i64>> {
+    let handle = window.window_handle().map_err(playback_window_failed)?;
+    match handle.as_raw() {
+        RawWindowHandle::Win32(handle) => {
+            create_video_host_window_on_main_thread(app, window, handle.hwnd.get() as isize)
+        }
+        _ => Err(playback_window_failed("unsupported native window handle")),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn embedded_window_id_for(_app: &AppHandle, _window: &Window) -> AppResult<Option<i64>> {
+    Ok(None)
+}
+
+#[cfg(target_os = "windows")]
+fn create_video_host_window_on_main_thread(
     app: &AppHandle,
-    session_id: &str,
+    window: &Window,
+    parent_hwnd: isize,
 ) -> AppResult<Option<i64>> {
-    // The Windows mpv child HWND must be owned by the UI thread's message loop.
     let app = app.clone();
-    let session_id = session_id.to_string();
-    let (result_tx, result_rx) = mpsc::channel();
-    let app_for_task = app.clone();
+    let window = window.clone();
+    let (result_tx, result_rx) = std::sync::mpsc::channel();
     app.run_on_main_thread(move || {
-        let result = create_player_window_inner(&app_for_task, &session_id);
+        let result = create_video_host_window(&window, parent_hwnd);
         let _ = result_tx.send(result);
     })
     .map_err(playback_window_failed)?;
@@ -276,45 +381,8 @@ fn create_player_window_on_main_thread(
         .map_err(|error| playback_window_failed(error.to_string()))?
 }
 
-fn create_player_window_inner(app: &AppHandle, session_id: &str) -> AppResult<Option<i64>> {
-    let label = format!("player-{session_id}");
-    let url = WebviewUrl::App(format!("index.html?view=player&sessionId={session_id}").into());
-    let window = if let Some(window) = app.get_webview_window(&label) {
-        window
-    } else {
-        WebviewWindowBuilder::new(app, label, url)
-            .title("Lumi Player")
-            .inner_size(1120.0, 700.0)
-            .min_inner_size(760.0, 460.0)
-            .resizable(true)
-            .build()
-            .map_err(playback_window_failed)?
-    };
-
-    embedded_window_id_for(&window)
-}
-
 #[cfg(target_os = "windows")]
-fn embedded_window_id_for(window: &tauri::WebviewWindow) -> AppResult<Option<i64>> {
-    let handle = window.window_handle().map_err(playback_window_failed)?;
-    match handle.as_raw() {
-        RawWindowHandle::Win32(handle) => {
-            create_video_host_window(window, handle.hwnd.get() as isize)
-        }
-        _ => Err(playback_window_failed("unsupported native window handle")),
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn embedded_window_id_for(_window: &tauri::WebviewWindow) -> AppResult<Option<i64>> {
-    Ok(None)
-}
-
-#[cfg(target_os = "windows")]
-fn create_video_host_window(
-    window: &tauri::WebviewWindow,
-    parent_hwnd: isize,
-) -> AppResult<Option<i64>> {
+fn create_video_host_window(window: &Window, parent_hwnd: isize) -> AppResult<Option<i64>> {
     use windows_sys::Win32::Foundation::{HINSTANCE, HWND};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, HMENU, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
@@ -322,18 +390,17 @@ fn create_video_host_window(
 
     let class_name = wide_null("Static");
     let size = window.inner_size().map_err(playback_window_failed)?;
-    let video_width = size.width.max(1);
-    let video_height = size.height.max(1);
+    let video_bounds = video_bounds_for_window_size(size.width, size.height);
     let child = unsafe {
         CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             class_name.as_ptr(),
             std::ptr::null(),
             WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-            0,
-            0,
-            video_width as i32,
-            video_height as i32,
+            video_bounds.x,
+            video_bounds.y,
+            video_bounds.width as i32,
+            video_bounds.height as i32,
             parent_hwnd as HWND,
             std::ptr::null_mut::<std::ffi::c_void>() as HMENU,
             std::ptr::null_mut::<std::ffi::c_void>() as HINSTANCE,
@@ -348,7 +415,13 @@ fn create_video_host_window(
     }
 
     let child = child as isize;
-    position_video_host(child, 0, 0, video_width, video_height);
+    position_video_host(
+        child,
+        video_bounds.x,
+        video_bounds.y,
+        video_bounds.width,
+        video_bounds.height,
+    );
     let session_id = window
         .label()
         .strip_prefix("player-")
@@ -367,28 +440,38 @@ fn create_video_host_window(
                 bounds: None,
             },
         );
+    let window_for_event = window.clone();
     window.on_window_event(move |event| match event {
         WindowEvent::Resized(size)
         | WindowEvent::ScaleFactorChanged {
             new_inner_size: size,
             ..
         } => {
-            let fallback = PlaybackSurfaceBounds {
-                session_id: session_id.clone(),
-                x: 0,
-                y: 0,
-                width: size.width.max(1),
-                height: size.height.max(1),
+            let controls_label = player_controls_label(&session_id);
+            if let Some(webview) = window_for_event.get_webview(&controls_label) {
+                let controls = controls_bounds_for_window_size(size.width, size.height);
+                let _ = webview.set_position(PhysicalPosition::new(controls.x, controls.y));
+                let _ = webview.set_size(PhysicalSize::new(controls.width, controls.height));
+            }
+            let mut fallback = video_bounds_for_window_size(size.width, size.height);
+            fallback.session_id = session_id.clone();
+            let bounds = {
+                let reported = video_surfaces()
+                    .lock()
+                    .ok()
+                    .and_then(|surfaces| {
+                        surfaces
+                            .get(&session_id)
+                            .and_then(|surface| surface.bounds.clone())
+                    });
+                reported.unwrap_or(fallback)
             };
-            let bounds = video_surfaces()
-                .lock()
-                .ok()
-                .and_then(|surfaces| {
-                    surfaces
-                        .get(&session_id)
-                        .and_then(|surface| surface.bounds.clone())
-                })
-                .unwrap_or(fallback);
+            let bounds = PlaybackSurfaceBounds {
+                session_id: session_id.clone(),
+                width: bounds.width.max(1),
+                height: bounds.height.max(1),
+                ..bounds
+            };
             position_video_host(child, bounds.x, bounds.y, bounds.width, bounds.height);
         }
         _ => {}
@@ -475,7 +558,14 @@ fn destroy_video_surface_for_session(app: &AppHandle, session_id: &str) -> AppRe
 
     let app = app.clone();
     let session_id = session_id.to_string();
+    let app_for_task = app.clone();
     app.run_on_main_thread(move || {
+        if let Some(webview) = app_for_task.get_webview(&player_controls_label(&session_id)) {
+            let _ = webview.close();
+        }
+        if let Some(window) = app_for_task.get_window(&format!("player-{session_id}")) {
+            let _ = window.destroy();
+        }
         let Ok(mut surfaces) = video_surfaces().lock() else {
             return;
         };
@@ -532,20 +622,20 @@ fn wide_null(value: &str) -> Vec<u16> {
 }
 
 struct EmbyProgressReporter {
-    local_state: AppState,
+    deps: super::BlockingProviderDeps,
 }
 
 impl EmbyProgressReporter {
     fn new(state: &AppState) -> Self {
         Self {
-            local_state: super::state_for_blocking(state),
+            deps: super::BlockingProviderDeps::from_state(state),
         }
     }
 }
 
 impl PlaybackProgressReporter for EmbyProgressReporter {
     fn report_progress(&self, progress: PlaybackProgressUpdate) -> AppResult<()> {
-        emby_provider_for_state(&self.local_state).report_progress(progress)
+        emby_provider_for_deps(&self.deps).report_progress(progress)
     }
 }
 

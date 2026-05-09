@@ -1028,6 +1028,24 @@ describe("LumiShell", () => {
     );
   });
 
+  it("renders only controls when loaded as the native player child webview", async () => {
+    mockBrowsingCommands();
+    window.history.replaceState(
+      null,
+      "",
+      "/?view=player&sessionId=session-1&surface=controls",
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Lumi Player" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Video")).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "playback_update_surface_bounds",
+      expect.anything(),
+    );
+  });
+
   it("shows player window errors without exposing stream URLs or tokens", async () => {
     mockBrowsingCommands();
     window.history.replaceState(null, "", "/?view=player&sessionId=session-1");

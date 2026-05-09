@@ -1388,6 +1388,11 @@ select:focus-visible {
     var(--color-background);
 }
 
+.player-window.controls-only {
+  grid-template-rows: 1fr;
+  background: rgb(12 14 15 / 96%);
+}
+
 .player-video-region {
   position: relative;
   min-height: 0;
@@ -1415,6 +1420,11 @@ select:focus-visible {
   padding: 14px 16px 16px;
   background: rgb(12 14 15 / 96%);
   box-shadow: 0 -28px 70px rgb(0 0 0 / 44%);
+}
+
+.player-window.controls-only .player-control-region {
+  align-content: center;
+  min-height: 100vh;
 }
 
 .player-window-header {

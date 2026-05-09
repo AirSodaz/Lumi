@@ -8,7 +8,7 @@ use crate::{
     providers::{LibraryItem, MediaProvider, ServerProfile},
 };
 
-use super::auth::emby_provider_for_state;
+use super::auth::{emby_provider_for_deps, emby_provider_for_state};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,8 +64,11 @@ pub async fn providers_list_libraries(
     state: State<'_, AppState>,
     request: ListLibrariesRequest,
 ) -> AppResult<Vec<LibraryItem>> {
-    let state = super::state_for_blocking(state.inner());
-    super::run_blocking_command(move || list_libraries_for_state(&state, request)).await
+    let deps = super::BlockingProviderDeps::from_state(state.inner());
+    super::run_blocking_command(move || {
+        emby_provider_for_deps(&deps).list_libraries(&request.server_id)
+    })
+    .await
 }
 
 pub fn list_libraries_for_state(

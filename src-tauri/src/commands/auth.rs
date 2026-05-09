@@ -9,6 +9,8 @@ use crate::{
     providers::{emby::EmbyProvider, LoginRequest, MediaProvider, ServerProfile},
 };
 
+use super::BlockingProviderDeps;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogoutRequest {
@@ -20,8 +22,11 @@ pub async fn auth_login_manual(
     state: State<'_, AppState>,
     request: LoginRequest,
 ) -> AppResult<ServerProfile> {
-    let state = super::state_for_blocking(state.inner());
-    super::run_blocking_command(move || login_manual_for_state(&state, request)).await
+    let deps = BlockingProviderDeps::from_state(state.inner());
+    super::run_blocking_command(move || {
+        emby_provider_for_deps(&deps).login_manual(request)
+    })
+    .await
 }
 
 pub fn login_manual_for_state(state: &AppState, request: LoginRequest) -> AppResult<ServerProfile> {
@@ -30,8 +35,14 @@ pub fn login_manual_for_state(state: &AppState, request: LoginRequest) -> AppRes
 
 #[tauri::command]
 pub async fn auth_logout(state: State<'_, AppState>, request: LogoutRequest) -> AppResult<()> {
-    let state = super::state_for_blocking(state.inner());
-    super::run_blocking_command(move || logout_for_state(&state, request)).await
+    let local_store = state.local_store();
+    let credential_store = state.credential_store();
+    super::run_blocking_command(move || {
+        let profile = local_store.get_server_profile(&request.server_id)?;
+        credential_store.delete_token(&CredentialKey::server_token(&profile))?;
+        local_store.delete_server_profile(&request.server_id)
+    })
+    .await
 }
 
 pub fn logout_for_state(state: &AppState, request: LogoutRequest) -> AppResult<()> {
@@ -50,5 +61,14 @@ pub(crate) fn emby_provider_for_state(state: &AppState) -> EmbyProvider {
         state.credential_store(),
         state.emby_transport(),
         state.clock(),
+    )
+}
+
+pub(crate) fn emby_provider_for_deps(deps: &BlockingProviderDeps) -> EmbyProvider {
+    EmbyProvider::new_with_clock(
+        deps.local_store.clone(),
+        deps.credential_store.clone(),
+        deps.emby_transport.clone(),
+        deps.clock.clone(),
     )
 }

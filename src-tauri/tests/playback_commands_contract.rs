@@ -589,12 +589,35 @@ fn windows_video_host_is_created_on_tauri_main_thread() {
         std::fs::read_to_string("src/commands/playback.rs").expect("read playback command source");
 
     assert!(
-        playback_source.contains("create_player_window_on_main_thread(&self.app, session_id)"),
+        playback_source.contains("create_video_host_window_on_main_thread(app, window"),
         "Windows mpv child windows must be created on Tauri's main thread so their message handling stays attached to the UI event loop"
     );
     assert!(
         playback_source.contains("app.run_on_main_thread(move ||"),
         "The player window creation boundary must dispatch the native window work to Tauri's main thread"
+    );
+}
+
+#[test]
+fn windows_player_uses_native_window_with_child_controls_webview() {
+    let playback_source =
+        std::fs::read_to_string("src/commands/playback.rs").expect("read playback command source");
+
+    assert!(
+        playback_source.contains("WindowBuilder::new"),
+        "The player host must be a native Tauri window so mpv renders into a native HWND"
+    );
+    assert!(
+        playback_source.contains("WebviewBuilder::new"),
+        "The React player controls should be loaded as a child webview inside the native player window"
+    );
+    assert!(
+        playback_source.contains(".add_child("),
+        "The controls webview must be attached to the native window instead of replacing the native mpv host"
+    );
+    assert!(
+        !playback_source.contains("WebviewWindowBuilder"),
+        "The player host must not regress to a WebviewWindowBuilder window that can cover native mpv output"
     );
 }
 
@@ -612,8 +635,8 @@ fn windows_video_host_uses_reported_video_region_bounds() {
         "The player window must have a command boundary for resizing the native mpv host to the measured video region"
     );
     assert!(
-        !playback_source.contains("CONTROL_REGION_HEIGHT"),
-        "The native video host must not overlap controls by subtracting a hard-coded controls height"
+        playback_source.contains("PLAYER_CONTROLS_HEIGHT"),
+        "The native window owns a stable child controls webview height so the mpv surface uses only the remaining native video area"
     );
     assert!(
         playback_source.contains(

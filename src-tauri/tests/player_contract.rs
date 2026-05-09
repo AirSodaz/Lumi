@@ -438,6 +438,57 @@ fn native_player_service_close_returns_before_backend_teardown_finishes() {
 }
 
 #[test]
+fn native_player_service_close_returns_before_final_progress_finishes() {
+    let host = Arc::new(FakePlaybackHost::default());
+    let backend = Arc::new(FakeMpvBackend::with_position(96));
+    let reporter = Arc::new(HangingProgressReporter::default());
+    let service =
+        NativePlayerService::with_progress_reporter(host.clone(), backend, reporter.clone());
+
+    let session = service
+        .open(
+            PlayerOpenRequest {
+                server_id: "server-1".into(),
+                item_id: "movie-1".into(),
+                media_source_id: None,
+            },
+            ResolvedPlaybackSource {
+                id: "source-1".into(),
+                url: "http://localhost/stream.mkv".into(),
+            },
+        )
+        .expect("open playback");
+    service
+        .command(
+            &session.id,
+            PlaybackCommand::Seek {
+                position_seconds: 15,
+            },
+        )
+        .expect("seed progress position");
+
+    let (result_tx, result_rx) = mpsc::channel();
+    let session_id = session.id.clone();
+    thread::spawn(move || {
+        result_tx
+            .send(service.close(&session_id))
+            .expect("send close result");
+    });
+
+    let closed = result_rx
+        .recv_timeout(Duration::from_millis(100))
+        .expect("close should not wait for final progress reporting")
+        .expect("close playback");
+
+    assert_eq!(closed.state, PlayerState::Closed);
+    assert_eq!(
+        host.states.lock().unwrap().last().map(|state| state.state),
+        Some(PlayerState::Closed)
+    );
+    reporter.wait_for_report();
+}
+
+#[test]
 fn native_player_service_close_command_returns_before_backend_teardown_finishes() {
     let host = Arc::new(FakePlaybackHost::default());
     let backend = Arc::new(HangingCloseMpvBackend::default());
@@ -590,6 +641,7 @@ fn native_player_service_reports_throttled_progress_and_final_position() {
         .expect("next progress interval");
     service.close(&session.id).expect("close playback");
 
+    reporter.wait_for_reports(3);
     let reports = reporter.reports.lock().unwrap();
     assert_eq!(
         reports
@@ -962,11 +1014,60 @@ fn playback_test_error() -> AppError {
 #[derive(Default)]
 struct FakeProgressReporter {
     reports: Mutex<Vec<PlaybackProgressUpdate>>,
+    reports_changed: Condvar,
 }
 
 impl PlaybackProgressReporter for FakeProgressReporter {
     fn report_progress(&self, progress: PlaybackProgressUpdate) -> AppResult<()> {
         self.reports.lock().unwrap().push(progress);
+        self.reports_changed.notify_all();
+        Ok(())
+    }
+}
+
+impl FakeProgressReporter {
+    fn wait_for_reports(&self, expected: usize) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut reports = self.reports.lock().unwrap();
+        loop {
+            if reports.len() >= expected {
+                return;
+            }
+            let now = Instant::now();
+            assert!(now < deadline, "timed out waiting for progress reports");
+            let timeout = deadline.saturating_duration_since(now);
+            reports = self.reports_changed.wait_timeout(reports, timeout).unwrap().0;
+        }
+    }
+}
+
+#[derive(Default)]
+struct HangingProgressReporter {
+    started: Mutex<bool>,
+    started_changed: Condvar,
+}
+
+impl HangingProgressReporter {
+    fn wait_for_report(&self) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut started = self.started.lock().unwrap();
+        loop {
+            if *started {
+                return;
+            }
+            let now = Instant::now();
+            assert!(now < deadline, "timed out waiting for progress report");
+            let timeout = deadline.saturating_duration_since(now);
+            started = self.started_changed.wait_timeout(started, timeout).unwrap().0;
+        }
+    }
+}
+
+impl PlaybackProgressReporter for HangingProgressReporter {
+    fn report_progress(&self, _progress: PlaybackProgressUpdate) -> AppResult<()> {
+        *self.started.lock().unwrap() = true;
+        self.started_changed.notify_all();
+        thread::sleep(Duration::from_secs(30));
         Ok(())
     }
 }
