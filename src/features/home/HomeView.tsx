@@ -1,4 +1,12 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type WheelEvent,
+} from "react";
 import {
   AnimatePresence,
   motion,
@@ -20,6 +28,9 @@ import {
 } from "../../lib/tauriClient";
 
 const FEATURED_CAROUSEL_INTERVAL_MS = 8_000;
+const FEATURED_WHEEL_THRESHOLD = 48;
+const FEATURED_WHEEL_COOLDOWN_MS = 420;
+const GAMEPAD_AXIS_THRESHOLD = 0.55;
 const EMPTY_FEATURED_ITEMS: LibraryItem[] = [];
 
 type FeaturedArtworkStyle = MotionStyle & {
@@ -78,7 +89,18 @@ export function HomeView({
     : fallbackFeatured
       ? [fallbackFeatured]
       : EMPTY_FEATURED_ITEMS;
+  const featuredItemIds = featuredItems.map((item) => item.id).join(":");
   const [selectedFeaturedId, setSelectedFeaturedId] = useState<string | null>(null);
+  const [featuredFocusWithin, setFeaturedFocusWithin] = useState(false);
+  const featuredButtonRef = useRef<HTMLButtonElement>(null);
+  const featuredFocusWithinRef = useRef(false);
+  const featuredPointerWithinRef = useRef(false);
+  const lastFeaturedWheelAtRef = useRef(0);
+  const gamepadPressedRef = useRef({
+    activate: false,
+    next: false,
+    previous: false,
+  });
   const canCycleFeatured = featuredItems.length > 1;
   const selectedFeaturedIndex = selectedFeaturedId
     ? featuredItems.findIndex((item) => item.id === selectedFeaturedId)
@@ -86,6 +108,9 @@ export function HomeView({
   const featuredIndex = selectedFeaturedIndex >= 0 ? selectedFeaturedIndex : 0;
   const nextFeaturedId = canCycleFeatured
     ? featuredItems[(featuredIndex + 1) % featuredItems.length]?.id ?? null
+    : null;
+  const previousFeaturedId = canCycleFeatured
+    ? featuredItems[(featuredIndex - 1 + featuredItems.length) % featuredItems.length]?.id ?? null
     : null;
   const featured = featuredItems[featuredIndex] ?? featuredItems[0] ?? null;
   const featuredTitle =
@@ -135,6 +160,104 @@ export function HomeView({
         transition: { duration: 0.26, ease: carouselEase },
       } satisfies FeaturedMotionState;
 
+  const showFeaturedByIndex = useCallback((index: number) => {
+    const itemId = featuredItemIds.split(":")[index];
+    if (itemId) {
+      setSelectedFeaturedId(itemId);
+    }
+  }, [featuredItemIds]);
+
+  const showNextFeatured = useCallback(() => {
+    if (nextFeaturedId) {
+      setSelectedFeaturedId(nextFeaturedId);
+    }
+  }, [nextFeaturedId]);
+
+  const showPreviousFeatured = useCallback(() => {
+    if (previousFeaturedId) {
+      setSelectedFeaturedId(previousFeaturedId);
+    }
+  }, [previousFeaturedId]);
+
+  function handleFeaturedFocus(event: FocusEvent<HTMLElement>) {
+    if (event.currentTarget.contains(event.target)) {
+      featuredFocusWithinRef.current = true;
+      setFeaturedFocusWithin(true);
+    }
+  }
+
+  function handleFeaturedBlur(event: FocusEvent<HTMLElement>) {
+    const nextFocus = event.relatedTarget;
+
+    if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
+      featuredFocusWithinRef.current = false;
+      setFeaturedFocusWithin(false);
+      gamepadPressedRef.current = {
+        activate: false,
+        next: false,
+        previous: false,
+      };
+    }
+  }
+
+  function handleFeaturedKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (!canCycleFeatured) {
+      return;
+    }
+
+    switch (event.key) {
+      case "ArrowLeft":
+        event.preventDefault();
+        showPreviousFeatured();
+        break;
+      case "ArrowRight":
+        event.preventDefault();
+        showNextFeatured();
+        break;
+      case "Home":
+        event.preventDefault();
+        showFeaturedByIndex(0);
+        break;
+      case "End":
+        event.preventDefault();
+        showFeaturedByIndex(featuredItems.length - 1);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function handleFeaturedWheel(event: WheelEvent<HTMLElement>) {
+    if (
+      !canCycleFeatured ||
+      (!featuredFocusWithinRef.current && !featuredPointerWithinRef.current)
+    ) {
+      return;
+    }
+
+    const absoluteX = Math.abs(event.deltaX);
+    const absoluteY = Math.abs(event.deltaY);
+    if (absoluteX < FEATURED_WHEEL_THRESHOLD || absoluteX <= absoluteY) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastFeaturedWheelAtRef.current < FEATURED_WHEEL_COOLDOWN_MS) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    lastFeaturedWheelAtRef.current = now;
+
+    if (event.deltaX > 0) {
+      showNextFeatured();
+      return;
+    }
+
+    showPreviousFeatured();
+  }
+
   useEffect(() => {
     if (prefersReducedMotion || !canCycleFeatured) {
       return;
@@ -146,6 +269,61 @@ export function HomeView({
 
     return () => window.clearInterval(timer);
   }, [canCycleFeatured, nextFeaturedId, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (!featuredFocusWithin || !featured || typeof navigator.getGamepads !== "function") {
+      return;
+    }
+
+    let animationFrame = 0;
+
+    const pollGamepads = () => {
+      const gamepads = Array.from(navigator.getGamepads()).filter(
+        (gamepad): gamepad is Gamepad => Boolean(gamepad?.connected),
+      );
+      const previousPressed = gamepadPressedRef.current;
+      const currentPressed = gamepads.reduce(
+        (pressed, gamepad) => {
+          const primaryButton = Boolean(gamepad.buttons[0]?.pressed);
+          const leftShoulder = Boolean(gamepad.buttons[4]?.pressed);
+          const rightShoulder = Boolean(gamepad.buttons[5]?.pressed);
+          const dpadLeft = Boolean(gamepad.buttons[14]?.pressed);
+          const dpadRight = Boolean(gamepad.buttons[15]?.pressed);
+          const leftStick = gamepad.axes[0] ?? 0;
+
+          return {
+            activate: pressed.activate || primaryButton,
+            next: pressed.next || rightShoulder || dpadRight || leftStick > GAMEPAD_AXIS_THRESHOLD,
+            previous: pressed.previous || leftShoulder || dpadLeft || leftStick < -GAMEPAD_AXIS_THRESHOLD,
+          };
+        },
+        { activate: false, next: false, previous: false },
+      );
+
+      if (currentPressed.activate && !previousPressed.activate) {
+        featuredButtonRef.current?.click();
+      } else if (canCycleFeatured && currentPressed.next && !previousPressed.next) {
+        showNextFeatured();
+      } else if (canCycleFeatured && currentPressed.previous && !previousPressed.previous) {
+        showPreviousFeatured();
+      }
+
+      gamepadPressedRef.current = currentPressed;
+      animationFrame = window.requestAnimationFrame(pollGamepads);
+    };
+
+    animationFrame = window.requestAnimationFrame(pollGamepads);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [
+    canCycleFeatured,
+    featured,
+    featuredFocusWithin,
+    showNextFeatured,
+    showPreviousFeatured,
+  ]);
 
   const showNoServerHome = !server && !serversLoading;
 
@@ -181,8 +359,19 @@ export function HomeView({
 
       <motion.div
         aria-labelledby="home-featured-title"
+        aria-roledescription="carousel"
         className={`featured-hero ${featuredArtwork ? "has-art" : ""}`.trim()}
         data-motion-surface="featured-hero"
+        onBlurCapture={handleFeaturedBlur}
+        onFocusCapture={handleFeaturedFocus}
+        onKeyDown={handleFeaturedKeyDown}
+        onPointerEnter={() => {
+          featuredPointerWithinRef.current = true;
+        }}
+        onPointerLeave={() => {
+          featuredPointerWithinRef.current = false;
+        }}
+        onWheel={handleFeaturedWheel}
         {...createSurfaceMotion(reducedMotion, 0)}
       >
         <AnimatePresence initial={false} mode="sync">
@@ -201,6 +390,7 @@ export function HomeView({
             aria-label={featuredTitle}
             className="featured-hero-button"
             onClick={() => onOpenMedia(featured)}
+            ref={featuredButtonRef}
             type="button"
           >
             <AnimatePresence initial={false} mode="wait">

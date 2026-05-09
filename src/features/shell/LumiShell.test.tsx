@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import App from "../../App";
@@ -33,11 +33,14 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 const originalLocation = window.location.href;
+const originalRequestAnimationFrame = window.requestAnimationFrame;
+const originalCancelAnimationFrame = window.cancelAnimationFrame;
 const invokeMock = vi.mocked(invoke);
 const listenMock = vi.mocked(listen);
 let scrollIntoViewMock: Mock;
 let startViewTransitionMock: Mock;
 const eventListeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
+let animationFrameCallbacks: Array<FrameRequestCallback | null>;
 
 const demoServer: ServerProfile = {
   id: "server-1",
@@ -429,6 +432,60 @@ async function findPosterCardButtonByName(name: string | RegExp) {
   });
 }
 
+async function runNextAnimationFrame() {
+  const callback = await waitFor(() => {
+    let next: FrameRequestCallback | null | undefined;
+
+    while (animationFrameCallbacks.length > 0 && !next) {
+      next = animationFrameCallbacks.shift();
+    }
+
+    if (!next) {
+      throw new Error("Expected a queued animation frame callback");
+    }
+
+    return next;
+  });
+
+  act(() => {
+    callback(performance.now());
+  });
+}
+
+function mockGamepads(gamepads: Array<Partial<Gamepad> | null>) {
+  Object.defineProperty(window.navigator, "getGamepads", {
+    configurable: true,
+    value: vi.fn(() => gamepads),
+  });
+}
+
+function mockAnimationFrameQueue() {
+  Object.defineProperty(window, "requestAnimationFrame", {
+    configurable: true,
+    value: vi.fn((callback: FrameRequestCallback) => {
+      animationFrameCallbacks.push(callback);
+
+      return animationFrameCallbacks.length;
+    }),
+    writable: true,
+  });
+  Object.defineProperty(window, "cancelAnimationFrame", {
+    configurable: true,
+    value: vi.fn((handle: number) => {
+      animationFrameCallbacks[handle - 1] = null;
+    }),
+    writable: true,
+  });
+}
+
+function gamepadButton(pressed = false): GamepadButton {
+  return {
+    pressed,
+    touched: pressed,
+    value: pressed ? 1 : 0,
+  };
+}
+
 describe("LumiShell", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", originalLocation);
@@ -473,6 +530,18 @@ describe("LumiShell", () => {
         removeListener: vi.fn(),
       })),
     });
+    animationFrameCallbacks = [];
+    Object.defineProperty(window, "requestAnimationFrame", {
+      configurable: true,
+      value: originalRequestAnimationFrame,
+      writable: true,
+    });
+    Object.defineProperty(window, "cancelAnimationFrame", {
+      configurable: true,
+      value: originalCancelAnimationFrame,
+      writable: true,
+    });
+    mockGamepads([]);
     window.localStorage.clear();
     eventListeners.clear();
 
@@ -1032,6 +1101,172 @@ describe("LumiShell", () => {
         request: { serverId: "server-1", itemId: "featured-2" },
       }),
     );
+  });
+
+  it("controls the Home featured carousel from focused keyboard and remote inputs", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const featuredButton = await screen.findByRole("button", { name: "Random Feature" });
+    featuredButton.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Second Random Feature" })).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+
+    await user.keyboard("{End}");
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Home}");
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+
+    await user.keyboard("{ArrowRight}");
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByRole("heading", { name: "Second Random Feature" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
+        request: { serverId: "server-1", itemId: "featured-2" },
+      }),
+    );
+  });
+
+  it("keeps Home rail arrow navigation separate from focused carousel controls", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    const second = await screen.findByRole("button", { name: /Second Movie/ });
+    const third = await screen.findByRole("button", { name: /Third Movie/ });
+
+    second.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(third).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Second Random Feature" })).not.toBeInTheDocument();
+  });
+
+  it("uses horizontal touchpad wheel input only when the Home carousel is focused or hovered", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    let now = 1_000;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+
+    render(<App />);
+
+    const featuredButton = await screen.findByRole("button", { name: "Random Feature" });
+    const featuredHero = document.querySelector(".featured-hero");
+    expect(featuredHero).toBeInTheDocument();
+
+    featuredHero?.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaX: 96, deltaY: 4 }),
+    );
+    expect(screen.getByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+
+    await user.hover(featuredButton);
+    fireEvent.wheel(
+      featuredHero as Element,
+      { deltaX: 96, deltaY: 4 },
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+
+    now += 500;
+    fireEvent.wheel(
+      featuredHero as Element,
+      { deltaX: 1, deltaY: 90 },
+    );
+    expect(screen.getByRole("heading", { name: "Second Random Feature" })).toBeInTheDocument();
+
+    await user.unhover(featuredButton);
+    featuredButton.focus();
+    now += 500;
+    fireEvent.wheel(
+      featuredHero as Element,
+      { deltaX: -96, deltaY: 0 },
+    );
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    nowSpy.mockRestore();
+  });
+
+  it("maps focused gamepad controls to the Home featured carousel", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+    mockAnimationFrameQueue();
+
+    const gamepad = {
+      axes: [0, 0],
+      buttons: Array.from({ length: 16 }, () => gamepadButton()),
+      connected: true,
+      index: 0,
+      mapping: "standard",
+    } satisfies Partial<Gamepad>;
+    mockGamepads([gamepad]);
+
+    render(<App />);
+
+    const featuredButton = await screen.findByRole("button", { name: "Random Feature" });
+    featuredButton.focus();
+    await runNextAnimationFrame();
+
+    gamepad.buttons[15] = gamepadButton(true);
+    await runNextAnimationFrame();
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+
+    gamepad.buttons[15] = gamepadButton();
+    await runNextAnimationFrame();
+    gamepad.buttons[14] = gamepadButton(true);
+    await runNextAnimationFrame();
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+
+    gamepad.buttons[14] = gamepadButton();
+    await runNextAnimationFrame();
+    gamepad.buttons[5] = gamepadButton(true);
+    await runNextAnimationFrame();
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+
+    gamepad.buttons[5] = gamepadButton();
+    gamepad.buttons[0] = gamepadButton(true);
+    await runNextAnimationFrame();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
+        request: { serverId: "server-1", itemId: "featured-2" },
+      }),
+    );
+
+    gamepad.buttons[0] = gamepadButton();
+    await user.click(screen.getByRole("button", { name: "Home" }));
+    expect(await screen.findByRole("heading", { name: "Home", hidden: true })).toBeInTheDocument();
+    const homeFeaturedButton = await screen.findByRole("button", { name: "Random Feature" });
+    homeFeaturedButton.focus();
+    await runNextAnimationFrame();
+    const second = await screen.findByRole("button", { name: /Second Movie/ });
+    second.focus();
+    gamepad.buttons[15] = gamepadButton(true);
+    await runNextAnimationFrame();
+
+    expect(screen.getByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Second Random Feature" })).not.toBeInTheDocument();
   });
 
   it("auto-advances the Home featured carousel unless reduced motion is preferred", async () => {
