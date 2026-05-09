@@ -11,6 +11,10 @@ import {
   useItemDetail,
   useLibraries,
   useServers,
+  useCreateServerLine,
+  useDeleteServerLine,
+  useSelectServerLine,
+  useUpdateServerLine,
   useUpdateServerProfile,
 } from "./queries";
 
@@ -39,6 +43,17 @@ describe("tauri query hooks", () => {
         providerKind: "emby",
         name: "Demo Server",
         baseUrl: "http://localhost:8096",
+        lines: [
+          {
+            id: "line-1",
+            serverId: "server-1",
+            name: "Primary",
+            baseUrl: "http://localhost:8096",
+            isActive: true,
+            createdAt: "2026-05-07T00:00:00Z",
+            updatedAt: "2026-05-07T00:00:00Z",
+          },
+        ],
         userId: "user-1",
         createdAt: "2026-05-07T00:00:00Z",
         updatedAt: "2026-05-07T00:00:00Z",
@@ -293,6 +308,17 @@ describe("tauri query hooks", () => {
       providerKind: "emby",
       name: "Living Room",
       baseUrl: "http://localhost:8096",
+      lines: [
+        {
+          id: "line-1",
+          serverId: "server-1",
+          name: "Primary",
+          baseUrl: "http://localhost:8096",
+          isActive: true,
+          createdAt: "2026-05-07T00:00:00Z",
+          updatedAt: "2026-05-07T00:00:00Z",
+        },
+      ],
       userId: "user-1",
       createdAt: "2026-05-07T00:00:00Z",
       updatedAt: "2026-05-08T00:00:00Z",
@@ -305,6 +331,85 @@ describe("tauri query hooks", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invokeMock).toHaveBeenCalledWith("providers_update_server_profile", {
       request: { serverId: "server-1", name: "Living Room" },
+    });
+  });
+
+  it("mutates server lines through typed provider clients", async () => {
+    const updatedServer = {
+      id: "server-1",
+      providerKind: "emby",
+      name: "Demo Server",
+      baseUrl: "https://remote.example.com/emby",
+      lines: [
+        {
+          id: "line-1",
+          serverId: "server-1",
+          name: "Primary",
+          baseUrl: "http://localhost:8096",
+          isActive: false,
+          createdAt: "2026-05-07T00:00:00Z",
+          updatedAt: "2026-05-07T00:00:00Z",
+        },
+        {
+          id: "line-2",
+          serverId: "server-1",
+          name: "Remote",
+          baseUrl: "https://remote.example.com/emby",
+          isActive: true,
+          createdAt: "2026-05-08T00:00:00Z",
+          updatedAt: "2026-05-08T00:00:00Z",
+        },
+      ],
+      userId: "user-1",
+      createdAt: "2026-05-07T00:00:00Z",
+      updatedAt: "2026-05-08T00:00:00Z",
+    };
+    invokeMock.mockResolvedValue(updatedServer);
+
+    const create = renderHook(() => useCreateServerLine(), { wrapper });
+    create.result.current.mutate({
+      serverId: "server-1",
+      name: "Remote",
+      baseUrl: "https://remote.example.com/emby",
+    });
+    await waitFor(() => expect(create.result.current.isSuccess).toBe(true));
+    expect(invokeMock).toHaveBeenCalledWith("providers_create_server_line", {
+      request: {
+        serverId: "server-1",
+        name: "Remote",
+        baseUrl: "https://remote.example.com/emby",
+      },
+    });
+
+    const update = renderHook(() => useUpdateServerLine(), { wrapper });
+    update.result.current.mutate({
+      serverId: "server-1",
+      lineId: "line-2",
+      name: "Remote",
+      baseUrl: "https://remote.example.com/emby",
+    });
+    await waitFor(() => expect(update.result.current.isSuccess).toBe(true));
+    expect(invokeMock).toHaveBeenCalledWith("providers_update_server_line", {
+      request: {
+        serverId: "server-1",
+        lineId: "line-2",
+        name: "Remote",
+        baseUrl: "https://remote.example.com/emby",
+      },
+    });
+
+    const select = renderHook(() => useSelectServerLine(), { wrapper });
+    select.result.current.mutate({ serverId: "server-1", lineId: "line-2" });
+    await waitFor(() => expect(select.result.current.isSuccess).toBe(true));
+    expect(invokeMock).toHaveBeenCalledWith("providers_select_server_line", {
+      request: { serverId: "server-1", lineId: "line-2" },
+    });
+
+    const deleteLine = renderHook(() => useDeleteServerLine(), { wrapper });
+    deleteLine.result.current.mutate({ serverId: "server-1", lineId: "line-2" });
+    await waitFor(() => expect(deleteLine.result.current.isSuccess).toBe(true));
+    expect(invokeMock).toHaveBeenCalledWith("providers_delete_server_line", {
+      request: { serverId: "server-1", lineId: "line-2" },
     });
   });
 });

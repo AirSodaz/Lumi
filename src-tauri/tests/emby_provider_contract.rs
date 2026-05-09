@@ -9,7 +9,7 @@ use lumi_lib::{
             EmbyProvider,
         },
         HomeRowsRequest, LibraryItem, ListChildrenRequest, ListFavoritesRequest, LoginRequest,
-        MediaProvider, PlaybackProgressUpdate, ProviderKind, ServerProfile,
+        MediaProvider, PlaybackProgressUpdate, ProviderKind, ServerLine, ServerProfile,
     },
 };
 use serde_json::{json, Value};
@@ -47,6 +47,11 @@ mod providers {
             assert_eq!(profile.provider_kind, ProviderKind::Emby);
             assert_eq!(profile.name, "Demo Server");
             assert_eq!(profile.base_url, "http://localhost:8096");
+            assert_eq!(profile.lines.len(), 1);
+            assert_eq!(profile.lines[0].server_id, profile.id);
+            assert_eq!(profile.lines[0].name, "Primary");
+            assert_eq!(profile.lines[0].base_url, "http://localhost:8096");
+            assert!(profile.lines[0].is_active);
             assert_eq!(profile.user_id, "user-1");
             assert_eq!(profile.created_at, "2026-05-07T00:00:00Z");
             assert_eq!(profile.updated_at, "2026-05-07T00:00:00Z");
@@ -309,6 +314,57 @@ mod providers {
             assert!(children_request.url.contains("StartIndex=21"));
             assert!(children_request.url.contains("Limit=50"));
             assert_eq!(children_request.header("X-Emby-Token"), Some("token-value"));
+        }
+
+        #[test]
+        fn media_requests_use_the_selected_server_line_with_existing_token() {
+            let (local_store, credential_store, mut profile) = initialized_profile_with_token();
+            profile.base_url = "https://remote.example.com/emby".into();
+            profile.lines = vec![
+                ServerLine {
+                    id: "line-local".into(),
+                    server_id: profile.id.clone(),
+                    name: "Local".into(),
+                    base_url: "http://localhost:8096".into(),
+                    is_active: false,
+                    created_at: "2026-05-07T00:00:00Z".into(),
+                    updated_at: "2026-05-07T00:00:00Z".into(),
+                },
+                ServerLine {
+                    id: "line-remote".into(),
+                    server_id: profile.id.clone(),
+                    name: "Remote".into(),
+                    base_url: "https://remote.example.com/emby".into(),
+                    is_active: true,
+                    created_at: "2026-05-08T00:00:00Z".into(),
+                    updated_at: "2026-05-08T00:00:00Z".into(),
+                },
+            ];
+            local_store
+                .upsert_server_profile(&profile)
+                .expect("replace profile with selected line");
+            let transport = Arc::new(FakeEmbyTransport::new(vec![FakeResponse::json(
+                200,
+                json!({
+                    "Items": [{
+                        "Id": "library-1",
+                        "Name": "Movies",
+                        "Type": "CollectionFolder",
+                        "CollectionType": "movies"
+                    }]
+                }),
+            )]));
+            let provider = test_provider(local_store, credential_store, transport.clone());
+
+            provider
+                .list_libraries(&profile.id)
+                .expect("list libraries through selected line");
+
+            assert_eq!(
+                transport.request_at(0).url,
+                "https://remote.example.com/emby/Users/user-1/Views?IncludeExternalContent=false"
+            );
+            assert_eq!(transport.request_at(0).header("X-Emby-Token"), Some("token-value"));
         }
 
         #[test]
@@ -912,6 +968,15 @@ fn initialized_profile_with_token() -> (Arc<LocalStore>, Arc<MemoryCredentialSto
         provider_kind: ProviderKind::Emby,
         name: "Demo Server".into(),
         base_url: "http://localhost:8096".into(),
+        lines: vec![ServerLine {
+            id: "line-1".into(),
+            server_id: "server-1".into(),
+            name: "Primary".into(),
+            base_url: "http://localhost:8096".into(),
+            is_active: true,
+            created_at: "2026-05-07T00:00:00Z".into(),
+            updated_at: "2026-05-07T00:00:00Z".into(),
+        }],
         user_id: "user-1".into(),
         created_at: "2026-05-07T00:00:00Z".into(),
         updated_at: "2026-05-07T00:00:00Z".into(),

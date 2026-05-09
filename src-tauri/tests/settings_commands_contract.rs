@@ -11,7 +11,7 @@ use lumi_lib::{
     },
     providers::{
         emby::{Clock, EmbyHttpRequest, EmbyHttpResponse, EmbyHttpTransport},
-        ProviderKind, ServerProfile,
+        ProviderKind, ServerLine, ServerProfile,
     },
 };
 use serde_json::Value;
@@ -114,6 +114,15 @@ fn seed_profile_with_token(state: &AppState) -> ServerProfile {
         provider_kind: ProviderKind::Emby,
         name: "Demo Server".into(),
         base_url: "http://localhost:8096".into(),
+        lines: vec![ServerLine {
+            id: "line-1".into(),
+            server_id: "server-1".into(),
+            name: "Primary".into(),
+            base_url: "http://localhost:8096".into(),
+            is_active: true,
+            created_at: "2026-05-07T00:00:00Z".into(),
+            updated_at: "2026-05-07T00:00:00Z".into(),
+        }],
         user_id: "user-1".into(),
         created_at: "2026-05-07T00:00:00Z".into(),
         updated_at: "2026-05-07T00:00:00Z".into(),

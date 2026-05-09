@@ -1,10 +1,21 @@
 export type ProviderKind = "emby";
 
+export type ServerLine = {
+  id: string;
+  serverId: string;
+  name: string;
+  baseUrl: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ServerProfile = {
   id: string;
   providerKind: ProviderKind;
   name: string;
   baseUrl: string;
+  lines: ServerLine[];
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +77,23 @@ export type UpdateServerProfileRequest = {
   serverId: string;
   name: string;
 };
+
+export type CreateServerLineRequest = {
+  serverId: string;
+  name: string;
+  baseUrl: string;
+};
+
+export type UpdateServerLineRequest = CreateServerLineRequest & {
+  lineId: string;
+};
+
+export type SelectServerLineRequest = {
+  serverId: string;
+  lineId: string;
+};
+
+export type DeleteServerLineRequest = SelectServerLineRequest;
 
 export type LibraryItem = {
   id: string;

@@ -24,16 +24,21 @@ import {
 } from "../../lib/motion/presets";
 import {
   useLoginManual,
+  useCreateServerLine,
+  useDeleteServerLine,
   useLogout,
   useExportLogs,
   useMaterialState,
   useMpvDiagnostic,
+  useSelectServerLine,
   useServers,
   useSettings,
+  useUpdateServerLine,
   useUpdateServerProfile,
   useUpdateSettings,
   type AppError,
   type LogExport,
+  type ServerLine,
   type ServerProfile,
   type SubtitlePreference,
   type ThemePreference,
@@ -169,6 +174,7 @@ function ServersPanel({
               <div className="server-row-details">
                 <strong>{server.name}</strong>
                 <span>{server.baseUrl}</span>
+                <span>{lineCountLabel(server.lines.length, translate)}</span>
               </div>
               <div className="server-row-actions">
                 {isSelected ? (
@@ -657,11 +663,136 @@ type ServerDetailDialogProps = {
 
 function ServerDetailDialog({ onOpenChange, server }: ServerDetailDialogProps) {
   const { translate } = useI18n();
+  const createLine = useCreateServerLine();
+  const updateLine = useUpdateServerLine();
+  const selectLine = useSelectServerLine();
+  const deleteLine = useDeleteServerLine();
+  const [lineServer, setLineServer] = useState<ServerProfile | null>(null);
+  const [draftMode, setDraftMode] = useState<"closed" | "create" | "edit">("closed");
+  const [editingLine, setEditingLine] = useState<ServerLine | null>(null);
+  const [lineName, setLineName] = useState("");
+  const [lineUrl, setLineUrl] = useState("");
+  const [error, setError] = useState<AppError | null>(null);
+
+  const activeServer = lineServer?.id === server?.id ? lineServer : server;
+
+  function resetDraft() {
+    setDraftMode("closed");
+    setEditingLine(null);
+    setLineName("");
+    setLineUrl("");
+    setError(null);
+  }
+
+  function startCreateLine() {
+    setDraftMode("create");
+    setEditingLine(null);
+    setLineName("");
+    setLineUrl("");
+    setError(null);
+  }
+
+  function startEditLine(line: ServerLine) {
+    setDraftMode("edit");
+    setEditingLine(line);
+    setLineName(line.name);
+    setLineUrl(line.baseUrl);
+    setError(null);
+  }
+
+  async function handleLineSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeServer) {
+      return;
+    }
+
+    const trimmedName = lineName.trim();
+    const trimmedUrl = lineUrl.trim();
+    if (!trimmedName) {
+      setError({
+        code: "providers.server_line_name_required",
+        message: translate("settings.error.serverLineNameRequired"),
+        recoverable: true,
+      });
+      return;
+    }
+
+    try {
+      setError(null);
+      if (draftMode === "edit" && editingLine) {
+        const updated = await updateLine.mutateAsync({
+          serverId: activeServer.id,
+          lineId: editingLine.id,
+          name: trimmedName,
+          baseUrl: trimmedUrl,
+        });
+        setLineServer(updated);
+      } else {
+        const updated = await createLine.mutateAsync({
+          serverId: activeServer.id,
+          name: trimmedName,
+          baseUrl: trimmedUrl,
+        });
+        setLineServer(updated);
+      }
+      resetDraft();
+    } catch (caught) {
+      setError(toAppError(caught, translate("app.error.unknown")));
+    }
+  }
+
+  async function handleSelectLine(line: ServerLine) {
+    if (!activeServer || line.isActive) {
+      return;
+    }
+
+    try {
+      setError(null);
+      const updated = await selectLine.mutateAsync({
+        serverId: activeServer.id,
+        lineId: line.id,
+      });
+      setLineServer(updated);
+    } catch (caught) {
+      setError(toAppError(caught, translate("app.error.unknown")));
+    }
+  }
+
+  async function handleDeleteLine(line: ServerLine) {
+    if (!activeServer) {
+      return;
+    }
+
+    try {
+      setError(null);
+      const updated = await deleteLine.mutateAsync({
+        serverId: activeServer.id,
+        lineId: line.id,
+      });
+      setLineServer(updated);
+    } catch (caught) {
+      setError(toAppError(caught, translate("app.error.unknown")));
+    }
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      setLineServer(null);
+      resetDraft();
+    }
+    onOpenChange(nextOpen);
+  }
+
+  const lineMutationPending =
+    createLine.isPending ||
+    updateLine.isPending ||
+    selectLine.isPending ||
+    deleteLine.isPending;
 
   return (
-    <Dialog.Root open={Boolean(server)} onOpenChange={onOpenChange}>
+    <Dialog.Root open={Boolean(server)} onOpenChange={handleOpenChange}>
       <AnimatePresence>
-        {server ? (
+        {activeServer ? (
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild forceMount>
               <motion.div
@@ -677,7 +808,7 @@ function ServerDetailDialog({ onOpenChange, server }: ServerDetailDialogProps) {
                 {...dialogContentMotion}
               >
                 <div className="dialog-title-row">
-                  <Dialog.Title>{server.name}</Dialog.Title>
+                  <Dialog.Title>{activeServer.name}</Dialog.Title>
                   <Dialog.Close asChild>
                     <MotionButton
                       aria-label={translate("common.close")}
@@ -694,16 +825,127 @@ function ServerDetailDialog({ onOpenChange, server }: ServerDetailDialogProps) {
                 <div className="settings-list">
                   <div className="settings-row">
                     <strong>{translate("settings.field.serverUrl")}</strong>
-                    <span>{server.baseUrl}</span>
+                    <span>{activeServer.baseUrl}</span>
                   </div>
                   <div className="settings-row">
                     <strong>{translate("settings.field.user")}</strong>
-                    <span>{server.userId}</span>
+                    <span>{activeServer.userId}</span>
                   </div>
                   <div className="settings-row">
                     <strong>{translate("settings.field.provider")}</strong>
-                    <span>{server.providerKind}</span>
+                    <span>{activeServer.providerKind}</span>
                   </div>
+                  <div className="server-lines-header">
+                    <strong>{translate("settings.server.lines")}</strong>
+                    <MotionButton
+                      className="secondary-action server-current-action"
+                      onClick={startCreateLine}
+                      type="button"
+                    >
+                      {translate("settings.action.addLine")}
+                    </MotionButton>
+                  </div>
+                  <div className="server-lines-list">
+                    {activeServer.lines.map((line) => (
+                      <article className="server-line-row" key={line.id}>
+                        <div className="server-row-details">
+                          <strong>{line.name}</strong>
+                          <span>{line.baseUrl}</span>
+                        </div>
+                        <div className="server-row-actions">
+                          {line.isActive ? (
+                            <span className="status-chip server-current-chip">
+                              <Check aria-hidden="true" size={14} />
+                              <span>{translate("settings.server.currentLine")}</span>
+                            </span>
+                          ) : (
+                            <MotionButton
+                              aria-label={translate("settings.action.useLineFor", {
+                                name: line.name,
+                              })}
+                              className="secondary-action server-current-action"
+                              disabled={lineMutationPending}
+                              onClick={() => void handleSelectLine(line)}
+                              type="button"
+                            >
+                              {translate("settings.action.useLine")}
+                            </MotionButton>
+                          )}
+                          <MotionButton
+                            aria-label={translate("settings.action.editLineFor", {
+                              name: line.name,
+                            })}
+                            className="secondary-action server-current-action"
+                            disabled={lineMutationPending}
+                            onClick={() => startEditLine(line)}
+                            type="button"
+                          >
+                            {translate("settings.action.editLine")}
+                          </MotionButton>
+                          <MotionButton
+                            aria-label={translate("settings.action.deleteLineFor", {
+                              name: line.name,
+                            })}
+                            className="secondary-action server-current-action danger-action"
+                            disabled={lineMutationPending || activeServer.lines.length <= 1}
+                            onClick={() => void handleDeleteLine(line)}
+                            type="button"
+                          >
+                            {translate("settings.action.deleteLine")}
+                          </MotionButton>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {draftMode !== "closed" ? (
+                    <form className="dialog-form server-line-form" onSubmit={handleLineSubmit}>
+                      <label>
+                        <span>{translate("settings.field.lineName")}</span>
+                        <input
+                          onChange={(event) => setLineName(event.target.value)}
+                          required
+                          type="text"
+                          value={lineName}
+                        />
+                      </label>
+                      <label>
+                        <span>{translate("settings.field.lineUrl")}</span>
+                        <input
+                          autoComplete="url"
+                          onChange={(event) => setLineUrl(event.target.value)}
+                          required
+                          type="url"
+                          value={lineUrl}
+                        />
+                      </label>
+                      <div className="dialog-actions">
+                        <MotionButton
+                          className="secondary-action"
+                          onClick={resetDraft}
+                          type="button"
+                        >
+                          {translate("common.cancel")}
+                        </MotionButton>
+                        <MotionButton
+                          className="primary-action"
+                          disabled={lineMutationPending}
+                          type="submit"
+                        >
+                          {lineMutationPending
+                            ? translate("common.saving")
+                            : draftMode === "edit"
+                              ? translate("settings.action.saveLine")
+                              : translate("settings.action.createLine")}
+                        </MotionButton>
+                      </div>
+                    </form>
+                  ) : null}
+                  {error ? (
+                    <div className="form-error" role="alert">
+                      <strong>{lineErrorMessage(error, translate)}</strong>
+                      <span>{error.code}</span>
+                    </div>
+                  ) : null}
                 </div>
               </motion.div>
             </Dialog.Content>
@@ -877,6 +1119,29 @@ function materialTitle(
   }
 
   return translate("settings.appearance.materials.fallbackSurface");
+}
+
+function lineCountLabel(
+  count: number,
+  translate: ReturnType<typeof useI18n>["translate"],
+) {
+  return translate("settings.server.lineCount", { count });
+}
+
+function lineErrorMessage(
+  error: AppError,
+  translate: ReturnType<typeof useI18n>["translate"],
+) {
+  if (error.code === "providers.server_line_last") {
+    return translate("settings.error.serverLineLast");
+  }
+  if (error.code === "providers.server_line_url_duplicate") {
+    return translate("settings.error.serverLineUrlDuplicate");
+  }
+  if (error.code === "providers.server_line_name_required") {
+    return translate("settings.error.serverLineNameRequired");
+  }
+  return error.message;
 }
 
 function toAppError(error: unknown, fallbackMessage: string): AppError {

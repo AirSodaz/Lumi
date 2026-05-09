@@ -13,7 +13,7 @@ use crate::{
     providers::{
         HomeRows, HomeRowsRequest, LatestLibraryItems, LibraryItem, LibraryItemDetail,
         ListChildrenRequest, ListFavoritesRequest, LoginRequest, MediaProvider, MediaSource,
-        PagedResult, PlaybackProgressUpdate, ProviderKind, ServerProfile,
+        PagedResult, PlaybackProgressUpdate, ProviderKind, ServerLine, ServerProfile,
     },
 };
 
@@ -279,11 +279,22 @@ impl MediaProvider for EmbyProvider {
             .filter(|name| !name.is_empty())
             .unwrap_or(&authenticated.server_name)
             .to_string();
+        let base_url = client.base_url_string();
+        let profile_id = new_emby_profile_id();
         let profile = ServerProfile {
-            id: new_emby_profile_id(),
+            id: profile_id.clone(),
             provider_kind: ProviderKind::Emby,
             name: profile_name,
-            base_url: client.base_url_string(),
+            base_url: base_url.clone(),
+            lines: vec![ServerLine {
+                id: new_emby_line_id(),
+                server_id: profile_id,
+                name: "Primary".into(),
+                base_url,
+                is_active: true,
+                created_at: now.clone(),
+                updated_at: now.clone(),
+            }],
             user_id: authenticated.user_id,
             created_at: now.clone(),
             updated_at: now,
@@ -1038,6 +1049,10 @@ fn token_headers(token: &str) -> Vec<(String, String)> {
 
 fn new_emby_profile_id() -> String {
     format!("emby-profile-{}", Uuid::new_v4())
+}
+
+fn new_emby_line_id() -> String {
+    format!("line-{}", Uuid::new_v4())
 }
 
 fn default_headers(mut headers: Vec<(String, String)>) -> Vec<(String, String)> {
