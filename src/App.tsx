@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { MotionConfig } from "motion/react";
+import { HashRouter } from "react-router";
 import { PlayerWindowView } from "./features/player/PlayerWindowView";
 import { LumiShell } from "./features/shell/LumiShell";
 import { I18nProvider } from "./lib/i18n";
@@ -33,7 +34,9 @@ function App() {
             {route.view === "player" ? (
               <PlayerWindowView controlsOnly={route.controlsOnly} sessionId={route.sessionId} />
             ) : (
-              <LumiShell />
+              <HashRouter>
+                <LumiShell />
+              </HashRouter>
             )}
           </QueryClientProvider>
         </I18nProvider>

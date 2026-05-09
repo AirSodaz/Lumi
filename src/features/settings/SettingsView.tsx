@@ -1,4 +1,4 @@
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -43,8 +43,7 @@ import {
   type SubtitlePreference,
   type ThemePreference,
 } from "../../lib/tauriClient";
-
-type SettingsPanel = "mediaServices" | "player" | "appearance" | "logs";
+import type { SettingsPanel } from "../shell/shellRoutes";
 
 const panels: Array<{ id: SettingsPanel }> = [
   { id: "mediaServices" },
@@ -56,7 +55,9 @@ const panels: Array<{ id: SettingsPanel }> = [
 type SettingsViewProps = {
   openAddServerDialog?: boolean;
   onAddServerDialogOpenChange?: (open: boolean) => void;
+  onPanelChange?: (panel: SettingsPanel) => void;
   onSelectServer: (serverId: string) => void;
+  panel?: SettingsPanel;
   selectedServerId: string | null;
 };
 
@@ -79,13 +80,22 @@ function languagePreferenceLabelKey(languagePreference: LanguagePreference) {
 export function SettingsView({
   openAddServerDialog = false,
   onAddServerDialogOpenChange,
+  onPanelChange,
   onSelectServer,
+  panel: controlledPanel,
   selectedServerId,
 }: SettingsViewProps) {
   const [selectedPanel, setSelectedPanel] = useState<SettingsPanel>("mediaServices");
   const reducedMotion = useReducedMotion();
   const { translate } = useI18n();
-  const panel = openAddServerDialog ? "mediaServices" : selectedPanel;
+  const panel = openAddServerDialog
+    ? "mediaServices"
+    : controlledPanel ?? selectedPanel;
+
+  function selectPanel(nextPanel: SettingsPanel) {
+    setSelectedPanel(nextPanel);
+    onPanelChange?.(nextPanel);
+  }
 
   return (
     <section className="settings-view app-workbench" aria-labelledby="settings-title">
@@ -98,7 +108,7 @@ export function SettingsView({
               aria-current={panel === item.id ? "page" : undefined}
               key={item.id}
               motionKind="nav"
-              onClick={() => setSelectedPanel(item.id)}
+              onClick={() => selectPanel(item.id)}
               type="button"
             >
               {translate(panelLabelKey(item.id))}
@@ -303,6 +313,14 @@ function AddServerDialog({
   const [error, setError] = useState<AppError | null>(null);
   const login = useLoginManual();
   const firstInputRef = useRef<HTMLInputElement>(null);
+  const serverUrlInputId = useId();
+  const serverNameInputId = useId();
+  const usernameInputId = useId();
+  const passwordInputId = useId();
+  const serverUrlLabel = translate("settings.field.serverUrl");
+  const serverNameLabel = translate("settings.field.serverName");
+  const usernameLabel = translate("settings.field.username");
+  const passwordLabel = translate("settings.field.password");
   const controlled = onExternalOpenChange !== undefined;
   const open = controlled ? Boolean(externalOpen) : internalOpen;
 
@@ -382,10 +400,12 @@ function AddServerDialog({
                   {translate("settings.dialog.add.description")}
                 </Dialog.Description>
                 <form className="dialog-form" onSubmit={handleSubmit}>
-                  <label>
-                    <span>{translate("settings.field.serverUrl")}</span>
+                  <label htmlFor={serverUrlInputId}>
+                    <span>{serverUrlLabel}</span>
                     <input
+                      aria-label={serverUrlLabel}
                       autoComplete="url"
+                      id={serverUrlInputId}
                       onChange={(event) => setBaseUrl(event.target.value)}
                       ref={firstInputRef}
                       required
@@ -393,30 +413,36 @@ function AddServerDialog({
                       value={baseUrl}
                     />
                   </label>
-                  <label>
-                    <span>{translate("settings.field.serverName")}</span>
+                  <label htmlFor={serverNameInputId}>
+                    <span>{serverNameLabel}</span>
                     <input
+                      aria-label={serverNameLabel}
                       autoComplete="off"
+                      id={serverNameInputId}
                       onChange={(event) => setDisplayName(event.target.value)}
                       placeholder={translate("settings.field.serverNamePlaceholder")}
                       type="text"
                       value={displayName}
                     />
                   </label>
-                  <label>
-                    <span>{translate("settings.field.username")}</span>
+                  <label htmlFor={usernameInputId}>
+                    <span>{usernameLabel}</span>
                     <input
+                      aria-label={usernameLabel}
                       autoComplete="username"
+                      id={usernameInputId}
                       onChange={(event) => setUsername(event.target.value)}
                       required
                       type="text"
                       value={username}
                     />
                   </label>
-                  <label>
-                    <span>{translate("settings.field.password")}</span>
+                  <label htmlFor={passwordInputId}>
+                    <span>{passwordLabel}</span>
                     <input
+                      aria-label={passwordLabel}
                       autoComplete="current-password"
+                      id={passwordInputId}
                       onChange={(event) => setPassword(event.target.value)}
                       type="password"
                       value={password}
@@ -455,7 +481,7 @@ function PlayerPanel() {
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const diagnostic = useMpvDiagnostic();
-  const current = settings.data ?? defaultSettings();
+  const current = resolveSettings(settings.data);
 
   function updateDefaultVolume(value: number) {
     updateSettings.mutate({ defaultVolume: Math.max(0, Math.min(100, value)) });
@@ -536,7 +562,7 @@ function AppearancePanel() {
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const material = useMaterialState();
-  const current = settings.data ?? defaultSettings();
+  const current = resolveSettings(settings.data);
 
   return (
     <section className="settings-section" aria-labelledby="appearance-title">
@@ -1101,6 +1127,17 @@ function defaultSettings() {
       subtitlePreference: "serverDefault" as SubtitlePreference,
     },
     theme: "system" as ThemePreference,
+  };
+}
+
+function resolveSettings(settings: ReturnType<typeof useSettings>["data"]) {
+  return {
+    ...defaultSettings(),
+    ...settings,
+    player: {
+      ...defaultSettings().player,
+      ...settings?.player,
+    },
   };
 }
 

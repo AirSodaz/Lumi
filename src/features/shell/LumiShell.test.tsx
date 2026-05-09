@@ -664,15 +664,92 @@ describe("LumiShell", () => {
 
     await user.click(screen.getByRole("button", { name: "Favorites" }));
     expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/favorites");
     expect(back).toBeEnabled();
     expect(forward).toBeDisabled();
 
     await user.click(back);
     expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/home");
     expect(forward).toBeEnabled();
 
     await user.click(forward);
     expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/favorites");
+  });
+
+  it("navigates library detail history through hash routes from the Windows titlebar", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const back = await screen.findByRole("button", { name: "Go back" });
+    const forward = screen.getByRole("button", { name: "Go forward" });
+
+    await user.click(await screen.findByRole("button", { name: "Movies" }));
+    expect(await screen.findByRole("heading", { name: "Movies" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/servers/server-1/libraries/library-1");
+
+    await user.click(await screen.findByRole("button", { name: /Demo Movie/ }));
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+    expect(window.location.hash).toBe(
+      "#/servers/server-1/items/movie-1?from=library&libraryId=library-1",
+    );
+
+    await user.click(back);
+    expect(await screen.findByRole("heading", { name: "Movies" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/servers/server-1/libraries/library-1");
+    expect(forward).toBeEnabled();
+
+    await user.click(forward);
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+    expect(window.location.hash).toBe(
+      "#/servers/server-1/items/movie-1?from=library&libraryId=library-1",
+    );
+  });
+
+  it("follows nested media detail history with titlebar back and forward", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    const back = await screen.findByRole("button", { name: "Go back" });
+    const forward = screen.getByRole("button", { name: "Go forward" });
+
+    await user.click(await screen.findByRole("button", { name: /TV Shows/ }));
+    await user.click(await screen.findByRole("button", { name: /Demo Series/ }));
+    expect(await screen.findByRole("heading", { name: "Demo Series" })).toBeInTheDocument();
+    expect(window.location.hash).toBe(
+      "#/servers/server-1/items/series-1?from=library&libraryId=library-2",
+    );
+
+    const seasonRelated = screen.getByRole("region", { name: "More from Demo Series" });
+    await user.click(await within(seasonRelated).findByRole("button", { name: /Season 1/ }));
+    expect(await screen.findByRole("heading", { name: "Season 1" })).toBeInTheDocument();
+    expect(window.location.hash).toBe(
+      "#/servers/server-1/items/season-1?from=library&libraryId=library-2&parent=series-1",
+    );
+
+    const episodeRelated = screen.getByRole("region", { name: "More from Season 1" });
+    await user.click(await within(episodeRelated).findByRole("button", { name: /Episode 1/ }));
+    expect(await screen.findByRole("heading", { name: "Episode 1" })).toBeInTheDocument();
+    expect(window.location.hash).toBe(
+      "#/servers/server-1/items/episode-1?from=library&libraryId=library-2&parent=series-1&parent=season-1",
+    );
+
+    await user.click(back);
+    expect(await screen.findByRole("heading", { name: "Season 1" })).toBeInTheDocument();
+    expect(window.location.hash).toBe(
+      "#/servers/server-1/items/season-1?from=library&libraryId=library-2&parent=series-1",
+    );
+    await user.click(back);
+    expect(await screen.findByRole("heading", { name: "Demo Series" })).toBeInTheDocument();
+    expect(forward).toBeEnabled();
+
+    await user.click(forward);
+    expect(await screen.findByRole("heading", { name: "Season 1" })).toBeInTheDocument();
   });
 
   it("keeps Windows titlebar window controls", async () => {
@@ -1091,8 +1168,42 @@ describe("LumiShell", () => {
     await user.click(screen.getByRole("button", { name: "Add Server" }));
 
     expect(await screen.findByRole("heading", { name: "Settings", hidden: true })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/settings/media-services?addServer=1");
     expect(await screen.findByRole("dialog", { name: "Add Emby Server" })).toBeInTheDocument();
     expect(screen.getByLabelText("Server URL")).toHaveFocus();
+  });
+
+  it("loads a library directly from a hash route with the route server id", async () => {
+    mockBrowsingCommands();
+    window.history.replaceState(null, "", "/#/servers/server-2/libraries/library-3");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Kids" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_list_children", {
+        request: { serverId: "server-2", parentId: "library-3", cursor: null },
+      }),
+    );
+  });
+
+  it("syncs Settings panel navigation into the hash route", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/settings/media-services");
+
+    await user.click(screen.getByRole("button", { name: "Player" }));
+    expect(await screen.findByRole("heading", { name: "Player", level: 2 })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/settings/player");
+
+    await user.click(screen.getByRole("button", { name: "Appearance" }));
+    expect(await screen.findByRole("heading", { name: "Appearance", level: 2 })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/settings/appearance");
   });
 
   it("uses fallback text for featured items without logo artwork", async () => {

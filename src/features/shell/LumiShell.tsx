@@ -15,15 +15,26 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
-  type ReactNode,
 } from "react";
 import { AnimatePresence } from "motion/react";
 import * as Tooltip from "@radix-ui/react-tooltip";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  useParams,
+  useSearchParams,
+} from "react-router";
 import { FocusableCard } from "../../components/focus";
 import { GlassPanel, MotionPage } from "../../components/layout";
 import { MotionButton } from "../../components/motion";
@@ -47,24 +58,33 @@ import { HomeView } from "../home/HomeView";
 import { LibrariesView } from "../libraries/LibrariesView";
 import { MediaDetailView } from "../media-detail/MediaDetailView";
 import { SettingsView } from "../settings/SettingsView";
+import {
+  appendParent,
+  defaultSettingsPanel,
+  favoritesPath,
+  getDetailBackPath,
+  getDetailReturnLabelKey,
+  homePath,
+  libraryPath,
+  mediaDetailPath,
+  parseMediaDetailSource,
+  parseSettingsPanel,
+  searchPath,
+  settingsPath,
+  type SettingsPanel,
+} from "./shellRoutes";
 
 type ViewId = "home" | "favorites" | "search" | "settings";
-type ReturnView = "favorites" | "home";
 type Icon = LucideIcon;
 type ShellPlatform = "macos" | "windows";
 
-type ShellRoute =
-  | { kind: "view"; view: ViewId }
-  | { kind: "library"; libraryId: string }
-  | { itemId: string; kind: "mediaDetail"; returnView: ReturnView; serverId: string };
-
-type RouteHistory = {
-  backStack: ShellRoute[];
-  current: ShellRoute;
-  forwardStack: ShellRoute[];
+type RouteHistoryState = {
+  canGoBack: boolean;
+  canGoForward: boolean;
+  index: number;
+  stack: string[];
 };
 
-const initialRoute: ShellRoute = { kind: "view", view: "home" };
 const sidebarCollapsedStorageKey = "lumi.sidebarCollapsed";
 const selectedServerStorageKey = "lumi.selectedServerId";
 
@@ -80,17 +100,20 @@ const utilityNavItems = navItems.filter((item) => item.id === "settings");
 
 export function LumiShell() {
   const { translate } = useI18n();
-  const [history, setHistory] = useState<RouteHistory>(() => ({
-    backStack: [],
-    current: initialRoute,
-    forwardStack: [],
+  const navigate = useNavigate();
+  const location = useLocation();
+  const navigationType = useNavigationTypeName();
+  const [routeHistory, setRouteHistory] = useState<RouteHistoryState>(() => ({
+    canGoBack: false,
+    canGoForward: false,
+    index: 0,
+    stack: [],
   }));
-  const [openAddServerDialog, setOpenAddServerDialog] = useState(false);
+  const lastLocationKey = useRef<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     readSidebarCollapsedPreference,
   );
   const platform = useMemo(() => detectShellPlatform(), []);
-  const route = history.current;
   const serversQuery = useServers();
   const servers = serversQuery.data ?? [];
   const [preferredServerId, setPreferredServerId] = useState(
@@ -100,13 +123,8 @@ export function LumiShell() {
   const selectedServerId = selectedServer?.id ?? null;
   const librariesQuery = useLibraries(selectedServerId);
   const libraries = librariesQuery.data ?? [];
-  const activeView =
-    route.kind === "mediaDetail"
-      ? route.returnView
-      : route.kind === "library"
-        ? "home"
-        : route.view;
-  const routeKey = routeIdentity(route);
+  const activeView = getActiveView(location.pathname, location.search);
+  const routeKey = getRouteKey(location.pathname);
 
   useEffect(() => {
     if (
@@ -118,46 +136,27 @@ export function LumiShell() {
     }
   }, [preferredServerId, selectedServerId, serversQuery.isLoading]);
 
-  function runRouteTransition(updateRoute: () => void) {
-    updateRoute();
-  }
-
-  function setRouteWithTransition(nextRoute: ShellRoute) {
-    runRouteTransition(() =>
-      setHistory((currentHistory) => pushRoute(currentHistory, nextRoute)),
-    );
-  }
-
-  function goBack() {
-    if (history.backStack.length === 0) {
+  useLayoutEffect(() => {
+    if (lastLocationKey.current === location.key) {
       return;
     }
 
-    runRouteTransition(() => setHistory(popBack));
+    lastLocationKey.current = location.key;
+    setRouteHistory((current) =>
+      nextRouteHistoryState(
+        current,
+        navigationType,
+        getRouteSignature(location.pathname, location.search),
+      ),
+    );
+  }, [location.key, location.pathname, location.search, navigationType]);
+
+  function goBack() {
+    navigate(-1);
   }
 
   function goForward() {
-    if (history.forwardStack.length === 0) {
-      return;
-    }
-
-    runRouteTransition(() => setHistory(popForward));
-  }
-
-  function openMediaDetail(item: LibraryItem, returnView: ReturnView) {
-    setRouteWithTransition({
-      itemId: item.id,
-      kind: "mediaDetail",
-      returnView,
-      serverId: item.serverId,
-    });
-  }
-
-  function openLibrary(item: LibraryItem) {
-    setRouteWithTransition({
-      kind: "library",
-      libraryId: item.id,
-    });
+    navigate(1);
   }
 
   function selectActiveServer(serverId: string) {
@@ -166,8 +165,7 @@ export function LumiShell() {
   }
 
   function openSettingsForAddServer() {
-    setOpenAddServerDialog(true);
-    setRouteWithTransition({ kind: "view", view: "settings" });
+    navigate(settingsPath("mediaServices", { addServer: true }));
   }
 
   function toggleSidebarCollapsed() {
@@ -273,80 +271,6 @@ export function LumiShell() {
     event.currentTarget.focus({ preventScroll: true });
   }
 
-  let currentView: ReactNode;
-
-  if (route.kind === "mediaDetail") {
-    currentView = (
-      <MediaDetailView
-        itemId={route.itemId}
-        onBack={() =>
-          setRouteWithTransition({ kind: "view", view: route.returnView })
-        }
-        onOpenMedia={(item) => openMediaDetail(item, route.returnView)}
-        returnLabel={
-          route.returnView === "favorites"
-            ? translate("nav.favorites")
-            : translate("nav.home")
-        }
-        serverId={route.serverId}
-      />
-    );
-  } else if (route.kind === "library") {
-    currentView = (
-      <LibrariesView
-        libraries={libraries}
-        loading={librariesQuery.isLoading}
-        onBackToHome={() =>
-          setRouteWithTransition({ kind: "view", view: "home" })
-        }
-        onOpenMedia={(item) => openMediaDetail(item, "home")}
-        selectedLibraryId={route.libraryId}
-        selectedServer={selectedServer}
-        servers={servers}
-      />
-    );
-  } else {
-    switch (route.view) {
-      case "favorites":
-        currentView = (
-          <FavoritesView
-            onOpenMedia={(item) => openMediaDetail(item, "favorites")}
-            selectedServer={selectedServer}
-            serversLoading={serversQuery.isLoading}
-          />
-        );
-        break;
-      case "search":
-        currentView = <SearchView />;
-        break;
-      case "settings":
-        currentView = (
-          <SettingsView
-            openAddServerDialog={openAddServerDialog}
-            onAddServerDialogOpenChange={setOpenAddServerDialog}
-            onSelectServer={selectActiveServer}
-            selectedServerId={selectedServerId}
-          />
-        );
-        break;
-      case "home":
-      default:
-        currentView = (
-          <HomeView
-            libraries={libraries}
-            librariesLoading={librariesQuery.isLoading}
-            onOpenLibrary={openLibrary}
-            onOpenMedia={(item) => openMediaDetail(item, "home")}
-            onOpenSettings={openSettingsForAddServer}
-            selectedServer={selectedServer}
-            servers={servers}
-            serversLoading={serversQuery.isLoading}
-          />
-        );
-        break;
-    }
-  }
-
   return (
     <Tooltip.Provider delayDuration={250}>
       <div
@@ -355,8 +279,8 @@ export function LumiShell() {
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
       >
         <AppChrome
-          canGoBack={history.backStack.length > 0}
-          canGoForward={history.forwardStack.length > 0}
+          canGoBack={routeHistory.canGoBack}
+          canGoForward={routeHistory.canGoForward}
           onBack={goBack}
           onForward={goForward}
           platform={platform}
@@ -418,9 +342,7 @@ export function LumiShell() {
                     key={item.id}
                     label={translate(item.labelKey)}
                     onMoveRight={focusFirstContentEntry}
-                    onSelect={() =>
-                      setRouteWithTransition({ kind: "view", view: item.id })
-                    }
+                    onSelect={() => navigate(pathForView(item.id))}
                   />
                 ))}
               </div>
@@ -438,9 +360,7 @@ export function LumiShell() {
                     key={item.id}
                     label={translate(item.labelKey)}
                     onMoveRight={focusFirstContentEntry}
-                    onSelect={() =>
-                      setRouteWithTransition({ kind: "view", view: item.id })
-                    }
+                    onSelect={() => navigate(pathForView(item.id))}
                   />
                 ))}
               </div>
@@ -450,12 +370,251 @@ export function LumiShell() {
         <main className="shell-content" onKeyDown={handleContentKeyDown} tabIndex={-1}>
           <AnimatePresence mode="wait" initial={false}>
             <MotionPage key={routeKey} routeKey={routeKey}>
-              {currentView}
+              <Routes location={location}>
+                <Route index element={<Navigate replace to={homePath()} />} />
+                <Route
+                  path="/home"
+                  element={
+                    <HomeRoute
+                      libraries={libraries}
+                      librariesLoading={librariesQuery.isLoading}
+                      onOpenSettings={openSettingsForAddServer}
+                      selectedServer={selectedServer}
+                      servers={servers}
+                      serversLoading={serversQuery.isLoading}
+                    />
+                  }
+                />
+                <Route
+                  path="/favorites"
+                  element={
+                    <FavoritesRoute
+                      selectedServer={selectedServer}
+                      serversLoading={serversQuery.isLoading}
+                    />
+                  }
+                />
+                <Route path="/search" element={<SearchView />} />
+                <Route
+                  path="/settings/:panel"
+                  element={
+                    <SettingsRoute
+                      onSelectServer={selectActiveServer}
+                      selectedServerId={selectedServerId}
+                    />
+                  }
+                />
+                <Route
+                  path="/servers/:serverId/libraries/:libraryId"
+                  element={
+                    <LibraryRoute
+                      fallbackLibraries={libraries}
+                      fallbackLibrariesLoading={librariesQuery.isLoading}
+                      fallbackSelectedServer={selectedServer}
+                      servers={servers}
+                    />
+                  }
+                />
+                <Route path="/servers/:serverId/items/:itemId" element={<MediaDetailRoute />} />
+                <Route path="*" element={<Navigate replace to={homePath()} />} />
+              </Routes>
             </MotionPage>
           </AnimatePresence>
         </main>
       </div>
     </Tooltip.Provider>
+  );
+}
+
+type HomeRouteProps = {
+  libraries: LibraryItem[];
+  librariesLoading: boolean;
+  onOpenSettings: () => void;
+  selectedServer: ServerProfile | null;
+  servers: ServerProfile[];
+  serversLoading: boolean;
+};
+
+function HomeRoute({
+  libraries,
+  librariesLoading,
+  onOpenSettings,
+  selectedServer,
+  servers,
+  serversLoading,
+}: HomeRouteProps) {
+  const navigate = useNavigate();
+
+  function openMediaDetail(item: LibraryItem) {
+    navigate(mediaDetailPath({ from: "home", itemId: item.id, serverId: item.serverId }));
+  }
+
+  return (
+    <HomeView
+      libraries={libraries}
+      librariesLoading={librariesLoading}
+      onOpenLibrary={(item) => navigate(libraryPath(item.serverId, item.id))}
+      onOpenMedia={openMediaDetail}
+      onOpenSettings={onOpenSettings}
+      selectedServer={selectedServer}
+      servers={servers}
+      serversLoading={serversLoading}
+    />
+  );
+}
+
+function FavoritesRoute({
+  selectedServer,
+  serversLoading,
+}: {
+  selectedServer: ServerProfile | null;
+  serversLoading: boolean;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <FavoritesView
+      onOpenMedia={(item) =>
+        navigate(mediaDetailPath({ from: "favorites", itemId: item.id, serverId: item.serverId }))
+      }
+      selectedServer={selectedServer}
+      serversLoading={serversLoading}
+    />
+  );
+}
+
+function SettingsRoute({
+  onSelectServer,
+  selectedServerId,
+}: {
+  onSelectServer: (serverId: string) => void;
+  selectedServerId: string | null;
+}) {
+  const navigate = useNavigate();
+  const params = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const panel = parseSettingsPanel(params.panel);
+  const routeRequestsAddServer = searchParams.get("addServer") === "1";
+  const [localAddServerDialogOpen, setLocalAddServerDialogOpen] = useState(false);
+  const addServerDialogOpen = routeRequestsAddServer || localAddServerDialogOpen;
+
+  function setPanel(nextPanel: SettingsPanel) {
+    navigate(settingsPath(nextPanel));
+  }
+
+  function setAddServerDialogOpen(open: boolean) {
+    if (!routeRequestsAddServer) {
+      setLocalAddServerDialogOpen(open);
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+
+    if (open) {
+      nextParams.set("addServer", "1");
+    } else {
+      nextParams.delete("addServer");
+    }
+
+    setSearchParams(nextParams, { replace: true });
+  }
+
+  return (
+    <SettingsView
+      onAddServerDialogOpenChange={setAddServerDialogOpen}
+      onPanelChange={setPanel}
+      onSelectServer={onSelectServer}
+      openAddServerDialog={addServerDialogOpen}
+      panel={panel}
+      selectedServerId={selectedServerId}
+    />
+  );
+}
+
+type LibraryRouteProps = {
+  fallbackLibraries: LibraryItem[];
+  fallbackLibrariesLoading: boolean;
+  fallbackSelectedServer: ServerProfile | null;
+  servers: ServerProfile[];
+};
+
+function LibraryRoute({
+  fallbackLibraries,
+  fallbackLibrariesLoading,
+  fallbackSelectedServer,
+  servers,
+}: LibraryRouteProps) {
+  const navigate = useNavigate();
+  const params = useParams();
+  const routeServerId = params.serverId ?? null;
+  const routeLibraryId = params.libraryId ?? null;
+  const routeLibrariesQuery = useLibraries(routeServerId);
+  const routeServer = selectServerById(servers, routeServerId) ?? fallbackSelectedServer;
+  const libraries = routeServerId === fallbackSelectedServer?.id
+    ? fallbackLibraries
+    : routeLibrariesQuery.data ?? [];
+  const loading = routeServerId === fallbackSelectedServer?.id
+    ? fallbackLibrariesLoading
+    : routeLibrariesQuery.isLoading;
+
+  if (!routeServerId || !routeLibraryId) {
+    return <Navigate replace to={homePath()} />;
+  }
+
+  return (
+    <LibrariesView
+      childrenServerId={routeServerId}
+      libraries={libraries}
+      loading={loading}
+      onBackToHome={() => navigate(homePath())}
+      onOpenMedia={(item) =>
+        navigate(
+          mediaDetailPath({
+            from: "library",
+            itemId: item.id,
+            libraryId: routeLibraryId,
+            serverId: item.serverId,
+          }),
+        )
+      }
+      selectedLibraryId={routeLibraryId}
+      selectedServer={routeServer}
+      servers={servers}
+    />
+  );
+}
+
+function MediaDetailRoute() {
+  const { translate } = useI18n();
+  const navigate = useNavigate();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+  const serverId = params.serverId ?? "";
+  const itemId = params.itemId ?? "";
+  const source = parseMediaDetailSource(searchParams);
+
+  if (!serverId || !itemId) {
+    return <Navigate replace to={homePath()} />;
+  }
+
+  return (
+    <MediaDetailView
+      itemId={itemId}
+      onBack={() => navigate(getDetailBackPath(serverId, source))}
+      onOpenMedia={(item) =>
+        navigate(
+          mediaDetailPath({
+            from: source.from,
+            itemId: item.id,
+            libraryId: source.from === "library" ? source.libraryId : null,
+            parentTrail: appendParent(source, itemId),
+            serverId: item.serverId,
+          }),
+        )
+      }
+      returnLabel={translate(getDetailReturnLabelKey(source))}
+      serverId={serverId}
+    />
   );
 }
 
@@ -731,56 +890,114 @@ function selectServer(
   );
 }
 
-function routeIdentity(route: ShellRoute) {
-  if (route.kind === "mediaDetail") {
-    return `media-${route.serverId}-${route.itemId}`;
-  }
-
-  if (route.kind === "library") {
-    return `library-${route.libraryId}`;
-  }
-
-  return route.view;
+function selectServerById(
+  servers: readonly ServerProfile[],
+  serverId: string | null,
+) {
+  return servers.find((server) => server.id === serverId) ?? null;
 }
 
-function pushRoute(history: RouteHistory, nextRoute: ShellRoute): RouteHistory {
-  if (routeIdentity(history.current) === routeIdentity(nextRoute)) {
-    return history;
+function pathForView(view: ViewId) {
+  switch (view) {
+    case "favorites":
+      return favoritesPath();
+    case "search":
+      return searchPath();
+    case "settings":
+      return settingsPath(defaultSettingsPanel);
+    case "home":
+    default:
+      return homePath();
+  }
+}
+
+function getActiveView(pathname: string, search: string): ViewId {
+  if (pathname.startsWith("/favorites")) {
+    return "favorites";
   }
 
+  if (pathname.startsWith("/search")) {
+    return "search";
+  }
+
+  if (pathname.startsWith("/settings")) {
+    return "settings";
+  }
+
+  if (pathname.includes("/items/")) {
+    return parseMediaDetailSource(new URLSearchParams(search)).from === "favorites"
+      ? "favorites"
+      : "home";
+  }
+
+  return "home";
+}
+
+function getRouteKey(pathname: string) {
+  return pathname;
+}
+
+function nextRouteHistoryState(
+  current: RouteHistoryState,
+  navigationType: "POP" | "PUSH" | "REPLACE",
+  signature: string,
+): RouteHistoryState {
+  if (current.stack.length === 0) {
+    return {
+      canGoBack: false,
+      canGoForward: false,
+      index: 0,
+      stack: [signature],
+    };
+  }
+
+  if (navigationType === "REPLACE") {
+    const stack = [...current.stack];
+    stack[current.index] = signature;
+
+    return {
+      canGoBack: current.index > 0,
+      canGoForward: current.index < stack.length - 1,
+      index: current.index,
+      stack,
+    };
+  }
+
+  if (navigationType === "PUSH") {
+    const nextIndex = current.index + 1;
+    const stack = [...current.stack.slice(0, nextIndex), signature];
+
+    return {
+      canGoBack: nextIndex > 0,
+      canGoForward: false,
+      index: nextIndex,
+      stack,
+    };
+  }
+
+  const previousIndex = current.stack.lastIndexOf(signature, current.index - 1);
+  const forwardIndex = current.stack.indexOf(signature, current.index + 1);
+  const nextIndex =
+    previousIndex >= 0
+      ? previousIndex
+      : forwardIndex >= 0
+        ? forwardIndex
+        : current.index;
+
   return {
-    backStack: [...history.backStack, history.current],
-    current: nextRoute,
-    forwardStack: [],
+    canGoBack: nextIndex > 0,
+    canGoForward: nextIndex < current.stack.length - 1,
+    index: nextIndex,
+    stack: current.stack,
   };
 }
 
-function popBack(history: RouteHistory): RouteHistory {
-  const previous = history.backStack[history.backStack.length - 1];
-
-  if (!previous) {
-    return history;
-  }
-
-  return {
-    backStack: history.backStack.slice(0, -1),
-    current: previous,
-    forwardStack: [history.current, ...history.forwardStack],
-  };
+function useNavigationTypeName() {
+  return useNavigationType() as "POP" | "PUSH" | "REPLACE";
 }
 
-function popForward(history: RouteHistory): RouteHistory {
-  const next = history.forwardStack[0];
-
-  if (!next) {
-    return history;
-  }
-
-  return {
-    backStack: [...history.backStack, history.current],
-    current: next,
-    forwardStack: history.forwardStack.slice(1),
-  };
+function getRouteSignature(pathname: string, search: string) {
+  return `${pathname}${search}`;
 }
 
 type WindowCommand = "close" | "drag" | "minimize" | "toggleMaximize";

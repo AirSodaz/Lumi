@@ -16,6 +16,7 @@ import {
 } from "../../lib/tauriClient";
 
 type LibrariesViewProps = {
+  childrenServerId?: string | null;
   libraries: LibraryItem[];
   loading: boolean;
   onBackToHome: () => void;
@@ -26,6 +27,7 @@ type LibrariesViewProps = {
 };
 
 export function LibrariesView({
+  childrenServerId,
   libraries,
   loading,
   onBackToHome,
@@ -39,7 +41,7 @@ export function LibrariesView({
     libraries.find((library) => library.id === selectedLibraryId) ?? null;
   const server = selectedServer ?? servers[0] ?? null;
   const children = useChildren(
-    selectedLibrary ? server?.id : null,
+    selectedLibrary ? (childrenServerId ?? server?.id ?? null) : null,
     selectedLibrary?.id ?? null,
   );
 
