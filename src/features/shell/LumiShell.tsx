@@ -176,7 +176,6 @@ export function LumiShell() {
   function selectActiveServer(serverId: string) {
     setPreferredServerId(serverId);
     writeSelectedServerPreference(serverId);
-    setRouteWithTransition({ kind: "view", view: "home" });
   }
 
   function toggleSidebarCollapsed() {
@@ -274,7 +273,12 @@ export function LumiShell() {
         currentView = <SearchView />;
         break;
       case "settings":
-        currentView = <SettingsView />;
+        currentView = (
+          <SettingsView
+            onSelectServer={selectActiveServer}
+            selectedServerId={selectedServerId}
+          />
+        );
         break;
       case "home":
       default:
@@ -287,7 +291,6 @@ export function LumiShell() {
             onOpenSettings={() =>
               setRouteWithTransition({ kind: "view", view: "settings" })
             }
-            onSelectServer={selectActiveServer}
             selectedServer={selectedServer}
             servers={servers}
             serversLoading={serversQuery.isLoading}

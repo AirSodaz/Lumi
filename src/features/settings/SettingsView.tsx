@@ -48,6 +48,11 @@ const panels: Array<{ id: SettingsPanel }> = [
   { id: "logs" },
 ];
 
+type SettingsViewProps = {
+  onSelectServer: (serverId: string) => void;
+  selectedServerId: string | null;
+};
+
 function panelLabelKey(panel: SettingsPanel) {
   return `settings.panel.${panel}` as const;
 }
@@ -64,7 +69,10 @@ function languagePreferenceLabelKey(languagePreference: LanguagePreference) {
   return "i18n.language.system";
 }
 
-export function SettingsView() {
+export function SettingsView({
+  onSelectServer,
+  selectedServerId,
+}: SettingsViewProps) {
   const [panel, setPanel] = useState<SettingsPanel>("servers");
   const reducedMotion = useReducedMotion();
   const { translate } = useI18n();
@@ -103,7 +111,12 @@ export function SettingsView() {
             {...createSurfaceMotion(reducedMotion, 0)}
             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
           >
-            {panel === "servers" ? <ServersPanel /> : null}
+            {panel === "servers" ? (
+              <ServersPanel
+                onSelectServer={onSelectServer}
+                selectedServerId={selectedServerId}
+              />
+            ) : null}
             {panel === "player" ? <PlayerPanel /> : null}
             {panel === "appearance" ? <AppearancePanel /> : null}
             {panel === "logs" ? <LogsPanel /> : null}
@@ -114,7 +127,15 @@ export function SettingsView() {
   );
 }
 
-function ServersPanel() {
+type ServersPanelProps = {
+  onSelectServer: (serverId: string) => void;
+  selectedServerId: string | null;
+};
+
+function ServersPanel({
+  onSelectServer,
+  selectedServerId,
+}: ServersPanelProps) {
   const { translate } = useI18n();
   const serversQuery = useServers();
   const logout = useLogout();
@@ -137,76 +158,97 @@ function ServersPanel() {
       </div>
 
       <div className="settings-list">
-        {servers.map((server) => (
-          <article className="server-row" key={server.id}>
-            <span className="server-icon">
-              <Server aria-hidden="true" size={17} />
-            </span>
-            <div>
-              <strong>{server.name}</strong>
-              <span>{server.baseUrl}</span>
-            </div>
-            <DropdownMenu.Root>
-              <Tooltip.Root>
-                <Tooltip.Trigger asChild>
-                  <DropdownMenu.Trigger asChild>
-                    <MotionButton
-                      aria-label={translate("settings.action.moreActionsFor", {
-                        name: server.name,
-                      })}
-                      type="button"
-                    >
-                      <MoreHorizontal aria-hidden="true" size={16} />
-                    </MotionButton>
-                  </DropdownMenu.Trigger>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content className="tooltip-content" side="left">
-                    {translate("settings.action.moreActionsFor", { name: server.name })}
-                    <Tooltip.Arrow className="tooltip-arrow" />
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content align="end" asChild>
-                  <motion.div
-                    className="dropdown-content"
-                    data-motion-surface="dropdown"
-                    {...dropdownMotion}
+        {servers.map((server) => {
+          const isSelected = server.id === selectedServerId;
+
+          return (
+            <article className="server-row" key={server.id}>
+              <span className="server-icon">
+                <Server aria-hidden="true" size={17} />
+              </span>
+              <div className="server-row-details">
+                <strong>{server.name}</strong>
+                <span>{server.baseUrl}</span>
+              </div>
+              <div className="server-row-actions">
+                {isSelected ? (
+                  <span className="status-chip server-current-chip">
+                    <Check aria-hidden="true" size={14} />
+                    <span>{translate("settings.server.current")}</span>
+                  </span>
+                ) : (
+                  <MotionButton
+                    className="secondary-action server-current-action"
+                    onClick={() => onSelectServer(server.id)}
+                    type="button"
                   >
-                    <DropdownMenu.Item
-                      className="dropdown-item"
-                      onSelect={() => setViewingServer(server)}
-                    >
-                      {translate("settings.action.viewServer")}
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item
-                      className="dropdown-item"
-                      onSelect={() => setRenamingServer(server)}
-                    >
-                      {translate("settings.action.rename")}
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item className="dropdown-item">
-                      {translate("settings.action.diagnostics")}
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item
-                      className="dropdown-item"
-                      onSelect={() => logout.mutate({ serverId: server.id })}
-                    >
-                      {translate("settings.action.signOut")}
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item
-                      className="dropdown-item danger"
-                      onSelect={() => logout.mutate({ serverId: server.id })}
-                    >
-                      {translate("settings.action.deleteServer")}
-                    </DropdownMenu.Item>
-                  </motion.div>
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-          </article>
-        ))}
+                    {translate("settings.action.setCurrentServer")}
+                  </MotionButton>
+                )}
+                <DropdownMenu.Root>
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <DropdownMenu.Trigger asChild>
+                        <MotionButton
+                          aria-label={translate("settings.action.moreActionsFor", {
+                            name: server.name,
+                          })}
+                          className="server-menu-button"
+                          type="button"
+                        >
+                          <MoreHorizontal aria-hidden="true" size={16} />
+                        </MotionButton>
+                      </DropdownMenu.Trigger>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content className="tooltip-content" side="left">
+                        {translate("settings.action.moreActionsFor", { name: server.name })}
+                        <Tooltip.Arrow className="tooltip-arrow" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content align="end" asChild>
+                      <motion.div
+                        className="dropdown-content"
+                        data-motion-surface="dropdown"
+                        {...dropdownMotion}
+                      >
+                        <DropdownMenu.Item
+                          className="dropdown-item"
+                          onSelect={() => setViewingServer(server)}
+                        >
+                          {translate("settings.action.viewServer")}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          className="dropdown-item"
+                          onSelect={() => setRenamingServer(server)}
+                        >
+                          {translate("settings.action.rename")}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item className="dropdown-item">
+                          {translate("settings.action.diagnostics")}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          className="dropdown-item"
+                          onSelect={() => logout.mutate({ serverId: server.id })}
+                        >
+                          {translate("settings.action.signOut")}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          className="dropdown-item danger"
+                          onSelect={() => logout.mutate({ serverId: server.id })}
+                        >
+                          {translate("settings.action.deleteServer")}
+                        </DropdownMenu.Item>
+                      </motion.div>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              </div>
+            </article>
+          );
+        })}
         {servers.length === 0 ? (
           <GlassPanel className="empty-state compact">
             <Server aria-hidden="true" size={22} />

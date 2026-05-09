@@ -25,6 +25,16 @@ const demoServer = {
   updatedAt: "2026-05-07T00:00:00Z",
 };
 
+const secondServer = {
+  id: "server-2",
+  providerKind: "emby",
+  name: "Second Server",
+  baseUrl: "http://localhost:8097",
+  userId: "user-2",
+  createdAt: "2026-05-07T00:00:00Z",
+  updatedAt: "2026-05-07T00:00:00Z",
+};
+
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -38,6 +48,25 @@ function wrapper({ children }: { children: ReactNode }) {
       </I18nProvider>
     </ThemeProvider>
   );
+}
+
+function renderSettingsView(
+  props: {
+    onSelectServer?: (serverId: string) => void;
+    selectedServerId?: string | null;
+  } = {},
+) {
+  const onSelectServer = props.onSelectServer ?? vi.fn();
+
+  render(
+    <SettingsView
+      onSelectServer={onSelectServer}
+      selectedServerId={props.selectedServerId ?? "server-1"}
+    />,
+    { wrapper },
+  );
+
+  return { onSelectServer };
 }
 
 describe("SettingsView", () => {
@@ -107,7 +136,7 @@ describe("SettingsView", () => {
 
   it("logs out and removes a saved server from the settings list", async () => {
     const user = userEvent.setup();
-    render(<SettingsView />, { wrapper });
+    renderSettingsView();
 
     const serverRow = await screen.findByText("Demo Server");
     expect(serverRow).toBeInTheDocument();
@@ -124,7 +153,7 @@ describe("SettingsView", () => {
 
   it("opens saved server details from the server menu", async () => {
     const user = userEvent.setup();
-    render(<SettingsView />, { wrapper });
+    renderSettingsView();
 
     await screen.findByText("Demo Server");
     await user.click(screen.getByRole("button", { name: "More actions for Demo Server" }));
@@ -137,7 +166,7 @@ describe("SettingsView", () => {
 
   it("renames a saved server from the server menu", async () => {
     const user = userEvent.setup();
-    render(<SettingsView />, { wrapper });
+    renderSettingsView();
 
     await screen.findByText("Demo Server");
     await user.click(screen.getByRole("button", { name: "More actions for Demo Server" }));
@@ -158,7 +187,7 @@ describe("SettingsView", () => {
 
   it("saves player preferences and shows mpv diagnostics", async () => {
     const user = userEvent.setup();
-    render(<SettingsView />, { wrapper });
+    renderSettingsView();
 
     await user.click(await screen.findByRole("button", { name: "Player" }));
     expect(await screen.findByText("Native mpv backend is ready")).toBeInTheDocument();
@@ -178,7 +207,7 @@ describe("SettingsView", () => {
 
   it("shows material fallback state and exports redacted logs", async () => {
     const user = userEvent.setup();
-    render(<SettingsView />, { wrapper });
+    renderSettingsView();
 
     await user.click(await screen.findByRole("button", { name: "Appearance" }));
     expect(await screen.findByText("Fallback surface")).toBeInTheDocument();
@@ -197,7 +226,7 @@ describe("SettingsView", () => {
 
   it("switches interface language locally without updating backend settings", async () => {
     const user = userEvent.setup();
-    render(<SettingsView />, { wrapper });
+    renderSettingsView();
 
     await user.click(await screen.findByRole("button", { name: "Appearance" }));
     await screen.findByRole("heading", { name: "Appearance", level: 2 });
@@ -218,7 +247,7 @@ describe("SettingsView", () => {
 
   it("switches theme locally without updating backend settings", async () => {
     const user = userEvent.setup();
-    render(<SettingsView />, { wrapper });
+    renderSettingsView();
 
     await user.click(await screen.findByRole("button", { name: "Appearance" }));
     await screen.findByRole("heading", { name: "Appearance", level: 2 });
@@ -233,6 +262,56 @@ describe("SettingsView", () => {
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
     expect(document.documentElement).toHaveAttribute("data-theme-preference", "light");
     expect(document.documentElement.style.colorScheme).toBe("light");
+    expect(
+      invokeMock.mock.calls.filter(([command]) => command === "settings_update"),
+    ).toHaveLength(settingsUpdateCallsBefore.length);
+  });
+
+  it("switches the current server from the servers list without updating backend settings", async () => {
+    const user = userEvent.setup();
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "providers_list_servers") {
+        return Promise.resolve([demoServer, secondServer]);
+      }
+
+      if (command === "settings_get") {
+        return Promise.resolve({
+          materialEffectsEnabled: true,
+          player: {
+            defaultVolume: 80,
+            subtitlePreference: "serverDefault",
+          },
+          theme: "system",
+        });
+      }
+
+      if (command === "settings_update") {
+        return Promise.resolve({
+          materialEffectsEnabled: true,
+          player: {
+            defaultVolume: 80,
+            subtitlePreference: "serverDefault",
+          },
+          theme: "system",
+        });
+      }
+
+      return Promise.resolve(null);
+    });
+    const onSelectServer = vi.fn();
+
+    renderSettingsView({ onSelectServer, selectedServerId: "server-1" });
+
+    expect(await screen.findByText("Demo Server")).toBeInTheDocument();
+    expect(screen.getByText("Current server")).toBeInTheDocument();
+
+    const settingsUpdateCallsBefore = invokeMock.mock.calls.filter(
+      ([command]) => command === "settings_update",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Set Current" }));
+
+    expect(onSelectServer).toHaveBeenCalledWith("server-2");
     expect(
       invokeMock.mock.calls.filter(([command]) => command === "settings_update"),
     ).toHaveLength(settingsUpdateCallsBefore.length);

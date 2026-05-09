@@ -1426,10 +1426,18 @@ describe("LumiShell", () => {
     render(<App />);
 
     await screen.findByRole("button", { name: /Demo Movie/ });
-    await user.click(await screen.findByRole("button", { name: "Demo Server" }));
-    await user.click(await screen.findByRole("menuitem", { name: /Second Server/ }));
+    expect(screen.queryByRole("button", { name: "Demo Server" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Second Server/ })).not.toBeInTheDocument();
+    expect(screen.getByText("2 server connected")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Set Current" }));
 
     expect(window.localStorage.getItem("lumi.selectedServerId")).toBe("server-2");
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Home" }));
     await waitFor(() =>
       expect(getPosterCardButtonsByName(/Second Server Movie/)).toHaveLength(2),
     );
