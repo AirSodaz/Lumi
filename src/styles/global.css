@@ -184,6 +184,18 @@
   --color-control-region-shadow: 0 -22px 50px rgb(36 43 39 / 14%);
 }
 
+:root[data-theme="light"] .lumi-shell[data-platform="macos"] {
+  --sidebar-item-hover-background: rgb(20 32 34 / 7%);
+  --sidebar-item-pressed-background: rgb(20 32 34 / 10%);
+  --sidebar-item-selected-background: rgb(20 32 34 / 13%);
+}
+
+:root[data-theme="light"] .lumi-shell[data-platform="windows"] {
+  --sidebar-item-hover-background: rgb(20 32 34 / 8%);
+  --sidebar-item-pressed-background: rgb(20 32 34 / 12%);
+  --sidebar-item-selected-background: rgb(20 32 34 / 15%);
+}
+
 * {
   box-sizing: border-box;
   scrollbar-color: var(--scrollbar-thumb) transparent;
@@ -281,6 +293,7 @@ strong {
   --sidebar-collapsed-width: 80px;
   --sidebar-current-width: var(--sidebar-width);
   --sidebar-width: 224px;
+  --shell-content-corner-radius: 22px;
   position: relative;
   display: grid;
   height: 100vh;
@@ -296,17 +309,26 @@ strong {
   --macos-source-list-width: 238px;
   --shell-top-offset: var(--macos-titlebar-safe-area);
   --sidebar-current-width: var(--macos-source-list-width);
+  --sidebar-item-radius: 10px;
+  --sidebar-item-hover-background: rgb(255 255 255 / 8%);
+  --sidebar-item-pressed-background: rgb(255 255 255 / 11%);
+  --sidebar-item-selected-background: rgb(255 255 255 / 14%);
 }
 
 .lumi-shell[data-platform="windows"] {
   --windows-source-list-width: 238px;
   --sidebar-current-width: var(--windows-source-list-width);
+  --sidebar-item-radius: 10px;
+  --sidebar-item-hover-background: rgb(255 255 255 / 9%);
+  --sidebar-item-pressed-background: rgb(255 255 255 / 13%);
+  --sidebar-item-selected-background: rgb(255 255 255 / 16%);
 }
 
 .lumi-shell[data-platform="macos"] .shell-vignette,
 .lumi-shell[data-platform="windows"] .shell-vignette {
   top: var(--shell-top-offset);
   left: var(--sidebar-current-width);
+  border-top-left-radius: var(--shell-content-corner-radius);
 }
 
 .lumi-shell[data-sidebar-collapsed="true"] {
@@ -332,7 +354,7 @@ strong {
   grid-template-columns: auto auto minmax(96px, 1fr) auto;
   align-items: center;
   gap: 8px;
-  border-bottom: 1px solid var(--color-border-soft);
+  border-bottom: 0;
   padding: 0 4px 0 8px;
   color: var(--color-text-primary);
   background: transparent;
@@ -611,8 +633,8 @@ select:focus-visible {
   top: 0;
   height: calc(100vh - var(--shell-top-offset));
   margin: 0;
-  border-width: 0 1px 0 0;
-  border-right: 1px solid var(--color-border-soft);
+  border-width: 0;
+  border-right: 0;
   border-radius: 0;
   padding: calc(var(--shell-top-offset) + 14px) 12px 14px;
   background: transparent;
@@ -624,8 +646,8 @@ select:focus-visible {
   top: var(--shell-top-offset);
   height: calc(100vh - var(--shell-top-offset));
   margin: 0;
-  border-width: 0 1px 0 0;
-  border-right: 1px solid var(--color-border-soft);
+  border-width: 0;
+  border-right: 0;
   border-radius: 0;
   padding: 14px 12px;
   background: transparent;
@@ -654,16 +676,32 @@ select:focus-visible {
 .lumi-shell[data-platform="windows"] .nav-button {
   min-height: 30px;
   grid-template-columns: 26px minmax(0, 1fr);
-  border-radius: 7px;
+  border-radius: var(--sidebar-item-radius);
   padding: 0 10px 0 4px;
   font-size: 13px;
+  transition:
+    background-color var(--motion-focus-enter),
+    color var(--motion-focus-enter),
+    border-color var(--motion-focus-enter);
+}
+
+.lumi-shell[data-platform="macos"] .nav-button:hover,
+.lumi-shell[data-platform="windows"] .nav-button:hover {
+  color: var(--color-text-primary);
+  background: var(--sidebar-item-hover-background);
+}
+
+.lumi-shell[data-platform="macos"] .nav-button:active,
+.lumi-shell[data-platform="windows"] .nav-button:active {
+  color: var(--color-text-primary);
+  background: var(--sidebar-item-pressed-background);
 }
 
 .lumi-shell[data-platform="macos"] .nav-button[aria-current="page"],
 .lumi-shell[data-platform="windows"] .nav-button[aria-current="page"] {
   border-color: transparent;
   color: var(--color-text-primary);
-  background: var(--color-surface-control-hover);
+  background: var(--sidebar-item-selected-background);
   box-shadow: none;
 }
 
@@ -705,6 +743,8 @@ select:focus-visible {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 16px 28px 32px 24px;
+  border-top-left-radius: var(--shell-content-corner-radius);
+  clip-path: inset(0 round var(--shell-content-corner-radius) 0 0 0);
   scroll-gutter: stable;
   scroll-padding: 24px 32px 32px;
 }
@@ -2003,6 +2043,7 @@ select:focus-visible {
   }
 
   .lumi-shell {
+    --shell-content-corner-radius: 16px;
     --sidebar-current-width: 64px;
     --sidebar-width: 64px;
   }

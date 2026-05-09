@@ -94,9 +94,9 @@ describe("global rail styles", () => {
     expect(closeActiveRule).toContain("background: var(--color-caption-close-active);");
   });
 
-  it("styles macOS and Windows sidebars as native source lists instead of floating glass cards", () => {
-    const macShellRule = getRule(".lumi-shell[data-platform=\"macos\"]");
-    const windowsShellRule = getRule(".lumi-shell[data-platform=\"windows\"]");
+  it("styles macOS and Windows sidebars as fused native source lists", () => {
+    const macShellRule = getLastRule(".lumi-shell[data-platform=\"macos\"]");
+    const windowsShellRule = getLastRule(".lumi-shell[data-platform=\"windows\"]");
     const macSidebarRule = getRule(".lumi-shell[data-platform=\"macos\"] .shell-sidebar");
     const windowsSidebarRule = getRule(".lumi-shell[data-platform=\"windows\"] .shell-sidebar");
     const macSectionLabelRule = getRule(".sidebar-section-label");
@@ -106,25 +106,83 @@ describe("global rail styles", () => {
     expect(macSidebarRule).toContain("height: calc(100vh - var(--shell-top-offset));");
     expect(macSidebarRule).toContain("margin: 0;");
     expect(macSidebarRule).toContain("border-radius: 0;");
-    expect(macSidebarRule).toContain("border-right: 1px solid var(--color-border-soft);");
+    expect(macSidebarRule).toContain("border-right: 0;");
     expect(macSidebarRule).toContain("background: transparent;");
     expect(macSidebarRule).toContain("box-shadow: none;");
     expect(macSidebarRule).toContain("backdrop-filter: none;");
     expect(windowsSidebarRule).toContain("height: calc(100vh - var(--shell-top-offset));");
     expect(windowsSidebarRule).toContain("margin: 0;");
     expect(windowsSidebarRule).toContain("border-radius: 0;");
-    expect(windowsSidebarRule).toContain("border-right: 1px solid var(--color-border-soft);");
+    expect(windowsSidebarRule).toContain("border-right: 0;");
     expect(windowsSidebarRule).toContain("background: transparent;");
     expect(windowsSidebarRule).toContain("box-shadow: none;");
     expect(windowsSidebarRule).toContain("backdrop-filter: none;");
     expect(macSectionLabelRule).toContain("text-transform: uppercase;");
   });
 
-  it("keeps the Windows titlebar transparent so native Mica shows through", () => {
+  it("keeps the Windows titlebar fused with the native Mica shell", () => {
     const titlebarRule = getRule(".windows-titlebar");
 
+    expect(titlebarRule).toContain("border-bottom: 0;");
     expect(titlebarRule).toContain("background: transparent;");
     expect(titlebarRule).toContain("backdrop-filter: none;");
+  });
+
+  it("rounds the content corner where native chrome meets the content surface", () => {
+    const shellRule = getRule(".lumi-shell");
+    const nativeVignetteRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .shell-vignette,\n.lumi-shell[data-platform=\"windows\"] .shell-vignette",
+    );
+    const contentRule = getRule(".shell-content");
+    const compactShellRule = getRule("@media (max-width: 720px)", ".lumi-shell");
+
+    expect(shellRule).toContain("--shell-content-corner-radius: 22px;");
+    expect(nativeVignetteRule).toContain("border-top-left-radius: var(--shell-content-corner-radius);");
+    expect(contentRule).toContain("border-top-left-radius: var(--shell-content-corner-radius);");
+    expect(contentRule).toContain("clip-path: inset(0 round var(--shell-content-corner-radius) 0 0 0);");
+    expect(compactShellRule).toContain("--shell-content-corner-radius: 16px;");
+  });
+
+  it("uses platform-native smooth rounded sidebar item hover states without motion drift", () => {
+    const macShellRule = getLastRule(".lumi-shell[data-platform=\"macos\"]");
+    const windowsShellRule = getLastRule(".lumi-shell[data-platform=\"windows\"]");
+    const lightMacShellRule = getRule(":root[data-theme=\"light\"] .lumi-shell[data-platform=\"macos\"]");
+    const lightWindowsShellRule = getRule(":root[data-theme=\"light\"] .lumi-shell[data-platform=\"windows\"]");
+    const nativeNavButtonRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .nav-button,\n.lumi-shell[data-platform=\"windows\"] .nav-button",
+    );
+    const nativeNavHoverRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .nav-button:hover,\n.lumi-shell[data-platform=\"windows\"] .nav-button:hover",
+    );
+    const nativeNavActiveRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .nav-button:active,\n.lumi-shell[data-platform=\"windows\"] .nav-button:active",
+    );
+    const nativeNavSelectedRule = getRule(
+      ".lumi-shell[data-platform=\"macos\"] .nav-button[aria-current=\"page\"],\n.lumi-shell[data-platform=\"windows\"] .nav-button[aria-current=\"page\"]",
+    );
+
+    expect(macShellRule).toContain("--sidebar-item-radius: 10px;");
+    expect(macShellRule).toContain("--sidebar-item-hover-background:");
+    expect(macShellRule).toContain("--sidebar-item-selected-background:");
+    expect(windowsShellRule).toContain("--sidebar-item-radius: 10px;");
+    expect(windowsShellRule).toContain("--sidebar-item-hover-background:");
+    expect(windowsShellRule).toContain("--sidebar-item-selected-background:");
+    expect(lightMacShellRule).toContain("--sidebar-item-selected-background:");
+    expect(lightWindowsShellRule).toContain("--sidebar-item-selected-background:");
+    expect(nativeNavButtonRule).toContain("border-radius: var(--sidebar-item-radius);");
+    expect(nativeNavButtonRule).not.toContain("border-radius: 999px;");
+    expect(nativeNavButtonRule).toContain("transition:");
+    expect(nativeNavButtonRule).toContain("background-color var(--motion-focus-enter)");
+    expect(nativeNavButtonRule).toContain("color var(--motion-focus-enter)");
+    expect(nativeNavButtonRule).toContain("border-color var(--motion-focus-enter)");
+    expect(nativeNavButtonRule).not.toContain("transform");
+    expect(nativeNavHoverRule).toContain("background: var(--sidebar-item-hover-background);");
+    expect(nativeNavHoverRule).not.toContain("transform");
+    expect(nativeNavActiveRule).toContain("background: var(--sidebar-item-pressed-background);");
+    expect(nativeNavSelectedRule).toContain("border-color: transparent;");
+    expect(nativeNavSelectedRule).toContain("background: var(--sidebar-item-selected-background);");
+    expect(nativeNavSelectedRule).toContain("box-shadow: none;");
+    expect(nativeNavSelectedRule).not.toContain("transform");
   });
 });
 
