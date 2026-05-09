@@ -133,6 +133,15 @@ describe("tauri query hooks", () => {
           ],
         },
       ],
+      featuredItems: [
+        {
+          id: "featured-1",
+          providerKind: "emby",
+          serverId: "server-1",
+          itemType: "movie",
+          title: "Random Feature",
+        },
+      ],
     });
 
     const { result, rerender } = renderHook(
@@ -159,6 +168,7 @@ describe("tauri query hooks", () => {
     await waitFor(() =>
       expect(result.current.data?.continueWatching[0]?.title).toBe("Demo Movie"),
     );
+    expect(result.current.data?.featuredItems[0]?.title).toBe("Random Feature");
     expect(invokeMock).toHaveBeenCalledWith("media_get_home_rows", {
       request: {
         continueWatchingLimit: 10,

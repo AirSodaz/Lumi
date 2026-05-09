@@ -245,6 +245,17 @@ mod commands {
                         "Type": "Movie"
                     }]),
                 ),
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Items": [{
+                            "Id": "featured-1",
+                            "Name": "Random Feature",
+                            "Type": "Movie"
+                        }],
+                        "TotalRecordCount": 1
+                    }),
+                ),
             ]);
             let profile = seed_profile_with_token(&state);
 
@@ -266,6 +277,7 @@ mod commands {
             );
             assert_eq!(rows.latest_by_library[0].library_id, "library-1");
             assert_eq!(rows.latest_by_library[0].items[0].title, "Latest Movie");
+            assert_eq!(rows.featured_items[0].title, "Random Feature");
         }
     }
 }

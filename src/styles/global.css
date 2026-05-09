@@ -670,6 +670,48 @@ select:focus-visible {
   -webkit-line-clamp: 2;
 }
 
+.featured-carousel-controls {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.featured-carousel-button {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+}
+
+.featured-carousel-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-inline: 2px;
+}
+
+.featured-carousel-dot {
+  width: 7px;
+  height: 7px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: rgb(255 255 255 / 36%);
+  transition:
+    background var(--motion-focus-enter),
+    transform var(--motion-focus-enter);
+}
+
+.featured-carousel-dot[aria-pressed="true"] {
+  background: var(--color-text-primary);
+  transform: scale(1.22);
+}
+
+.featured-carousel-dot:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 54%);
+}
+
 .cinematic-header,
 .view-header {
   display: flex;

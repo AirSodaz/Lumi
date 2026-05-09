@@ -124,6 +124,7 @@ export type HomeRowsRequest = {
 export type HomeRows = {
   continueWatching: LibraryItem[];
   latestByLibrary: LatestLibraryItems[];
+  featuredItems: LibraryItem[];
 };
 
 export type LatestLibraryItems = {

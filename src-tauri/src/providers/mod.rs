@@ -88,6 +88,7 @@ pub struct HomeRowsRequest {
 pub struct HomeRows {
     pub continue_watching: Vec<LibraryItem>,
     pub latest_by_library: Vec<LatestLibraryItems>,
+    pub featured_items: Vec<LibraryItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

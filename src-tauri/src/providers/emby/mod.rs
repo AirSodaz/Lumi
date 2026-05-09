@@ -27,6 +27,8 @@ const CHILDREN_PAGE_SIZE: usize = 50;
 const FAVORITES_PAGE_SIZE: usize = 50;
 const HOME_CONTINUE_WATCHING_LIMIT: usize = 10;
 const HOME_LATEST_LIMIT: usize = 10;
+const HOME_FEATURED_LIMIT: usize = 12;
+const HOME_FEATURED_TYPES: &str = "Movie,Series,MusicVideo,Video";
 const ITEM_FIELDS: &str = "Overview,SortName,PrimaryImageAspectRatio,MediaSources";
 const HOME_ITEM_FIELDS: &str = "Overview,SortName,PrimaryImageAspectRatio";
 
@@ -388,6 +390,11 @@ impl MediaProvider for EmbyProvider {
                 Ok(LatestLibraryItems { library_id, items })
             })
             .collect::<AppResult<Vec<_>>>()?;
+        let featured_items = client
+            .list_random_featured_items(&profile.user_id, HOME_FEATURED_LIMIT, &token)?
+            .into_iter()
+            .map(|item| client.map_item(item, &profile.id))
+            .collect::<AppResult<Vec<_>>>()?;
 
         for item in &continue_watching {
             self.local_store.cache_media_item(item)?;
@@ -397,10 +404,14 @@ impl MediaProvider for EmbyProvider {
                 self.local_store.cache_media_item(item)?;
             }
         }
+        for item in &featured_items {
+            self.local_store.cache_media_item(item)?;
+        }
 
         Ok(HomeRows {
             continue_watching,
             latest_by_library,
+            featured_items,
         })
     }
 
@@ -599,6 +610,32 @@ impl EmbyClient {
         )?;
         self.ensure_success(response, ErrorContext::Media)
             .and_then(decode_json::<Vec<EmbyItem>>)
+    }
+
+    fn list_random_featured_items(
+        &self,
+        user_id: &str,
+        limit: usize,
+        token: &str,
+    ) -> AppResult<Vec<EmbyItem>> {
+        let path = format!("Users/{user_id}/Items");
+        let response = self.send(
+            EmbyHttpMethod::Get,
+            &path,
+            &[
+                ("Limit", limit.to_string()),
+                ("Recursive", "true".into()),
+                ("SortBy", "Random".into()),
+                ("IncludeItemTypes", HOME_FEATURED_TYPES.into()),
+                ("Fields", HOME_ITEM_FIELDS.into()),
+                ("EnableUserData", "true".into()),
+            ],
+            token_headers(token),
+            Value::Null,
+        )?;
+        self.ensure_success(response, ErrorContext::Media)
+            .and_then(decode_json::<EmbyItemsResponse>)
+            .map(|response| response.items)
     }
 
     fn list_favorites(

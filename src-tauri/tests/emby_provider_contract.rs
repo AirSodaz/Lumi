@@ -344,6 +344,24 @@ mod providers {
                         "RunTimeTicks": 18000000000u64
                     }]),
                 ),
+                FakeResponse::json(
+                    200,
+                    json!({
+                        "Items": [{
+                            "Id": "featured-1",
+                            "Name": "Random Feature",
+                            "Type": "Movie",
+                            "Overview": "A random library pick.",
+                            "ImageTags": { "Primary": "featured-poster" },
+                            "BackdropImageTags": ["featured-backdrop"],
+                            "UserData": {
+                                "PlayedPercentage": 12.5,
+                                "PlaybackPositionTicks": 9000000000u64
+                            }
+                        }],
+                        "TotalRecordCount": 1
+                    }),
+                ),
             ]));
             let provider = test_provider(local_store, credential_store, transport.clone());
 
@@ -368,6 +386,17 @@ mod providers {
             assert_eq!(rows.latest_by_library[0].items[0].title, "Latest Movie");
             assert_eq!(rows.latest_by_library[1].library_id, "library-2");
             assert_eq!(rows.latest_by_library[1].items[0].title, "Latest Episode");
+            assert_eq!(rows.featured_items.len(), 1);
+            assert_eq!(rows.featured_items[0].title, "Random Feature");
+            assert_eq!(rows.featured_items[0].item_type, "movie");
+            assert_eq!(rows.featured_items[0].played_percentage, Some(12.5));
+            assert_eq!(
+                rows.featured_items[0].backdrop_url,
+                Some(
+                    "http://localhost:8096/Items/featured-1/Images/Backdrop?tag=featured-backdrop"
+                        .into()
+                )
+            );
 
             let resume_request = transport.request_at(0);
             assert_eq!(resume_request.method, EmbyHttpMethod::Get);
@@ -386,6 +415,20 @@ mod providers {
 
             let second_latest_request = transport.request_at(2);
             assert!(second_latest_request.url.contains("ParentId=library-2"));
+
+            let featured_request = transport.request_at(3);
+            assert_eq!(featured_request.method, EmbyHttpMethod::Get);
+            assert!(featured_request
+                .url
+                .starts_with("http://localhost:8096/Users/user-1/Items?"));
+            assert!(featured_request.url.contains("Recursive=true"));
+            assert!(featured_request.url.contains("SortBy=Random"));
+            assert!(featured_request.url.contains("Limit=12"));
+            assert!(featured_request
+                .url
+                .contains("IncludeItemTypes=Movie%2CSeries%2CMusicVideo%2CVideo"));
+            assert!(featured_request.url.contains("EnableUserData=true"));
+            assert_eq!(featured_request.header("X-Emby-Token"), Some("token-value"));
         }
 
         #[test]

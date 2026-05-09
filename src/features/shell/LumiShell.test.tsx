@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import App from "../../App";
@@ -153,6 +153,27 @@ const demoVideo: LibraryItem = {
   overview: "A standalone video.",
 };
 
+const randomFeature: LibraryItem = {
+  id: "featured-1",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "movie",
+  title: "Random Feature",
+  overview: "A random library pick.",
+  backdropUrl: "http://localhost:8096/Items/featured-1/Images/Backdrop?tag=random-backdrop",
+  posterUrl: "http://localhost:8096/Items/featured-1/Images/Primary?tag=random-poster",
+};
+
+const secondRandomFeature: LibraryItem = {
+  id: "featured-2",
+  providerKind: "emby",
+  serverId: "server-1",
+  itemType: "series",
+  title: "Second Random Feature",
+  overview: "Another random library pick.",
+  backdropUrl: "http://localhost:8096/Items/featured-2/Images/Backdrop?tag=random-backdrop-2",
+};
+
 const nestedFolder: LibraryItem = {
   id: "folder-1",
   providerKind: "emby",
@@ -244,6 +265,7 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
             items: [secondServerMovie],
           },
         ],
+        featuredItems: [secondServerMovie],
       });
     }
 
@@ -271,6 +293,7 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
           items: [demoSeries],
         },
       ],
+      featuredItems: [randomFeature, secondRandomFeature],
     });
   }
   if (command === "media_list_children") {
@@ -318,6 +341,8 @@ function mockBrowsingCommandsFallback(command: string, args?: unknown) {
       "movie-6": itemDetail(sixthMovie),
       "video-1": itemDetail(demoVideo),
       "folder-1": itemDetail(nestedFolder),
+      "featured-1": itemDetail(randomFeature),
+      "featured-2": itemDetail(secondRandomFeature),
       "series-1": itemDetail(demoSeries),
       "season-1": itemDetail(seasonOne),
       "episode-1": itemDetail(episodeOne),
@@ -370,6 +395,7 @@ describe("LumiShell", () => {
       configurable: true,
       value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     });
+    vi.useRealTimers();
     Object.values(windowApiMocks).forEach((mock) => {
       mock.mockReset();
       mock.mockResolvedValue(undefined);
@@ -830,6 +856,143 @@ describe("LumiShell", () => {
         request: { serverId: "server-1", itemId: "movie-1" },
       }),
     );
+  });
+
+  it("prefers random library featured items in the Home carousel", async () => {
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    expect(screen.getByText("A random library pick.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Demo Movie" })).not.toBeInTheDocument();
+
+    const featuredShelf = document.querySelector(".featured-shelf");
+    const featuredArt = document.querySelector(".featured-art");
+    expect(featuredShelf).toBeInTheDocument();
+    expect(featuredArt).toHaveStyle({
+      backgroundImage:
+        'url("http://localhost:8096/Items/featured-1/Images/Backdrop?tag=random-backdrop")',
+    });
+    expect(featuredShelf?.querySelector(".hero-poster")).not.toBeInTheDocument();
+  });
+
+  it("advances the Home featured carousel and opens the active item detail", async () => {
+    const user = userEvent.setup();
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next featured item" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "More Info" }));
+
+    expect(await screen.findByRole("heading", { name: "Second Random Feature" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("media_get_item", {
+        request: { serverId: "server-1", itemId: "featured-2" },
+      }),
+    );
+  });
+
+  it("auto-advances the Home featured carousel unless reduced motion is preferred", async () => {
+    let intervalHandler: (() => void) | undefined;
+    const originalSetInterval = window.setInterval.bind(window);
+    const intervalSpy = vi
+      .spyOn(window, "setInterval")
+      .mockImplementation((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+        if (timeout === 8_000) {
+          if (typeof handler === "function") {
+            intervalHandler = () => handler();
+          }
+
+          return 1;
+        }
+
+        return originalSetInterval(handler, timeout, ...args);
+      });
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    expect(intervalSpy).toHaveBeenCalled();
+
+    const advanceFeaturedCarousel = intervalHandler;
+    if (!advanceFeaturedCarousel) {
+      throw new Error("Expected Home carousel interval callback");
+    }
+    act(() => {
+      advanceFeaturedCarousel();
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Second Random Feature" }),
+    ).toBeInTheDocument();
+
+    intervalSpy.mockRestore();
+  });
+
+  it("does not auto-advance the Home featured carousel with reduced motion", async () => {
+    const intervalSpy = vi.spyOn(window, "setInterval");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn((query: string) => ({
+        addEventListener: vi.fn(),
+        addListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        onchange: null,
+        removeEventListener: vi.fn(),
+        removeListener: vi.fn(),
+      })),
+    });
+    mockBrowsingCommands();
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    expect(intervalSpy.mock.calls.some(([, timeout]) => timeout === 8_000)).toBe(false);
+    expect(screen.getByRole("heading", { name: "Random Feature" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Second Random Feature" })).not.toBeInTheDocument();
+
+    intervalSpy.mockRestore();
+  });
+
+  it("falls back to the old Home featured source when random featured items are empty", async () => {
+    mockBrowsingCommands();
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === "media_get_home_rows") {
+        return Promise.resolve({
+          continueWatching: [
+            {
+              ...demoMovie,
+              playedPercentage: 45,
+              playbackPositionSeconds: 1800,
+            },
+          ],
+          latestByLibrary: [
+            {
+              libraryId: "library-1",
+              items: [secondMovie],
+            },
+          ],
+          featuredItems: [],
+        });
+      }
+
+      return mockBrowsingCommandsFallback(command, args);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Demo Movie" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Next featured item" })).not.toBeInTheDocument();
   });
 
   it("keeps playback controls out of the main detail view after opening", async () => {

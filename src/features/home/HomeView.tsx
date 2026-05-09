@@ -1,7 +1,7 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { motion, useReducedMotion } from "motion/react";
-import { Check, ChevronDown, Info, Server } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Info, Server } from "lucide-react";
 import { MediaRail } from "../../components/media";
 import { MotionButton } from "../../components/motion";
 import { useI18n } from "../../lib/i18n";
@@ -13,6 +13,9 @@ import {
   type LibraryItem,
   type ServerProfile,
 } from "../../lib/tauriClient";
+
+const FEATURED_CAROUSEL_INTERVAL_MS = 8_000;
+const EMPTY_FEATURED_ITEMS: LibraryItem[] = [];
 
 type HomeViewProps = {
   libraries: LibraryItem[];
@@ -38,6 +41,7 @@ export function HomeView({
   serversLoading,
 }: HomeViewProps) {
   const reducedMotion = useReducedMotion();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const { locale, translate } = useI18n();
   const server = selectedServer;
   const libraryIds = libraries.map((library) => library.id);
@@ -55,7 +59,23 @@ export function HomeView({
   }));
   const firstLatest = latestByLibrary.find((row) => row.items.length > 0)?.items[0] ?? null;
   const hasServers = servers.length > 0;
-  const featured = continueWatching[0] ?? firstLatest;
+  const randomFeaturedItems = homeRows.data?.featuredItems ?? EMPTY_FEATURED_ITEMS;
+  const fallbackFeatured = continueWatching[0] ?? firstLatest;
+  const featuredItems = randomFeaturedItems.length > 0
+    ? randomFeaturedItems
+    : fallbackFeatured
+      ? [fallbackFeatured]
+      : EMPTY_FEATURED_ITEMS;
+  const [selectedFeaturedId, setSelectedFeaturedId] = useState<string | null>(null);
+  const canCycleFeatured = featuredItems.length > 1;
+  const selectedFeaturedIndex = selectedFeaturedId
+    ? featuredItems.findIndex((item) => item.id === selectedFeaturedId)
+    : -1;
+  const featuredIndex = selectedFeaturedIndex >= 0 ? selectedFeaturedIndex : 0;
+  const nextFeaturedId = canCycleFeatured
+    ? featuredItems[(featuredIndex + 1) % featuredItems.length]?.id ?? null
+    : null;
+  const featured = featuredItems[featuredIndex] ?? featuredItems[0] ?? null;
   const featuredTitle =
     featured?.title ??
     (server ? server.name : translate("home.featured.connectTitle"));
@@ -68,6 +88,30 @@ export function HomeView({
   const featuredArtworkStyle = featuredArtwork
     ? ({ backgroundImage: `url("${featuredArtwork}")` } satisfies CSSProperties)
     : undefined;
+
+  useEffect(() => {
+    if (prefersReducedMotion || !canCycleFeatured) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setSelectedFeaturedId(nextFeaturedId);
+    }, FEATURED_CAROUSEL_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [canCycleFeatured, nextFeaturedId, prefersReducedMotion]);
+
+  function showPreviousFeatured() {
+    const previousIndex = featuredIndex === 0
+      ? featuredItems.length - 1
+      : featuredIndex - 1;
+    setSelectedFeaturedId(featuredItems[previousIndex]?.id ?? null);
+  }
+
+  function showNextFeatured() {
+    const nextIndex = (featuredIndex + 1) % featuredItems.length;
+    setSelectedFeaturedId(featuredItems[nextIndex]?.id ?? null);
+  }
 
   return (
     <section className="view-stack home-view app-workbench" aria-labelledby="home-title">
@@ -133,6 +177,43 @@ export function HomeView({
                   <span>{translate("home.action.moreInfo")}</span>
                 </MotionButton>
                 <span className="status-chip">{formatMetadata(featured, locale)}</span>
+                {canCycleFeatured ? (
+                  <div
+                    aria-label={translate("home.featured.carouselControls")}
+                    className="featured-carousel-controls"
+                  >
+                    <MotionButton
+                      aria-label={translate("home.featured.previous")}
+                      className="icon-button featured-carousel-button"
+                      onClick={showPreviousFeatured}
+                      type="button"
+                    >
+                      <ChevronLeft aria-hidden="true" size={15} />
+                    </MotionButton>
+                    <MotionButton
+                      aria-label={translate("home.featured.next")}
+                      className="icon-button featured-carousel-button"
+                      onClick={showNextFeatured}
+                      type="button"
+                    >
+                      <ChevronRight aria-hidden="true" size={15} />
+                    </MotionButton>
+                    <span className="featured-carousel-dots">
+                      {featuredItems.map((item, index) => (
+                        <button
+                          aria-label={translate("home.featured.showItem", {
+                            title: item.title,
+                          })}
+                          aria-pressed={index === featuredIndex}
+                          className="featured-carousel-dot"
+                          key={item.id}
+                          onClick={() => setSelectedFeaturedId(item.id)}
+                          type="button"
+                        />
+                      ))}
+                    </span>
+                  </div>
+                ) : null}
               </>
             ) : (
               <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
@@ -184,6 +265,30 @@ export function HomeView({
       ))}
     </section>
   );
+}
+
+function usePrefersReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setPrefersReducedMotion(query.matches);
+    updatePreference();
+    query.addEventListener?.("change", updatePreference);
+
+    return () => {
+      query.removeEventListener?.("change", updatePreference);
+    };
+  }, []);
+
+  return prefersReducedMotion;
 }
 
 type ServerSelectorProps = {

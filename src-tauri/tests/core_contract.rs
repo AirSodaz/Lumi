@@ -279,6 +279,7 @@ impl MediaProvider for MockProvider {
         Ok(HomeRows {
             continue_watching: Vec::new(),
             latest_by_library: Vec::new(),
+            featured_items: Vec::new(),
         })
     }
 
