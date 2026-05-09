@@ -547,16 +547,7 @@ function SearchView() {
 
   return (
     <section className="view-stack search-view app-workbench" aria-labelledby="search-title">
-      <header className="workbench-header">
-        <div className="workbench-title-block">
-          <span className="workbench-kicker">{translate("search.kicker")}</span>
-          <h1 id="search-title">{translate("nav.search")}</h1>
-          <div className="workbench-meta-row">
-            <span>{translate("search.meta.targets")}</span>
-            <span>{translate("search.meta.localQuery")}</span>
-          </div>
-        </div>
-      </header>
+      <h1 className="sr-only" id="search-title">{translate("nav.search")}</h1>
       <div className="browser-toolbar" aria-label={translate("search.scope.aria")}>
         <span className="server-dot" aria-hidden="true" />
         <strong>{translate("search.meta.scope")}</strong>

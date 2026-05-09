@@ -31,27 +31,10 @@ export function FavoritesView({
     () => favorites.data?.pages.flatMap((page) => page.items) ?? [],
     [favorites.data],
   );
-  const favoriteCount = items.length;
-  const status = favorites.isLoading
-    ? translate("library.meta.syncing")
-    : favoriteCount > 0
-      ? translate("library.meta.items", { count: favoriteCount })
-      : translate("common.ready");
 
   return (
     <section className="view-stack favorites-view app-workbench" aria-labelledby="favorites-title">
-      <header className="workbench-header">
-        <div className="workbench-title-block">
-          <span className="workbench-kicker">
-            {selectedServer?.name ?? translate("home.meta.noServer")}
-          </span>
-          <h1 id="favorites-title">{translate("nav.favorites")}</h1>
-          <div className="workbench-meta-row">
-            <span>{translate("favorites.meta.embyFavorites")}</span>
-            <span>{serversLoading ? translate("favorites.loading.server") : status}</span>
-          </div>
-        </div>
-      </header>
+      <h1 className="sr-only" id="favorites-title">{translate("nav.favorites")}</h1>
 
       {!selectedServer ? (
         <FavoritesEmpty

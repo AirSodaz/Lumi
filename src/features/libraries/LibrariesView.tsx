@@ -4,7 +4,6 @@ import { GlassPanel } from "../../components/layout";
 import { PosterCard } from "../../components/media";
 import { MotionButton } from "../../components/motion";
 import { useI18n } from "../../lib/i18n";
-import { formatMetadata } from "../../lib/media/format";
 import {
   getMediaCardPresentation,
   getMediaGridColumns,
@@ -35,7 +34,7 @@ export function LibrariesView({
   selectedServer,
   servers,
 }: LibrariesViewProps) {
-  const { locale, translate } = useI18n();
+  const { translate } = useI18n();
   const selectedLibrary =
     libraries.find((library) => library.id === selectedLibraryId) ?? null;
   const server = selectedServer ?? servers[0] ?? null;
@@ -47,32 +46,19 @@ export function LibrariesView({
   if (!selectedLibrary) {
     return (
       <section className="view-stack libraries-view app-workbench" aria-labelledby="library-title">
-        <header className="workbench-header">
-          <div className="workbench-title-block">
-            <span className="workbench-kicker">
-              {server?.name ?? translate("home.meta.noServer")}
-            </span>
-            <h1 id="library-title">{translate("library.title.fallback")}</h1>
-            <div className="workbench-meta-row">
-              <span>
-                {loading
-                  ? translate("library.meta.syncing")
-                  : translate("library.meta.unavailable")}
-              </span>
-              <span>{server?.name ?? translate("common.server")}</span>
-            </div>
-          </div>
-          <div className="toolbar-cluster">
-            <MotionButton
-              className="secondary-action"
-              onClick={onBackToHome}
-              type="button"
-            >
-              <ChevronLeft aria-hidden="true" size={16} />
-              <span>{translate("library.action.backHome")}</span>
-            </MotionButton>
-          </div>
-        </header>
+        <h1 className="sr-only" id="library-title">
+          {translate("library.title.fallback")}
+        </h1>
+        <div className="browser-toolbar" aria-label={translate("library.aria.path")}>
+          <MotionButton
+            className="secondary-action"
+            onClick={onBackToHome}
+            type="button"
+          >
+            <ChevronLeft aria-hidden="true" size={16} />
+            <span>{translate("library.action.backHome")}</span>
+          </MotionButton>
+        </div>
 
         <EmptyState
           icon={loading ? Film : Library}
@@ -91,39 +77,19 @@ export function LibrariesView({
     );
   }
 
-  const childCount = children.data?.items.length ?? 0;
-  const childStatus = children.isLoading
-    ? translate("common.loading")
-    : childCount > 0
-      ? translate("library.meta.items", { count: childCount })
-      : translate("library.meta.browser");
-
   return (
     <section className="view-stack libraries-view app-workbench" aria-labelledby="library-title">
-      <header className="workbench-header">
-        <div className="workbench-title-block">
-          <span className="workbench-kicker">
-            {server?.name ?? translate("home.meta.noServer")}
-          </span>
-          <h1 id="library-title">{selectedLibrary.title}</h1>
-          <div className="workbench-meta-row">
-            <span>{formatMetadata(selectedLibrary, locale)}</span>
-            <span>{childStatus}</span>
-          </div>
-        </div>
-        <div className="toolbar-cluster">
-          <MotionButton
-            className="secondary-action"
-            onClick={onBackToHome}
-            type="button"
-          >
-            <ChevronLeft aria-hidden="true" size={16} />
-            <span>{translate("library.action.backHome")}</span>
-          </MotionButton>
-        </div>
-      </header>
+      <h1 className="sr-only" id="library-title">{selectedLibrary.title}</h1>
 
       <div className="browser-toolbar" aria-label={translate("library.aria.path")}>
+        <MotionButton
+          className="secondary-action"
+          onClick={onBackToHome}
+          type="button"
+        >
+          <ChevronLeft aria-hidden="true" size={16} />
+          <span>{translate("library.action.backHome")}</span>
+        </MotionButton>
         <span className="breadcrumb-label">{translate("nav.home")}</span>
         <span aria-hidden="true" className="toolbar-divider">/</span>
         <strong>{selectedLibrary.title}</strong>

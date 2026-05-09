@@ -1404,7 +1404,10 @@ describe("LumiShell", () => {
     await user.click(moviesLibraryCard);
 
     expect(await screen.findByRole("heading", { name: "Movies" })).toBeInTheDocument();
+    expect(document.querySelector(".libraries-view .workbench-header")).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Demo Movie/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back to Home" }));
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("media_list_children", {
         request: { serverId: "server-1", parentId: "library-1", cursor: null },
@@ -1428,7 +1431,7 @@ describe("LumiShell", () => {
     await screen.findByRole("button", { name: /Demo Movie/ });
     expect(screen.queryByRole("button", { name: "Demo Server" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /Second Server/ })).not.toBeInTheDocument();
-    expect(screen.getByText("2 server connected")).toBeInTheDocument();
+    expect(screen.queryByText("2 server connected")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
@@ -1490,25 +1493,30 @@ describe("LumiShell", () => {
     expect(screen.queryByText(/P6|P7|arrives/i)).not.toBeInTheDocument();
   });
 
-  it("uses compact app workbench headers for primary views instead of cinematic heroes", async () => {
+  it("keeps primary workbench page titles accessible without visible page headers", async () => {
     const user = userEvent.setup();
     mockBrowsingCommands();
 
     render(<App />);
 
     await screen.findByRole("button", { name: /Demo Movie/ });
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(document.querySelector(".home-view .workbench-header")).not.toBeInTheDocument();
     expect(document.querySelector(".home-view .cinematic-hero")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Favorites" }));
     expect(await screen.findByRole("heading", { name: "Favorites" })).toBeInTheDocument();
+    expect(document.querySelector(".favorites-view .workbench-header")).not.toBeInTheDocument();
     expect(document.querySelector(".favorites-view .cinematic-hero")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Search" }));
     expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
+    expect(document.querySelector(".search-view .workbench-header")).not.toBeInTheDocument();
     expect(document.querySelector(".search-view .cinematic-hero")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(document.querySelector(".settings-view .workbench-header")).not.toBeInTheDocument();
     expect(document.querySelector(".settings-view .cinematic-hero")).not.toBeInTheDocument();
   });
 

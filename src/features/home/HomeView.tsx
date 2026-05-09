@@ -51,7 +51,6 @@ export function HomeView({
   onOpenMedia,
   onOpenSettings,
   selectedServer,
-  servers,
   serversLoading,
 }: HomeViewProps) {
   const reducedMotion = useReducedMotion();
@@ -72,7 +71,6 @@ export function HomeView({
     library,
   }));
   const firstLatest = latestByLibrary.find((row) => row.items.length > 0)?.items[0] ?? null;
-  const hasServers = servers.length > 0;
   const randomFeaturedItems = homeRows.data?.featuredItems ?? EMPTY_FEATURED_ITEMS;
   const fallbackFeatured = continueWatching[0] ?? firstLatest;
   const featuredItems = randomFeaturedItems.length > 0
@@ -151,34 +149,7 @@ export function HomeView({
 
   return (
     <section className="view-stack home-view app-workbench" aria-labelledby="home-title">
-      <header className="workbench-header">
-        <div className="workbench-title-block">
-          <span className="workbench-kicker">
-            {server?.name ?? translate("home.meta.noServer")}
-          </span>
-          <h1 id="home-title">{translate("nav.home")}</h1>
-          <div className="workbench-meta-row">
-            <span>
-              {hasServers
-                ? translate("home.meta.serverConnected", { count: servers.length })
-                : translate("home.meta.addServer")}
-            </span>
-            <span>
-              {libraries.length > 0
-                ? translate("home.meta.libraries", { count: libraries.length })
-                : translate("home.meta.libraryWaiting")}
-            </span>
-          </div>
-        </div>
-        <div className="toolbar-cluster">
-          {!server ? (
-            <MotionButton className="primary-action" onClick={onOpenSettings} type="button">
-              <Server aria-hidden="true" size={15} />
-              <span>{translate("home.action.addServer")}</span>
-            </MotionButton>
-          ) : null}
-        </div>
-      </header>
+      <h1 className="sr-only" id="home-title">{translate("nav.home")}</h1>
 
       <motion.div
         aria-labelledby="home-featured-title"

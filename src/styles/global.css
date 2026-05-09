@@ -644,57 +644,16 @@ select:focus-visible {
   align-content: start;
 }
 
-.workbench-header {
-  display: flex;
-  min-height: 92px;
-  align-items: end;
-  justify-content: space-between;
-  gap: 18px;
-  border-bottom: 1px solid var(--color-border-soft);
-  padding: 8px 0 14px;
-}
-
-.workbench-title-block {
-  display: grid;
-  min-width: 0;
-  gap: 8px;
-}
-
-.workbench-title-block h1 {
-  font-size: 30px;
-  font-weight: 720;
-  line-height: 1.05;
-}
-
 .workbench-kicker {
   color: var(--color-text-tertiary);
   font-size: 12px;
   font-weight: 700;
 }
 
-.workbench-meta-row,
-.toolbar-cluster,
 .browser-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.workbench-meta-row {
-  flex-wrap: wrap;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-.workbench-meta-row span + span::before {
-  margin-right: 8px;
-  color: var(--color-text-tertiary);
-  content: "/";
-}
-
-.toolbar-cluster {
-  flex-wrap: wrap;
-  justify-content: end;
 }
 
 .browser-toolbar {
@@ -928,7 +887,6 @@ select:focus-visible {
 .poster-card span,
 .library-card span,
 .featured-copy p,
-.workbench-meta-row,
 .hero-description {
   color: var(--color-text-secondary);
 }

@@ -79,16 +79,7 @@ export function SettingsView({
 
   return (
     <section className="settings-view app-workbench" aria-labelledby="settings-title">
-      <header className="workbench-header">
-        <div className="workbench-title-block">
-          <span className="workbench-kicker">Lumi</span>
-          <h1 id="settings-title">{translate("settings.title")}</h1>
-          <div className="workbench-meta-row">
-            <span>{translate(panelLabelKey(panel))}</span>
-            <span>{translate("settings.meta.localPreferences")}</span>
-          </div>
-        </div>
-      </header>
+      <h1 className="sr-only" id="settings-title">{translate("settings.title")}</h1>
 
       <div className="settings-layout">
         <nav className="settings-tabs" aria-label={translate("settings.aria.sections")}>
