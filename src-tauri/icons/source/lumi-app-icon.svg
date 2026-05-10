@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Lumi app icon</title>
+  <desc id="desc">A refined teal crescent with a warm gold light wedge on a dark rounded square.</desc>
+  <defs>
+    <linearGradient id="background" x1="18" y1="14" x2="111" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18282b"/>
+      <stop offset="0.58" stop-color="#0b0f10"/>
+      <stop offset="1" stop-color="#21130e"/>
+    </linearGradient>
+    <radialGradient id="background-glow" cx="38" cy="25" r="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7f4ed" stop-opacity="0.14"/>
+      <stop offset="0.48" stop-color="#8fd8ca" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#050606" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="crescent" x1="35" y1="21" x2="86" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7f4ed"/>
+      <stop offset="0.52" stop-color="#8fd8ca"/>
+      <stop offset="1" stop-color="#187a78"/>
+    </linearGradient>
+    <linearGradient id="light-wedge" x1="61" y1="49" x2="88" y2="83" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7d987"/>
+      <stop offset="1" stop-color="#f0c96a"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="108" height="108" rx="30" fill="url(#background)"/>
+  <rect x="10" y="10" width="108" height="108" rx="30" fill="url(#background-glow)"/>
+  <path d="M82 21c-25 6-43 27-43 52 0 14 5 26 14 35-12-8-21-22-21-39 0-26 20-47 50-48Z" fill="url(#crescent)"/>
+  <path d="M47 38c-7 8-11 18-11 31 0 12 4 22 11 31" fill="none" stroke="#f7f4ed" stroke-width="4" stroke-linecap="round" opacity="0.34"/>
+  <path d="M61 49c11 4 20 10 27 18-9 4-18 9-27 16 5-10 5-23 0-34Z" fill="url(#light-wedge)"/>
+  <path d="M61 49c11 4 20 10 27 18-9 4-18 9-27 16 5-10 5-23 0-34Z" fill="#f7f4ed" opacity="0.07"/>
+</svg>
