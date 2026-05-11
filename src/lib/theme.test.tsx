@@ -147,12 +147,16 @@ describe("theme", () => {
     expect(screen.getByTestId("resolved")).toHaveTextContent("dark");
     await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith("dark"));
 
+    setThemeMock.mockClear();
+
     await user.click(screen.getByRole("button", { name: "switch system" }));
 
     expect(screen.getByTestId("preference")).toHaveTextContent("system");
     expect(screen.getByTestId("resolved")).toHaveTextContent("light");
     expect(document.documentElement).toHaveAttribute("data-theme-preference", "system");
-    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith("light"));
+    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith(null));
+    expect(setThemeMock).not.toHaveBeenCalledWith("light");
+    expect(setThemeMock).not.toHaveBeenCalledWith("dark");
 
     mediaQuery.setMatches(true);
 
@@ -161,7 +165,36 @@ describe("theme", () => {
     );
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(document.documentElement.style.colorScheme).toBe("dark");
-    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith("dark"));
+    expect(setThemeMock).not.toHaveBeenCalledWith("dark");
+  });
+
+  it("clears the native theme override when backend settings initialize to system", async () => {
+    const mediaQuery = createMatchMedia(true);
+    vi.stubGlobal("matchMedia", mediaQuery.matchMedia);
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "settings_get") {
+        return Promise.resolve({
+          materialEffectsEnabled: true,
+          player: {
+            defaultVolume: 100,
+            subtitlePreference: "serverDefault",
+          },
+          theme: "system",
+        });
+      }
+
+      return Promise.resolve(null);
+    });
+
+    renderThemeProbe();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("preference")).toHaveTextContent("system"),
+    );
+    expect(screen.getByTestId("resolved")).toHaveTextContent("dark");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(document.documentElement).toHaveAttribute("data-theme-preference", "system");
+    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith(null));
   });
 
   it("keeps the CSS theme usable when native theme sync fails", async () => {

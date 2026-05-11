@@ -63,10 +63,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [resolvedTheme, themePreference]);
 
   useEffect(() => {
-    void setTheme(resolvedTheme).catch(() => {
-      // Native theme sync is best-effort; CSS theme state remains authoritative.
-    });
-  }, [resolvedTheme]);
+    const nativeTheme = themePreference === "system" ? null : themePreference;
+
+    void setTheme(nativeTheme)
+      .then(() => {
+        if (themePreference === "system") {
+          setPrefersDark(getSystemPrefersDark());
+        }
+      })
+      .catch(() => {
+        // Native theme sync is best-effort; CSS theme state remains authoritative.
+      });
+  }, [themePreference]);
 
   const setThemePreference = useCallback(
     (nextPreference: ThemePreference) => {
