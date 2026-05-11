@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setTheme } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import {
   ThemeProvider,
@@ -17,7 +18,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/app", () => ({
+  setTheme: vi.fn(),
+}));
+
 const invokeMock = vi.mocked(invoke);
+const setThemeMock = vi.mocked(setTheme);
 
 function ThemeProbe() {
   const { resolvedTheme, setThemePreference, themePreference } = useTheme();
@@ -28,6 +34,9 @@ function ThemeProbe() {
       <span data-testid="resolved">{resolvedTheme}</span>
       <button onClick={() => setThemePreference("light")} type="button">
         switch light
+      </button>
+      <button onClick={() => setThemePreference("dark")} type="button">
+        switch dark
       </button>
       <button onClick={() => setThemePreference("system")} type="button">
         switch system
@@ -40,6 +49,8 @@ describe("theme", () => {
   afterEach(() => {
     window.localStorage.clear();
     invokeMock.mockReset();
+    setThemeMock.mockReset();
+    setThemeMock.mockResolvedValue(undefined);
     invokeMock.mockResolvedValue({
       materialEffectsEnabled: true,
       player: {
@@ -115,6 +126,7 @@ describe("theme", () => {
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(document.documentElement).toHaveAttribute("data-theme-preference", "dark");
     expect(document.documentElement.style.colorScheme).toBe("dark");
+    expect(setThemeMock).toHaveBeenLastCalledWith("dark");
 
     await user.click(screen.getByRole("button", { name: "switch light" }));
 
@@ -127,14 +139,51 @@ describe("theme", () => {
     );
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
     expect(document.documentElement.style.colorScheme).toBe("light");
+    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith("light"));
+
+    await user.click(screen.getByRole("button", { name: "switch dark" }));
+
+    expect(screen.getByTestId("preference")).toHaveTextContent("dark");
+    expect(screen.getByTestId("resolved")).toHaveTextContent("dark");
+    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith("dark"));
 
     await user.click(screen.getByRole("button", { name: "switch system" }));
 
     expect(screen.getByTestId("preference")).toHaveTextContent("system");
     expect(screen.getByTestId("resolved")).toHaveTextContent("light");
     expect(document.documentElement).toHaveAttribute("data-theme-preference", "system");
+    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith("light"));
 
     mediaQuery.setMatches(true);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("resolved")).toHaveTextContent("dark"),
+    );
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(document.documentElement.style.colorScheme).toBe("dark");
+    await waitFor(() => expect(setThemeMock).toHaveBeenLastCalledWith("dark"));
+  });
+
+  it("keeps the CSS theme usable when native theme sync fails", async () => {
+    setThemeMock.mockRejectedValue(new Error("theme permission denied"));
+    const mediaQuery = createMatchMedia(false);
+    vi.stubGlobal("matchMedia", mediaQuery.matchMedia);
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "settings_get") {
+        return Promise.resolve({
+          materialEffectsEnabled: true,
+          player: {
+            defaultVolume: 100,
+            subtitlePreference: "serverDefault",
+          },
+          theme: "dark",
+        });
+      }
+
+      return Promise.resolve(null);
+    });
+
+    renderThemeProbe();
 
     await waitFor(() =>
       expect(screen.getByTestId("resolved")).toHaveTextContent("dark"),

@@ -5,6 +5,7 @@
   --color-background: #0b0f12;
   --color-background-raised: #121820;
   --color-surface-fallback: #161d25;
+  --color-window-background: rgb(8 12 15 / 92%);
   --color-surface-content-glass: rgb(229 238 242 / 9%);
   --color-surface-content-glass-strong: rgb(229 238 242 / 15%);
   --color-surface-control: rgb(229 238 242 / 11%);
@@ -28,13 +29,13 @@
   --color-caption-close-hover: #c42b1c;
   --color-caption-close-active: #a4261d;
   --color-body-background:
-    linear-gradient(115deg, rgb(8 12 15 / 98%), rgb(12 17 22 / 96%) 46%, rgb(15 21 27 / 94%)),
-    linear-gradient(90deg, rgb(130 211 202 / 10%), rgb(230 196 108 / 6%));
+    linear-gradient(115deg, rgb(8 12 15 / 99%), rgb(12 17 22 / 98%) 46%, rgb(15 21 27 / 96%)),
+    linear-gradient(90deg, rgb(130 211 202 / 8%), rgb(230 196 108 / 5%));
   --color-shell-vignette:
-    radial-gradient(circle at 68% 14%, rgb(229 238 242 / 8%), transparent 24%),
-    radial-gradient(circle at 82% 78%, rgb(130 211 202 / 8%), transparent 30%),
-    linear-gradient(180deg, rgb(229 238 242 / 6%), transparent 36%),
-    rgb(9 13 16 / 84%);
+    radial-gradient(circle at 68% 14%, rgb(244 247 248 / 7%), transparent 24%),
+    radial-gradient(circle at 82% 78%, rgb(130 211 202 / 6%), transparent 30%),
+    linear-gradient(180deg, rgb(244 247 248 / 4%), transparent 36%),
+    rgb(9 13 16 / 90%);
   --color-titlebar-background:
     linear-gradient(180deg, rgb(229 238 242 / 8%), rgb(229 238 242 / 3%)),
     rgb(17 22 27 / 66%);
@@ -42,8 +43,8 @@
     linear-gradient(180deg, rgb(229 238 242 / 10%), rgb(229 238 242 / 4%)),
     rgb(11 15 19 / 58%);
   --color-panel-background:
-    linear-gradient(180deg, rgb(229 238 242 / 10%), rgb(229 238 242 / 5%)),
-    rgb(13 18 23 / 52%);
+    linear-gradient(180deg, rgb(244 247 248 / 8%), rgb(244 247 248 / 4%)),
+    rgb(18 24 30 / 72%);
   --color-featured-background:
     linear-gradient(180deg, rgb(229 238 242 / 9%), rgb(229 238 242 / 4%)),
     rgb(12 17 22 / 52%);
@@ -60,7 +61,7 @@
     linear-gradient(90deg, rgb(0 0 0 / 82%), rgb(0 0 0 / 50%) 44%, rgb(0 0 0 / 16%)),
     linear-gradient(0deg, rgb(0 0 0 / 82%), transparent 54%),
     linear-gradient(180deg, rgb(255 255 255 / 6%), transparent 28%);
-  --color-input-background: rgb(3 7 10 / 34%);
+  --color-input-background: rgb(244 247 248 / 8%);
   --color-dialog-overlay: rgb(0 0 0 / 54%);
   --color-dialog-background:
     linear-gradient(180deg, rgb(229 238 242 / 12%), rgb(229 238 242 / 6%)),
@@ -91,7 +92,7 @@
   --shadow-focus:
     0 0 0 3px rgb(255 255 255 / 64%),
     0 22px 60px rgb(0 0 0 / 52%);
-  --shadow-panel: 0 30px 90px rgb(0 0 0 / 42%);
+  --shadow-panel: 0 22px 58px rgb(0 0 0 / 28%);
   --motion-focus-enter: 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-panel-transition: 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-route-transition: 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -111,6 +112,7 @@
   --color-background: #f5f3ee;
   --color-background-raised: #fffaf2;
   --color-surface-fallback: #ffffff;
+  --color-window-background: transparent;
   --color-surface-content-glass: rgb(255 255 255 / 68%);
   --color-surface-content-glass-strong: rgb(255 255 255 / 86%);
   --color-surface-control: rgb(17 31 35 / 8%);
@@ -236,12 +238,12 @@ body,
   min-width: 760px;
   min-height: 460px;
   margin: 0;
-  background: transparent;
+  background: var(--color-window-background);
 }
 
 body {
   overflow: hidden;
-  background: transparent;
+  background: var(--color-window-background);
 }
 
 button,
@@ -303,6 +305,7 @@ strong {
   grid-template-rows: var(--shell-top-offset) minmax(0, 1fr);
   overflow: hidden;
   isolation: isolate;
+  background: var(--color-window-background);
   transition: grid-template-columns var(--motion-panel-transition);
 }
 

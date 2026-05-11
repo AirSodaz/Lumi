@@ -32,11 +32,33 @@ describe("global rail styles", () => {
     expect(darkThemeRule).toContain("--color-background: #0b0f12;");
     expect(darkThemeRule).toContain("--color-background-raised: #121820;");
     expect(darkThemeRule).toContain("--color-surface-fallback: #161d25;");
+    expect(darkThemeRule).toContain("--color-window-background: rgb(8 12 15 / 92%);");
     expect(darkThemeRule).toContain("--color-text-primary: #f4f7f8;");
     expect(darkThemeRule).toContain("--color-selected-background: rgb(230 238 241 / 92%);");
     expect(darkThemeRule).toContain("--color-body-background:");
+    expect(darkThemeRule).toContain("rgb(8 12 15 / 99%)");
+    expect(darkThemeRule).toContain("rgb(244 247 248 / 7%)");
+    expect(darkThemeRule).toContain("--color-panel-background:");
+    expect(darkThemeRule).toContain("rgb(18 24 30 / 72%)");
+    expect(darkThemeRule).toContain("--color-input-background: rgb(244 247 248 / 8%);");
+    expect(darkThemeRule).toContain("--shadow-panel: 0 22px 58px rgb(0 0 0 / 28%);");
+    expect(darkThemeRule).not.toContain("rgb(3 7 10 / 34%)");
     expect(darkThemeRule).not.toContain("#251f1b");
     expect(darkThemeRule).not.toContain("#1b110c");
+  });
+
+  it("backs the transparent dark shell with dark root fallbacks", () => {
+    const rootRule = getRule("html,\nbody,\n#root");
+    const bodyRule = getRule("body");
+    const shellRule = getRule(".lumi-shell");
+    const shellVignetteRule = getRuleContaining(".shell-vignette", "background:");
+
+    expect(rootRule).toContain("background: var(--color-window-background);");
+    expect(bodyRule).toContain("background: var(--color-window-background);");
+    expect(shellRule).toContain("background: var(--color-window-background);");
+    expect(shellVignetteRule).toContain("background:");
+    expect(shellVignetteRule).toContain("var(--color-shell-vignette),");
+    expect(shellVignetteRule).toContain("var(--color-body-background);");
   });
 
   it("styles the Home featured carousel as one full-stage hero surface", () => {
@@ -234,6 +256,7 @@ describe("global rail styles", () => {
     expect(nativeSettingsTabsRule).toContain("background: transparent;");
     expect(nativeSettingsTabsRule).toContain("box-shadow: none;");
     expect(nativeSettingsTabsRule).toContain("backdrop-filter: none;");
+    expect(nativeSettingsTabsRule).not.toContain("var(--color-surface-content-glass)");
     expect(nativeSettingsButtonRule).toContain("min-height: 30px;");
     expect(nativeSettingsButtonRule).toContain("border-radius: var(--sidebar-item-radius);");
     expect(nativeSettingsButtonRule).toContain("transition:");

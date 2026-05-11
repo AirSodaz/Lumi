@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { setTheme } from "@tauri-apps/api/app";
 import { ThemeContext } from "./themeContext";
 import {
   darkModeMediaQuery,
@@ -60,6 +61,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.dataset.themePreference = themePreference;
     root.style.colorScheme = resolvedTheme;
   }, [resolvedTheme, themePreference]);
+
+  useEffect(() => {
+    void setTheme(resolvedTheme).catch(() => {
+      // Native theme sync is best-effort; CSS theme state remains authoritative.
+    });
+  }, [resolvedTheme]);
 
   const setThemePreference = useCallback(
     (nextPreference: ThemePreference) => {

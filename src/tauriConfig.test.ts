@@ -21,12 +21,19 @@ type TauriConfig = {
   };
 };
 
+type TauriCapability = {
+  permissions: string[];
+};
+
 const baseConfig = JSON.parse(
   readFileSync("src-tauri/tauri.conf.json", "utf8"),
 ) as TauriConfig;
 const windowsConfig = JSON.parse(
   readFileSync("src-tauri/tauri.windows.conf.json", "utf8"),
 ) as TauriConfig;
+const defaultCapability = JSON.parse(
+  readFileSync("src-tauri/capabilities/default.json", "utf8"),
+) as TauriCapability;
 
 describe("Tauri window material config", () => {
   it("uses native macOS sidebar material in the base desktop window", () => {
@@ -50,5 +57,9 @@ describe("Tauri window material config", () => {
       effects: ["mica"],
       state: "active",
     });
+  });
+
+  it("allows the frontend theme provider to sync the native app theme", () => {
+    expect(defaultCapability.permissions).toContain("core:app:allow-set-app-theme");
   });
 });
